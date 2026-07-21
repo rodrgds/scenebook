@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "build": "bun run icons && wxt build",
-    "check": "tsc --noEmit",
+    "check": "wxt prepare && tsc --noEmit",
     "clean": "rm -rf .output .wxt",
     "dev": "wxt",
     "icons": "bun scripts/generate-icons.ts",

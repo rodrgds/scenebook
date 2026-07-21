@@ -44,6 +44,10 @@ describe('composite GitHub Action contract', () => {
     expect(checks.if).toContain(
       'github.event.pull_request.head.repo.full_name == github.repository',
     );
+    for (const step of steps) {
+      const environmentNames = Object.keys(step.env ?? {}).map((name) => name.toLowerCase());
+      expect(new Set(environmentNames).size).toBe(environmentNames.length);
+    }
     expect(steps.at(-1).name).toBe('Return verification result');
   });
 

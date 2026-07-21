@@ -189,11 +189,9 @@ runs:
         HTTPS_PROXY: ''
         HTTP_PROXY: ''
         ALL_PROXY: ''
-        https_proxy: ''
-        http_proxy: ''
-        all_proxy: ''
       run: |
         set -euo pipefail
+        unset https_proxy http_proxy all_proxy
         node "$GITHUB_ACTION_PATH/scripts/github-post-checks.mjs" \
           --working-directory "$PWD" \
           --evidence-directory "$SCENEBOOK_ACTION_EVIDENCE_DIRECTORY" \
