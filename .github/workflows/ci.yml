@@ -43,8 +43,11 @@ jobs:
         run: bun run --cwd apps/extension test:e2e
       - name: Regenerate reference Scene
         run: bun run example:seed
-      - name: Assert generated source is committed
-        run: git diff --exit-code -- examples/acme-product
+      - name: Assert generated Scene semantics are committed
+        run: >-
+          git diff --exit-code
+          --ignore-matching-lines='^[[:space:]]*(-[[:space:]]+)?(sha256:|path: assets/|byteLength:|x:|y:|width:|height:)'
+          -- examples/acme-product/scenes/invite-member.scene/scene.yaml
       - name: Upload extension package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

@@ -78,10 +78,13 @@ if [[ "$SCENEBOOK_ACTION_UPLOAD" == "true" ]]; then
   )
 fi
 
+action_workspace_cli="${GITHUB_ACTION_PATH:-}/packages/cli/dist/bin.js"
 if [[ -x node_modules/.bin/scenebook ]]; then
   node_modules/.bin/scenebook "${scenebook_args[@]}"
 elif [[ -n "${GITHUB_ACTION_PATH:-}" && -x "$GITHUB_ACTION_PATH/node_modules/.bin/scenebook" ]]; then
   "$GITHUB_ACTION_PATH/node_modules/.bin/scenebook" "${scenebook_args[@]}"
+elif [[ -n "${GITHUB_ACTION_PATH:-}" && -f "$action_workspace_cli" && ! -L "$action_workspace_cli" ]]; then
+  node "$action_workspace_cli" "${scenebook_args[@]}"
 else
   bunx --bun "@scenebook/cli@$SCENEBOOK_ACTION_VERSION" "${scenebook_args[@]}"
 fi

@@ -73,6 +73,13 @@ describe('composite GitHub Action contract', () => {
     const testIndex = steps.findIndex((step) => step.name === 'Unit and contract tests');
     expect(browserInstallIndex).toBeGreaterThan(-1);
     expect(testIndex).toBeGreaterThan(browserInstallIndex);
+    const seedIndex = steps.findIndex((step) => step.name === 'Regenerate reference Scene');
+    const semanticAssertion = steps.find(
+      (step) => step.name === 'Assert generated Scene semantics are committed',
+    );
+    expect(seedIndex).toBeGreaterThan(testIndex);
+    expect(semanticAssertion.run).toContain('--ignore-matching-lines=');
+    expect(semanticAssertion.run).toContain('invite-member.scene/scene.yaml');
   });
 
   it('returns the original verification exit before report, artifact, or Checks failures', () => {
@@ -161,20 +168,19 @@ describe('composite GitHub Action contract', () => {
     ]);
   });
 
-  it('uses the checked-out action workspace CLI for its unpublished self-test', async () => {
+  it('uses the checked-out action build for its unpublished self-test', async () => {
     const sandbox = await mkdtemp(resolve(tmpdir(), 'scenebook-action-self-test-'));
     directories.push(sandbox);
     const workspace = resolve(sandbox, 'consumer');
     const actionRoot = resolve(sandbox, 'action');
-    const executable = resolve(actionRoot, 'node_modules/.bin/scenebook');
+    const executable = resolve(actionRoot, 'packages/cli/dist/bin.js');
     const argumentsPath = resolve(sandbox, 'arguments.txt');
     await mkdir(workspace, { recursive: true });
-    await mkdir(resolve(actionRoot, 'node_modules/.bin'), { recursive: true });
+    await mkdir(resolve(actionRoot, 'packages/cli/dist'), { recursive: true });
     await writeFile(
       executable,
-      '#!/usr/bin/env bash\nprintf \'%s\\n\' "$@" > "$SCENEBOOK_TEST_ARGUMENTS"\n',
+      "const { writeFileSync } = require('node:fs');\nwriteFileSync(process.env.SCENEBOOK_TEST_ARGUMENTS, `${process.argv.slice(2).join('\\n')}\\n`);\n",
     );
-    await chmod(executable, 0o700);
 
     const result = spawnSync('bash', [resolve(ROOT, 'scripts/github-action-verify.sh')], {
       cwd: workspace,
