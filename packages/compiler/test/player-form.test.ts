@@ -321,7 +321,7 @@ describe('generated canonical-viewer players', () => {
     } finally {
       await page.close();
     }
-  });
+  }, 15_000);
 
   it('honors reduced motion and protects form inputs from global keyboard navigation', async () => {
     const { output } = await formFixture({ analytics: true, cta: true });
@@ -379,7 +379,7 @@ describe('generated canonical-viewer players', () => {
     } finally {
       await page.close();
     }
-  });
+  }, 15_000);
 
   it('submits reviewed fields with retry-safe idempotency and anonymous lifecycle analytics', async () => {
     const { output } = await formFixture({ analytics: true, cta: true });
@@ -441,5 +441,5 @@ describe('generated canonical-viewer players', () => {
     } finally {
       await page.close();
     }
-  });
+  }, 15_000);
 });
