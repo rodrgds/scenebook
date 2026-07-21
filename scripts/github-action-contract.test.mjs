@@ -88,8 +88,12 @@ describe('composite GitHub Action contract', () => {
     const steps = workflow.jobs.journeys.steps;
     const seedIndex = steps.findIndex((step) => step.name === 'Seed a reviewed self-test baseline');
     const actionIndex = steps.findIndex((step) => step.uses === './');
+    const privacyScan = steps.find(
+      (step) => step.name === 'Assess sanitized publication derivatives',
+    );
     expect(seedIndex).toBeGreaterThan(-1);
     expect(actionIndex).toBeGreaterThan(seedIndex);
+    expect(privacyScan.run).toContain('node ../../packages/cli/dist/bin.js privacy scan');
     expect(steps[seedIndex].run).toContain('seed_exit_code');
     expect(steps[seedIndex].run).toContain('baseline accept');
     expect(steps[seedIndex].run).toContain('github-action-self-test');

@@ -27,7 +27,7 @@ jobs:
           sudo apt-get install --yes ffmpeg tesseract-ocr
       - name: Assess sanitized publication derivatives
         working-directory: examples/acme-product
-        run: bun ../../packages/cli/src/bin.ts privacy scan --config scenebook.config.ts
+        run: node ../../packages/cli/dist/bin.js privacy scan --config scenebook.config.ts
       - name: Seed a reviewed self-test baseline
         working-directory: examples/acme-product
         run: |
