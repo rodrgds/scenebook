@@ -168,6 +168,15 @@ describe('release metadata', () => {
   });
 });
 
+describe('version pull request', () => {
+  it('generates the changelog files required by changesets/action', async () => {
+    const config = JSON.parse(
+      await readFile(join(workspaceRoot, '.changeset', 'config.json'), 'utf8'),
+    ) as { changelog?: unknown };
+    expect(config.changelog).toBe('@changesets/cli/changelog');
+  });
+});
+
 describe('publish guard', () => {
   const validEnvironment: NodeJS.ProcessEnv = {
     CI: 'true',
