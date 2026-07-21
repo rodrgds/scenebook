@@ -82,6 +82,19 @@ describe('composite GitHub Action contract', () => {
     expect(semanticAssertion.run).toContain('invite-member.scene/scene.yaml');
   });
 
+  it('approves a disposable changed baseline before expecting the Action self-test to pass', async () => {
+    const source = await readFile(resolve(ROOT, '.github/workflows/scenebook.yml'), 'utf8');
+    const workflow = parse(source);
+    const steps = workflow.jobs.journeys.steps;
+    const seedIndex = steps.findIndex((step) => step.name === 'Seed a reviewed self-test baseline');
+    const actionIndex = steps.findIndex((step) => step.uses === './');
+    expect(seedIndex).toBeGreaterThan(-1);
+    expect(actionIndex).toBeGreaterThan(seedIndex);
+    expect(steps[seedIndex].run).toContain('seed_exit_code');
+    expect(steps[seedIndex].run).toContain('baseline accept');
+    expect(steps[seedIndex].run).toContain('github-action-self-test');
+  });
+
   it('returns the original verification exit before report, artifact, or Checks failures', () => {
     expect(
       resultCode({
