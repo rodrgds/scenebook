@@ -28,7 +28,7 @@
     "@testing-library/svelte": "5.4.2",
     "happy-dom": "20.11.0",
     "svelte-check": "4.7.3",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "vite": "8.1.5",
     "vitest": "4.1.10"
   }
