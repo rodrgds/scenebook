@@ -28,10 +28,10 @@ steps:
         id: members-before-invite
         route: /?scenebook=1
         screenshot:
-          sha256: 8b17ddbf58589b62343802b033baeb5b032a11fe96a5361a2245fef2c0556174
-          path: assets/8b17ddbf58589b62343802b033baeb5b032a11fe96a5361a2245fef2c0556174.png
+          sha256: 8edc25f47a09a08f6b762fc7a2d9d758e25806ca5996712bfb12271b614df4b4
+          path: assets/8edc25f47a09a08f6b762fc7a2d9d758e25806ca5996712bfb12271b614df4b4.png
           mediaType: image/png
-          byteLength: 52414
+          byteLength: 55227
           role: screenshot
           width: 1440
           height: 900
@@ -57,9 +57,9 @@ steps:
           confidence: 0.8
           generated: true
       normalizedRect:
-        x: 0.797938
+        x: 0.788932
         y: 0.142222
-        width: 0.104839
+        width: 0.113845
         height: 0.048889
       visible: true
       occluded: false
@@ -79,9 +79,9 @@ steps:
               confidence: 0.8
               generated: true
           normalizedRect:
-            x: 0.797938
+            x: 0.788932
             y: 0.142222
-            width: 0.104839
+            width: 0.113845
             height: 0.048889
           visible: true
           occluded: false
@@ -92,9 +92,9 @@ steps:
         - id: open-invitation-hotspot
           kind: hotspot
           rect:
-            x: 0.797938
+            x: 0.788932
             y: 0.142222
-            width: 0.104839
+            width: 0.113845
             height: 0.048889
       autoAdvance: false
       transition: fade
@@ -118,10 +118,10 @@ steps:
         id: invite-form-empty
         route: /?scenebook=1
         screenshot:
-          sha256: dc2052d2b1301075ea71c92ef7ac8e74e978d532434f01a8c2158aaa8bb4b978
-          path: assets/dc2052d2b1301075ea71c92ef7ac8e74e978d532434f01a8c2158aaa8bb4b978.png
+          sha256: b4d8863610871cb52ef565fac827fe7317e169abb4a703b33ffb66dd3f3f1adb
+          path: assets/b4d8863610871cb52ef565fac827fe7317e169abb4a703b33ffb66dd3f3f1adb.png
           mediaType: image/png
-          byteLength: 68758
+          byteLength: 72262
           role: screenshot
           width: 1440
           height: 900
@@ -148,7 +148,7 @@ steps:
           generated: true
       normalizedRect:
         x: 0.34375
-        y: 0.437222
+        y: 0.436111
         width: 0.3125
         height: 0.048889
       visible: true
@@ -170,7 +170,7 @@ steps:
               generated: true
           normalizedRect:
             x: 0.34375
-            y: 0.437222
+            y: 0.436111
             width: 0.3125
             height: 0.048889
           visible: true
@@ -187,7 +187,7 @@ steps:
           kind: hotspot
           rect:
             x: 0.34375
-            y: 0.437222
+            y: 0.436111
             width: 0.3125
             height: 0.048889
       autoAdvance: false
@@ -206,7 +206,7 @@ steps:
         scope: both
         rect:
           x: 0.34375
-          y: 0.437222
+          y: 0.436111
           width: 0.3125
           height: 0.048889
         reason: Example invitee address
@@ -223,10 +223,10 @@ steps:
         id: invite-form-complete
         route: /?scenebook=1
         screenshot:
-          sha256: dc2052d2b1301075ea71c92ef7ac8e74e978d532434f01a8c2158aaa8bb4b978
-          path: assets/dc2052d2b1301075ea71c92ef7ac8e74e978d532434f01a8c2158aaa8bb4b978.png
+          sha256: b4d8863610871cb52ef565fac827fe7317e169abb4a703b33ffb66dd3f3f1adb
+          path: assets/b4d8863610871cb52ef565fac827fe7317e169abb4a703b33ffb66dd3f3f1adb.png
           mediaType: image/png
-          byteLength: 68758
+          byteLength: 72262
           role: screenshot
           width: 1440
           height: 900
@@ -248,9 +248,9 @@ steps:
           confidence: 0.99
           generated: false
       normalizedRect:
-        x: 0.560547
-        y: 0.658333
-        width: 0.095703
+        x: 0.552203
+        y: 0.653889
+        width: 0.104047
         height: 0.048889
       visible: true
       occluded: false
@@ -266,9 +266,9 @@ steps:
               confidence: 0.99
               generated: false
           normalizedRect:
-            x: 0.560547
-            y: 0.658333
-            width: 0.095703
+            x: 0.552203
+            y: 0.653889
+            width: 0.104047
             height: 0.048889
           visible: true
           occluded: false
@@ -279,9 +279,9 @@ steps:
         - id: send-invitation-hotspot
           kind: hotspot
           rect:
-            x: 0.560547
-            y: 0.658333
-            width: 0.095703
+            x: 0.552203
+            y: 0.653889
+            width: 0.104047
             height: 0.048889
       autoAdvance: false
       transition: fade
@@ -299,7 +299,7 @@ steps:
         scope: both
         rect:
           x: 0.34375
-          y: 0.437222
+          y: 0.436111
           width: 0.3125
           height: 0.048889
         reason: Example invitee address
@@ -316,10 +316,10 @@ steps:
         id: invite-sent
         route: /?scenebook=1
         screenshot:
-          sha256: e8ce48f3d6a41ebe0346f5a8d0dc3f7c8c10f129250166affdab22548662dbdf
-          path: assets/e8ce48f3d6a41ebe0346f5a8d0dc3f7c8c10f129250166affdab22548662dbdf.png
+          sha256: ebf82111413ab6f5750911a8267eaee9771b566f75435cda2bf77325752b30ed
+          path: assets/ebf82111413ab6f5750911a8267eaee9771b566f75435cda2bf77325752b30ed.png
           mediaType: image/png
-          byteLength: 66682
+          byteLength: 68550
           role: screenshot
           width: 1440
           height: 900
@@ -378,24 +378,24 @@ steps:
       label: Watch again
       fields: []
 assets:
-  - sha256: 8b17ddbf58589b62343802b033baeb5b032a11fe96a5361a2245fef2c0556174
-    path: assets/8b17ddbf58589b62343802b033baeb5b032a11fe96a5361a2245fef2c0556174.png
+  - sha256: 8edc25f47a09a08f6b762fc7a2d9d758e25806ca5996712bfb12271b614df4b4
+    path: assets/8edc25f47a09a08f6b762fc7a2d9d758e25806ca5996712bfb12271b614df4b4.png
     mediaType: image/png
-    byteLength: 52414
+    byteLength: 55227
     role: screenshot
     width: 1440
     height: 900
-  - sha256: dc2052d2b1301075ea71c92ef7ac8e74e978d532434f01a8c2158aaa8bb4b978
-    path: assets/dc2052d2b1301075ea71c92ef7ac8e74e978d532434f01a8c2158aaa8bb4b978.png
+  - sha256: b4d8863610871cb52ef565fac827fe7317e169abb4a703b33ffb66dd3f3f1adb
+    path: assets/b4d8863610871cb52ef565fac827fe7317e169abb4a703b33ffb66dd3f3f1adb.png
     mediaType: image/png
-    byteLength: 68758
+    byteLength: 72262
     role: screenshot
     width: 1440
     height: 900
-  - sha256: e8ce48f3d6a41ebe0346f5a8d0dc3f7c8c10f129250166affdab22548662dbdf
-    path: assets/e8ce48f3d6a41ebe0346f5a8d0dc3f7c8c10f129250166affdab22548662dbdf.png
+  - sha256: ebf82111413ab6f5750911a8267eaee9771b566f75435cda2bf77325752b30ed
+    path: assets/ebf82111413ab6f5750911a8267eaee9771b566f75435cda2bf77325752b30ed.png
     mediaType: image/png
-    byteLength: 66682
+    byteLength: 68550
     role: screenshot
     width: 1440
     height: 900

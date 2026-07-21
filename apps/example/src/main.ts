@@ -273,7 +273,7 @@ inviteForm.addEventListener('submit', (event) => {
   };
   dialog.close();
   renderMembers();
-  toastDetail.textContent = `${email} can now join Acme Studio.`;
+  toastDetail.textContent = 'They can now join Acme Studio.';
   toast.hidden = false;
 });
 
