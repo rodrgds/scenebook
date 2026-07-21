@@ -160,4 +160,45 @@ describe('composite GitHub Action contract', () => {
       'tesseract',
     ]);
   });
+
+  it('uses the checked-out action workspace CLI for its unpublished self-test', async () => {
+    const sandbox = await mkdtemp(resolve(tmpdir(), 'scenebook-action-self-test-'));
+    directories.push(sandbox);
+    const workspace = resolve(sandbox, 'consumer');
+    const actionRoot = resolve(sandbox, 'action');
+    const executable = resolve(actionRoot, 'node_modules/.bin/scenebook');
+    const argumentsPath = resolve(sandbox, 'arguments.txt');
+    await mkdir(workspace, { recursive: true });
+    await mkdir(resolve(actionRoot, 'node_modules/.bin'), { recursive: true });
+    await writeFile(
+      executable,
+      '#!/usr/bin/env bash\nprintf \'%s\\n\' "$@" > "$SCENEBOOK_TEST_ARGUMENTS"\n',
+    );
+    await chmod(executable, 0o700);
+
+    const result = spawnSync('bash', [resolve(ROOT, 'scripts/github-action-verify.sh')], {
+      cwd: workspace,
+      env: {
+        PATH: process.env.PATH,
+        GITHUB_ACTION_PATH: actionRoot,
+        SCENEBOOK_ACTION_VERSION: '0.1.0',
+        SCENEBOOK_ACTION_CONFIG: 'scenebook.config.ts',
+        SCENEBOOK_ACTION_UPLOAD: 'false',
+        SCENEBOOK_ACTION_POST_CHECKS: 'false',
+        SCENEBOOK_ACTION_ARTIFACT_NAME: 'scenebook-review',
+        SCENEBOOK_ACTION_OCR_PROVIDER: 'tesseract',
+        SCENEBOOK_TEST_ARGUMENTS: argumentsPath,
+      },
+      encoding: 'utf8',
+    });
+
+    expect(result.status).toBe(0);
+    expect((await readFile(argumentsPath, 'utf8')).split('\n').filter(Boolean)).toEqual([
+      'ci',
+      '--config',
+      'scenebook.config.ts',
+      '--provider',
+      'tesseract',
+    ]);
+  });
 });

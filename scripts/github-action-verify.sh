@@ -80,6 +80,8 @@ fi
 
 if [[ -x node_modules/.bin/scenebook ]]; then
   node_modules/.bin/scenebook "${scenebook_args[@]}"
+elif [[ -n "${GITHUB_ACTION_PATH:-}" && -x "$GITHUB_ACTION_PATH/node_modules/.bin/scenebook" ]]; then
+  "$GITHUB_ACTION_PATH/node_modules/.bin/scenebook" "${scenebook_args[@]}"
 else
   bunx --bun "@scenebook/cli@$SCENEBOOK_ACTION_VERSION" "${scenebook_args[@]}"
 fi
