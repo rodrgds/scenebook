@@ -31,12 +31,12 @@ jobs:
         run: bun run format:check
       - name: Typecheck
         run: bun run check
+      - name: Install reference browser
+        run: bunx playwright install --with-deps chromium
       - name: Unit and contract tests
         run: SCENEBOOK_FFMPEG_PATH="$(command -v ffmpeg)" bun run test
       - name: Build all packages and applications
         run: bun run build
-      - name: Install reference browser
-        run: bunx playwright install --with-deps chromium
       - name: Run reference Scene replay
         run: bun run --cwd examples/acme-product test:replay
       - name: Run recorder Chromium E2E

@@ -63,6 +63,18 @@ describe('composite GitHub Action contract', () => {
     }
   });
 
+  it('installs Chromium before running browser-backed unit tests', async () => {
+    const source = await readFile(resolve(ROOT, '.github/workflows/ci.yml'), 'utf8');
+    const workflow = parse(source);
+    const steps = workflow.jobs.verify.steps;
+    const browserInstallIndex = steps.findIndex(
+      (step) => step.name === 'Install reference browser',
+    );
+    const testIndex = steps.findIndex((step) => step.name === 'Unit and contract tests');
+    expect(browserInstallIndex).toBeGreaterThan(-1);
+    expect(testIndex).toBeGreaterThan(browserInstallIndex);
+  });
+
   it('returns the original verification exit before report, artifact, or Checks failures', () => {
     expect(
       resultCode({
