@@ -1,0 +1,41 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetBucketLocation", "s3:ListBucket"],
+      "Resource": ["arn:aws:s3:::scenebook"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": [
+        "arn:aws:s3:::scenebook/staging/*",
+        "arn:aws:s3:::scenebook/workspaces/*/objects/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject"],
+      "Resource": ["arn:aws:s3:::scenebook/staging/*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject"],
+      "Resource": ["arn:aws:s3:::scenebook/workspaces/*/objects/*"],
+      "Condition": {
+        "StringEquals": {
+          "s3:x-amz-metadata-directive": "REPLACE"
+        },
+        "StringLike": {
+          "s3:x-amz-copy-source": "scenebook/staging/*"
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:DeleteObject"],
+      "Resource": ["arn:aws:s3:::scenebook/staging/*"]
+    }
+  ]
+}

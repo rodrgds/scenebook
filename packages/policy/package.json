@@ -1,0 +1,51 @@
+{
+  "name": "@scenebook/policy",
+  "version": "0.1.0",
+  "description": "Explainable Channel and atomic Release policy evaluation for Scenebook",
+  "type": "module",
+  "source": "./src/index.ts",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist coverage"
+  },
+  "dependencies": {
+    "@scenebook/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rodrgds/scenebook.git",
+    "directory": "packages/policy"
+  },
+  "homepage": "https://github.com/rodrgds/scenebook#readme",
+  "bugs": {
+    "url": "https://github.com/rodrgds/scenebook/issues"
+  }
+}

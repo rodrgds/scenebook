@@ -1,0 +1,101 @@
+schemaVersion: 1
+id: acme-product
+name: Acme Product Stories
+slug: acme-product
+description: A complete reference project showing capture, verification, review, and multi-format publishing.
+defaultLocale: en
+locales:
+  - en
+public:
+  seo:
+    index: false
+    follow: false
+  attribution: true
+  remix: true
+repositories:
+  - id: scenebook-example
+    provider: github
+    repository: scenebook-dev/scenebook
+    defaultBranch: main
+environments:
+  - id: local-example
+    name: Local example
+    kind: local
+    baseUrl: http://127.0.0.1:4174
+    variableNames: []
+    allowMutations: true
+    privateNetwork: false
+productVariants:
+  - id: workspace-admin
+    name: Workspace administrator
+    role: admin
+    plan: pro
+    locale: en
+    featureFlags: {}
+captureProfiles:
+  - id: desktop-chromium
+    name: Desktop Chromium
+    browser: chromium
+    viewport:
+      width: 1440
+      height: 900
+      deviceScaleFactor: 1
+      isMobile: false
+    colorScheme: light
+    reducedMotion: reduce
+    timezone: Europe/Lisbon
+    locale: en
+runTargets:
+  - id: admin-desktop-local
+    name: Admin on desktop
+    environmentId: local-example
+    productVariantId: workspace-admin
+    captureProfileId: desktop-chromium
+    enabled: true
+collections:
+  - id: workspace-onboarding
+    title: Workspace onboarding
+    slug: workspace-onboarding
+    description: Essential workspace administration journeys.
+    audience:
+      - workspace-admin
+    entries:
+      - id: invite-member-entry
+        sceneId: invite-member
+channels:
+  - id: public-catalog
+    name: Public product stories
+    slug: public
+    description: Approved public product walkthroughs and guides.
+    kind: public-catalog
+    collectionIds:
+      - workspace-onboarding
+    public:
+      seo:
+        title: Acme public product stories
+        description: Reviewed walkthroughs for the Acme reference product.
+      attribution: true
+      remix: true
+    policy:
+      requireCriticalPassing: true
+      requireVisualApproval: true
+      requireEditorialApproval: true
+      requireCompleteLocalization: false
+      publication: manual
+      nonCriticalFailure: block
+  - id: docs
+    name: Product documentation
+    slug: docs
+    description: Product stories selected for documentation synchronization.
+    kind: docs-sync
+    collectionIds:
+      - workspace-onboarding
+    policy:
+      requireCriticalPassing: true
+      requireVisualApproval: true
+      requireEditorialApproval: true
+      requireCompleteLocalization: false
+      publication: approved-main
+      nonCriticalFailure: carry-forward
+metadata:
+  source: reference-example

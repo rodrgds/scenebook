@@ -1,0 +1,406 @@
+name: scenebook
+
+services:
+  postgres:
+    image: postgres:17.10-alpine3.23@sha256:8189a1f6e40904781fc9e2612687877791d21679866db58b1de996b31fc312e4
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: scenebook
+      POSTGRES_USER: scenebook
+      POSTGRES_PASSWORD: ${SCENEBOOK_POSTGRES_PASSWORD:?set SCENEBOOK_POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U scenebook -d scenebook']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    networks: [backend]
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
+    restart: unless-stopped
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${SCENEBOOK_MINIO_ROOT_USER:?set SCENEBOOK_MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${SCENEBOOK_MINIO_ROOT_PASSWORD:?set SCENEBOOK_MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:9000/minio/health/live]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    networks: [backend]
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z@sha256:aead63c77f9db9107f1696fb08ecb0faeda23729cde94b0f663edf4fe09728e3
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: 'no'
+    entrypoint: /bin/sh
+    command:
+      - -eu
+      - -c
+      - |
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing local/scenebook
+        mc anonymous set none local/scenebook
+        mc admin policy create local scenebook-cloud /config/scenebook-policy.json
+        mc admin policy create local scenebook-gateway /config/scenebook-gateway-policy.json
+        mc admin policy create local scenebook-final-delete /config/scenebook-final-delete-policy.json
+        mc admin user add local "$$SCENEBOOK_S3_ACCESS_KEY_ID" "$$SCENEBOOK_S3_SECRET_ACCESS_KEY"
+        mc admin user enable local "$$SCENEBOOK_S3_ACCESS_KEY_ID"
+        mc admin policy attach local scenebook-cloud --user "$$SCENEBOOK_S3_ACCESS_KEY_ID"
+        mc admin user add local "$$SCENEBOOK_GATEWAY_S3_ACCESS_KEY_ID" "$$SCENEBOOK_GATEWAY_S3_SECRET_ACCESS_KEY"
+        mc admin user enable local "$$SCENEBOOK_GATEWAY_S3_ACCESS_KEY_ID"
+        mc admin policy attach local scenebook-gateway --user "$$SCENEBOOK_GATEWAY_S3_ACCESS_KEY_ID"
+        mc admin user add local "$$SCENEBOOK_S3_FINAL_DELETE_ACCESS_KEY_ID" "$$SCENEBOOK_S3_FINAL_DELETE_SECRET_ACCESS_KEY"
+        mc admin user enable local "$$SCENEBOOK_S3_FINAL_DELETE_ACCESS_KEY_ID"
+        mc admin policy attach local scenebook-final-delete --user "$$SCENEBOOK_S3_FINAL_DELETE_ACCESS_KEY_ID"
+    environment:
+      MINIO_ROOT_USER: ${SCENEBOOK_MINIO_ROOT_USER:?set SCENEBOOK_MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${SCENEBOOK_MINIO_ROOT_PASSWORD:?set SCENEBOOK_MINIO_ROOT_PASSWORD}
+      SCENEBOOK_S3_ACCESS_KEY_ID: ${SCENEBOOK_S3_ACCESS_KEY_ID:?set SCENEBOOK_S3_ACCESS_KEY_ID}
+      SCENEBOOK_S3_SECRET_ACCESS_KEY: ${SCENEBOOK_S3_SECRET_ACCESS_KEY:?set SCENEBOOK_S3_SECRET_ACCESS_KEY}
+      SCENEBOOK_GATEWAY_S3_ACCESS_KEY_ID: ${SCENEBOOK_GATEWAY_S3_ACCESS_KEY_ID:?set SCENEBOOK_GATEWAY_S3_ACCESS_KEY_ID}
+      SCENEBOOK_GATEWAY_S3_SECRET_ACCESS_KEY: ${SCENEBOOK_GATEWAY_S3_SECRET_ACCESS_KEY:?set SCENEBOOK_GATEWAY_S3_SECRET_ACCESS_KEY}
+      SCENEBOOK_S3_FINAL_DELETE_ACCESS_KEY_ID: ${SCENEBOOK_S3_FINAL_DELETE_ACCESS_KEY_ID:?set SCENEBOOK_S3_FINAL_DELETE_ACCESS_KEY_ID}
+      SCENEBOOK_S3_FINAL_DELETE_SECRET_ACCESS_KEY: ${SCENEBOOK_S3_FINAL_DELETE_SECRET_ACCESS_KEY:?set SCENEBOOK_S3_FINAL_DELETE_SECRET_ACCESS_KEY}
+    volumes:
+      - ./minio-policy.json:/config/scenebook-policy.json:ro
+      - ./minio-gateway-policy.json:/config/scenebook-gateway-policy.json:ro
+      - ./minio-final-delete-policy.json:/config/scenebook-final-delete-policy.json:ro
+    security_opt:
+      - no-new-privileges:true
+    networks: [backend]
+
+  cloud:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.cloud
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 4310
+      DATABASE_URL: ${SCENEBOOK_DATABASE_URL:?set SCENEBOOK_DATABASE_URL}
+      SCENEBOOK_PUBLIC_URL: ${SCENEBOOK_PUBLIC_URL:?set SCENEBOOK_PUBLIC_URL}
+      SCENEBOOK_PUBLICATION_URL: ${SCENEBOOK_PUBLICATION_URL:?set SCENEBOOK_PUBLICATION_URL}
+      SCENEBOOK_ADMIN_TOKEN: ${SCENEBOOK_ADMIN_TOKEN:?set SCENEBOOK_ADMIN_TOKEN}
+      SCENEBOOK_UPLOAD_TOKEN_SECRET: ${SCENEBOOK_UPLOAD_TOKEN_SECRET:?set SCENEBOOK_UPLOAD_TOKEN_SECRET}
+      SCENEBOOK_IDENTITY_TOKEN_SECRET: ${SCENEBOOK_IDENTITY_TOKEN_SECRET:?set SCENEBOOK_IDENTITY_TOKEN_SECRET}
+      SCENEBOOK_IDENTITY_SIGNING_PRIVATE_KEY: ${SCENEBOOK_IDENTITY_SIGNING_PRIVATE_KEY:?set SCENEBOOK_IDENTITY_SIGNING_PRIVATE_KEY}
+      SCENEBOOK_IDENTITY_VERIFICATION_PUBLIC_KEY: ${SCENEBOOK_IDENTITY_VERIFICATION_PUBLIC_KEY:?set SCENEBOOK_IDENTITY_VERIFICATION_PUBLIC_KEY}
+      SCENEBOOK_IDENTITY_PREVIOUS_VERIFICATION_PUBLIC_KEYS_JSON: '${SCENEBOOK_IDENTITY_PREVIOUS_VERIFICATION_PUBLIC_KEYS_JSON:-[]}'
+      SCENEBOOK_GATEWAY_EXCHANGE_SECRET: ${SCENEBOOK_GATEWAY_EXCHANGE_SECRET:?set SCENEBOOK_GATEWAY_EXCHANGE_SECRET}
+      SCENEBOOK_PUBLICATION_LOGIN_TTL_SECONDS: ${SCENEBOOK_PUBLICATION_LOGIN_TTL_SECONDS:-60}
+      SCENEBOOK_RUNNER_TOKEN_SECRET: ${SCENEBOOK_RUNNER_TOKEN_SECRET:?set SCENEBOOK_RUNNER_TOKEN_SECRET}
+      SCENEBOOK_ANALYTICS_HASH_SECRET: ${SCENEBOOK_ANALYTICS_HASH_SECRET:?set SCENEBOOK_ANALYTICS_HASH_SECRET}
+      SCENEBOOK_CTA_ENCRYPTION_KEY: ${SCENEBOOK_CTA_ENCRYPTION_KEY:?set SCENEBOOK_CTA_ENCRYPTION_KEY}
+      SCENEBOOK_OBJECT_STORE: s3
+      SCENEBOOK_S3_BUCKET: scenebook
+      SCENEBOOK_S3_REGION: us-east-1
+      SCENEBOOK_S3_ENDPOINT: http://minio:9000
+      SCENEBOOK_S3_ACCESS_KEY_ID: ${SCENEBOOK_S3_ACCESS_KEY_ID:?set SCENEBOOK_S3_ACCESS_KEY_ID}
+      SCENEBOOK_S3_SECRET_ACCESS_KEY: ${SCENEBOOK_S3_SECRET_ACCESS_KEY:?set SCENEBOOK_S3_SECRET_ACCESS_KEY}
+      SCENEBOOK_S3_FORCE_PATH_STYLE: 'true'
+      SCENEBOOK_GITHUB_OIDC_AUDIENCE: ${SCENEBOOK_GITHUB_OIDC_AUDIENCE:-scenebook}
+      SCENEBOOK_GITHUB_APP_ID: ${SCENEBOOK_GITHUB_APP_ID:-}
+      SCENEBOOK_GITHUB_APP_PRIVATE_KEY: ${SCENEBOOK_GITHUB_APP_PRIVATE_KEY:-}
+      SCENEBOOK_GITHUB_APP_API_URL: ${SCENEBOOK_GITHUB_APP_API_URL:-https://api.github.com}
+      SCENEBOOK_GITHUB_APP_ALLOWED_API_ORIGINS: ${SCENEBOOK_GITHUB_APP_ALLOWED_API_ORIGINS:-}
+      SCENEBOOK_GITHUB_APP_TIMEOUT_MS: ${SCENEBOOK_GITHUB_APP_TIMEOUT_MS:-15000}
+      SCENEBOOK_GITHUB_CHANGE_LEASE_SECONDS: ${SCENEBOOK_GITHUB_CHANGE_LEASE_SECONDS:-120}
+      SCENEBOOK_SESSION_TTL_SECONDS: ${SCENEBOOK_SESSION_TTL_SECONDS:-28800}
+      SCENEBOOK_API_TOKEN_MAX_TTL_SECONDS: ${SCENEBOOK_API_TOKEN_MAX_TTL_SECONDS:-7776000}
+      SCENEBOOK_SHARE_LINK_MAX_TTL_SECONDS: ${SCENEBOOK_SHARE_LINK_MAX_TTL_SECONDS:-604800}
+      SCENEBOOK_SCHEDULER_INTERVAL_MS: ${SCENEBOOK_SCHEDULER_INTERVAL_MS:-5000}
+      SCENEBOOK_SCHEDULER_BATCH_SIZE: ${SCENEBOOK_SCHEDULER_BATCH_SIZE:-100}
+      SCENEBOOK_RUNNER_LEASE_SECONDS: ${SCENEBOOK_RUNNER_LEASE_SECONDS:-120}
+      SCENEBOOK_CUSTOM_DOMAIN_ROUTING_TARGET: ${SCENEBOOK_CUSTOM_DOMAIN_ROUTING_TARGET:-}
+      SCENEBOOK_CUSTOM_DOMAIN_PROVISIONER_URL: ${SCENEBOOK_CUSTOM_DOMAIN_PROVISIONER_URL:-}
+      SCENEBOOK_CUSTOM_DOMAIN_PROVISIONER_SECRET: ${SCENEBOOK_CUSTOM_DOMAIN_PROVISIONER_SECRET:-}
+      SCENEBOOK_CUSTOM_DOMAIN_PROVISIONER_TIMEOUT_MS: ${SCENEBOOK_CUSTOM_DOMAIN_PROVISIONER_TIMEOUT_MS:-10000}
+      SCENEBOOK_WEBHOOKS_JSON: ${SCENEBOOK_WEBHOOKS_JSON:-[]}
+      SCENEBOOK_RATE_WINDOW_MS: ${SCENEBOOK_RATE_WINDOW_MS:-60000}
+      SCENEBOOK_RATE_REQUESTS: ${SCENEBOOK_RATE_REQUESTS:-120}
+      SCENEBOOK_RATE_AGGREGATE_REQUESTS: ${SCENEBOOK_RATE_AGGREGATE_REQUESTS:-300}
+      SCENEBOOK_MAX_JSON_BYTES: ${SCENEBOOK_MAX_JSON_BYTES:-524288}
+      SCENEBOOK_MAX_OBJECT_BYTES: ${SCENEBOOK_MAX_OBJECT_BYTES:-262144000}
+      SCENEBOOK_MAX_UPLOAD_OBJECTS: ${SCENEBOOK_MAX_UPLOAD_OBJECTS:-512}
+      SCENEBOOK_MAX_UPLOAD_BYTES: ${SCENEBOOK_MAX_UPLOAD_BYTES:-2147483648}
+      SCENEBOOK_MAX_ACTIVE_UPLOADS_TENANT: ${SCENEBOOK_MAX_ACTIVE_UPLOADS_TENANT:-32}
+      SCENEBOOK_MAX_ACTIVE_UPLOADS_GLOBAL: ${SCENEBOOK_MAX_ACTIVE_UPLOADS_GLOBAL:-2048}
+      SCENEBOOK_MAX_ACTIVE_UPLOAD_BYTES_TENANT: ${SCENEBOOK_MAX_ACTIVE_UPLOAD_BYTES_TENANT:-8589934592}
+      SCENEBOOK_MAX_ACTIVE_UPLOAD_BYTES_GLOBAL: ${SCENEBOOK_MAX_ACTIVE_UPLOAD_BYTES_GLOBAL:-274877906944}
+      SCENEBOOK_MAX_CONCURRENT_UPLOADS_TENANT: ${SCENEBOOK_MAX_CONCURRENT_UPLOADS_TENANT:-4}
+      SCENEBOOK_MAX_CONCURRENT_UPLOADS_GLOBAL: ${SCENEBOOK_MAX_CONCURRENT_UPLOADS_GLOBAL:-64}
+      SCENEBOOK_MAX_CONCURRENT_UPLOAD_BYTES_TENANT: ${SCENEBOOK_MAX_CONCURRENT_UPLOAD_BYTES_TENANT:-536870912}
+      SCENEBOOK_MAX_CONCURRENT_UPLOAD_BYTES_GLOBAL: ${SCENEBOOK_MAX_CONCURRENT_UPLOAD_BYTES_GLOBAL:-8589934592}
+      SCENEBOOK_UPLOAD_GC_INTERVAL_MS: ${SCENEBOOK_UPLOAD_GC_INTERVAL_MS:-60000}
+      SCENEBOOK_UPLOAD_GC_BATCH_SIZE: ${SCENEBOOK_UPLOAD_GC_BATCH_SIZE:-100}
+      SCENEBOOK_UPLOAD_GC_CLAIM_TTL_SECONDS: ${SCENEBOOK_UPLOAD_GC_CLAIM_TTL_SECONDS:-300}
+      # Delete-only credential: never reuse the ordinary cloud or read-only gateway key.
+      SCENEBOOK_EVIDENCE_RETENTION_ENABLED: ${SCENEBOOK_EVIDENCE_RETENTION_ENABLED:-true}
+      SCENEBOOK_S3_FINAL_DELETE_ACCESS_KEY_ID: ${SCENEBOOK_S3_FINAL_DELETE_ACCESS_KEY_ID:?set SCENEBOOK_S3_FINAL_DELETE_ACCESS_KEY_ID}
+      SCENEBOOK_S3_FINAL_DELETE_SECRET_ACCESS_KEY: ${SCENEBOOK_S3_FINAL_DELETE_SECRET_ACCESS_KEY:?set SCENEBOOK_S3_FINAL_DELETE_SECRET_ACCESS_KEY}
+      SCENEBOOK_EVIDENCE_STANDARD_RETENTION_GRACE_SECONDS: ${SCENEBOOK_EVIDENCE_STANDARD_RETENTION_GRACE_SECONDS:-7776000}
+      SCENEBOOK_EVIDENCE_DIAGNOSTIC_RETENTION_GRACE_SECONDS: ${SCENEBOOK_EVIDENCE_DIAGNOSTIC_RETENTION_GRACE_SECONDS:-604800}
+      SCENEBOOK_EVIDENCE_RETENTION_INTERVAL_MS: ${SCENEBOOK_EVIDENCE_RETENTION_INTERVAL_MS:-3600000}
+      SCENEBOOK_EVIDENCE_RETENTION_BATCH_SIZE: ${SCENEBOOK_EVIDENCE_RETENTION_BATCH_SIZE:-50}
+      SCENEBOOK_EVIDENCE_RETENTION_CLAIM_TTL_SECONDS: ${SCENEBOOK_EVIDENCE_RETENTION_CLAIM_TTL_SECONDS:-300}
+      SCENEBOOK_WORKSPACE_EXPORT_MAX_RECORDS: ${SCENEBOOK_WORKSPACE_EXPORT_MAX_RECORDS:-100000}
+      SCENEBOOK_WORKSPACE_EXPORT_MAX_ASSETS: ${SCENEBOOK_WORKSPACE_EXPORT_MAX_ASSETS:-10000}
+      SCENEBOOK_WORKSPACE_EXPORT_MAX_ASSET_BYTES: ${SCENEBOOK_WORKSPACE_EXPORT_MAX_ASSET_BYTES:-4294967296}
+      SCENEBOOK_WORKSPACE_EXPORT_MAX_METADATA_BYTES: ${SCENEBOOK_WORKSPACE_EXPORT_MAX_METADATA_BYTES:-67108864}
+      SCENEBOOK_WORKSPACE_EXPORT_MAX_TOTAL_BYTES: ${SCENEBOOK_WORKSPACE_EXPORT_MAX_TOTAL_BYTES:-4294967295}
+      SCENEBOOK_AUTO_MIGRATE: 'true'
+    ports:
+      - 127.0.0.1:${SCENEBOOK_CLOUD_PORT:-4310}:4310
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:4310/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    networks: [backend, edge]
+
+  postgres-gateway-init:
+    image: postgres:17.10-alpine3.23@sha256:8189a1f6e40904781fc9e2612687877791d21679866db58b1de996b31fc312e4
+    depends_on:
+      cloud:
+        condition: service_healthy
+    restart: 'no'
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: scenebook
+      PGUSER: scenebook
+      PGPASSWORD: ${SCENEBOOK_POSTGRES_PASSWORD:?set SCENEBOOK_POSTGRES_PASSWORD}
+      SCENEBOOK_GATEWAY_POSTGRES_PASSWORD: ${SCENEBOOK_GATEWAY_POSTGRES_PASSWORD:?set SCENEBOOK_GATEWAY_POSTGRES_PASSWORD}
+    entrypoint: /bin/sh
+    command:
+      - -eu
+      - -c
+      - |
+        psql --set=ON_ERROR_STOP=1 --set=gateway_password="$$SCENEBOOK_GATEWAY_POSTGRES_PASSWORD" <<'SQL'
+        SELECT format('CREATE ROLE scenebook_gateway LOGIN PASSWORD %L', :'gateway_password')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='scenebook_gateway') \gexec
+        ALTER ROLE scenebook_gateway PASSWORD :'gateway_password';
+        ALTER ROLE scenebook_gateway SET default_transaction_read_only = on;
+        ALTER ROLE scenebook_gateway SET search_path = publication_gateway, public;
+        GRANT CONNECT ON DATABASE scenebook TO scenebook_gateway;
+        GRANT USAGE ON SCHEMA public TO scenebook_gateway;
+        REVOKE CREATE ON SCHEMA public FROM scenebook_gateway;
+        REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM scenebook_gateway;
+        ALTER DEFAULT PRIVILEGES FOR ROLE scenebook IN SCHEMA public REVOKE SELECT ON TABLES FROM scenebook_gateway;
+
+        CREATE SCHEMA IF NOT EXISTS publication_gateway AUTHORIZATION scenebook;
+        REVOKE ALL ON SCHEMA publication_gateway FROM PUBLIC;
+        GRANT USAGE ON SCHEMA publication_gateway TO scenebook_gateway;
+
+        CREATE OR REPLACE VIEW publication_gateway.workspaces WITH (security_barrier=true) AS
+          SELECT id,slug,name,created_at FROM public.workspaces;
+        CREATE OR REPLACE VIEW publication_gateway.projects WITH (security_barrier=true) AS
+          SELECT id,workspace_id,slug,name,created_at FROM public.projects;
+        CREATE OR REPLACE VIEW publication_gateway.channels WITH (security_barrier=true) AS
+          SELECT id,workspace_id,project_id,slug,name,kind,policy_json,
+                 '[]'::jsonb AS webhook_ids,repeat('0',64) AS analytics_token_hash,
+                 current_release_id,sequence,created_at
+            FROM public.channels
+           WHERE kind IN ('public-catalog','private-portal');
+        CREATE OR REPLACE VIEW publication_gateway.releases WITH (security_barrier=true) AS
+          SELECT r.id,r.workspace_id,r.project_id,r.channel_id,r.sequence,r.status,r.release_json,
+                 repeat('0',64) AS manifest_hash,''::text AS idempotency_key,
+                 repeat('0',64) AS request_hash,r.published_at,r.supersedes_release_id,
+                 r.rollback_of_release_id,NULL::jsonb AS evidence_json
+            FROM public.releases r
+           WHERE EXISTS (SELECT 1 FROM public.channels c WHERE c.current_release_id=r.id);
+        CREATE OR REPLACE VIEW publication_gateway.custom_domains WITH (security_barrier=true) AS
+          SELECT id,workspace_id,project_id,channel_id,hostname,routing_target,status,dns_status,
+                 ''::text AS challenge_name,''::text AS challenge_value,
+                 dns_checked_at,dns_verified_at,
+                 CASE WHEN provisioning_json IS NULL THEN NULL ELSE jsonb_strip_nulls(jsonb_build_object(
+                   'operationKey','redacted','desiredState',provisioning_json->'desiredState',
+                   'certificate',provisioning_json->'certificate','routing',provisioning_json->'routing',
+                   'requestedAt',provisioning_json->'requestedAt','observedAt',provisioning_json->'observedAt'
+                 )) END AS provisioning_json,
+                 version,''::text AS created_by,created_at,updated_at,removed_at
+            FROM public.custom_domains
+           WHERE status='active';
+        CREATE OR REPLACE VIEW publication_gateway.identity_users WITH (security_barrier=true) AS
+          SELECT u.id,''::text AS email,''::text AS display_name,u.created_at,u.disabled_at
+            FROM public.identity_users u
+           WHERE EXISTS (
+             SELECT 1 FROM public.portal_grants g
+              WHERE g.subject_kind='user' AND g.subject_user_id=u.id
+           );
+        CREATE OR REPLACE VIEW publication_gateway.user_sessions WITH (security_barrier=true) AS
+          SELECT s.id,s.user_id,s.source_token_id,s.workspace_id,s.scopes,s.project_id,s.channel_id,
+                 s.created_at,s.expires_at,s.revoked_at
+            FROM public.user_sessions s
+           WHERE EXISTS (
+             SELECT 1 FROM public.portal_grants g
+              WHERE g.subject_kind='user' AND g.subject_user_id=s.user_id
+                AND g.workspace_id=s.workspace_id
+                AND (s.project_id IS NULL OR s.project_id=g.project_id)
+                AND (s.channel_id IS NULL OR s.channel_id=g.channel_id)
+           );
+        CREATE OR REPLACE VIEW publication_gateway.identity_api_tokens WITH (security_barrier=true) AS
+          SELECT t.id,t.user_id,t.workspace_id,''::text AS name,repeat('0',64) AS token_hash,
+                 t.scopes,t.project_id,t.channel_id,t.created_at,t.expires_at,
+                 NULL::timestamptz AS last_used_at,t.revoked_at
+            FROM public.identity_api_tokens t
+           WHERE EXISTS (
+             SELECT 1 FROM public.user_sessions s
+              JOIN public.portal_grants g ON g.subject_kind='user'
+               AND g.subject_user_id=s.user_id AND g.workspace_id=s.workspace_id
+               AND (s.project_id IS NULL OR s.project_id=g.project_id)
+               AND (s.channel_id IS NULL OR s.channel_id=g.channel_id)
+              WHERE s.source_token_id=t.id
+           );
+        CREATE OR REPLACE VIEW publication_gateway.portal_grants WITH (security_barrier=true) AS
+          SELECT id,workspace_id,project_id,channel_id,subject_kind,subject_user_id,subject_label,
+                 permission,''::text AS created_by,created_at,expires_at,revoked_at
+            FROM public.portal_grants;
+        CREATE OR REPLACE VIEW publication_gateway.private_share_links WITH (security_barrier=true) AS
+          SELECT id,grant_id,token_hash,''::text AS created_by,created_at,expires_at,revoked_at
+            FROM public.private_share_links;
+
+        REVOKE ALL ON ALL TABLES IN SCHEMA publication_gateway FROM PUBLIC;
+        GRANT SELECT ON publication_gateway.workspaces,publication_gateway.projects,
+          publication_gateway.channels,publication_gateway.releases,
+          publication_gateway.custom_domains,publication_gateway.identity_users,
+          publication_gateway.user_sessions,publication_gateway.identity_api_tokens,
+          publication_gateway.portal_grants,publication_gateway.private_share_links
+          TO scenebook_gateway;
+        SQL
+    security_opt:
+      - no-new-privileges:true
+    networks: [backend]
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.gateway
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 40s
+    depends_on:
+      postgres-gateway-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 4320
+      DATABASE_URL: postgresql://scenebook_gateway:${SCENEBOOK_GATEWAY_POSTGRES_PASSWORD:?set SCENEBOOK_GATEWAY_POSTGRES_PASSWORD}@postgres:5432/scenebook
+      SCENEBOOK_PUBLIC_URL: ${SCENEBOOK_PUBLIC_URL:?set SCENEBOOK_PUBLIC_URL}
+      SCENEBOOK_PUBLICATION_URL: ${SCENEBOOK_PUBLICATION_URL:?set SCENEBOOK_PUBLICATION_URL}
+      SCENEBOOK_CONTROL_PLANE_INTERNAL_URL: http://cloud:4310
+      SCENEBOOK_IDENTITY_VERIFICATION_PUBLIC_KEY: ${SCENEBOOK_IDENTITY_VERIFICATION_PUBLIC_KEY:?set SCENEBOOK_IDENTITY_VERIFICATION_PUBLIC_KEY}
+      SCENEBOOK_IDENTITY_PREVIOUS_VERIFICATION_PUBLIC_KEYS_JSON: '${SCENEBOOK_IDENTITY_PREVIOUS_VERIFICATION_PUBLIC_KEYS_JSON:-[]}'
+      SCENEBOOK_GATEWAY_SESSION_SECRET: ${SCENEBOOK_GATEWAY_SESSION_SECRET:?set SCENEBOOK_GATEWAY_SESSION_SECRET}
+      SCENEBOOK_GATEWAY_EXCHANGE_SECRET: ${SCENEBOOK_GATEWAY_EXCHANGE_SECRET:?set SCENEBOOK_GATEWAY_EXCHANGE_SECRET}
+      SCENEBOOK_GATEWAY_EXCHANGE_TIMEOUT_MS: ${SCENEBOOK_GATEWAY_EXCHANGE_TIMEOUT_MS:-5000}
+      SCENEBOOK_GATEWAY_SESSION_TTL_SECONDS: ${SCENEBOOK_GATEWAY_SESSION_TTL_SECONDS:-28800}
+      SCENEBOOK_GATEWAY_MAX_JSON_BYTES: ${SCENEBOOK_GATEWAY_MAX_JSON_BYTES:-16384}
+      SCENEBOOK_GATEWAY_MAX_MEMBER_BYTES: ${SCENEBOOK_GATEWAY_MAX_MEMBER_BYTES:-402653184}
+      SCENEBOOK_GATEWAY_MAX_CACHE_BYTES: ${SCENEBOOK_GATEWAY_MAX_CACHE_BYTES:-536870912}
+      SCENEBOOK_GATEWAY_MAX_RESPONSES: ${SCENEBOOK_GATEWAY_MAX_RESPONSES:-3}
+      SCENEBOOK_GATEWAY_TEMPORARY_ROOT: /tmp/scenebook-publication-gateway
+      SCENEBOOK_OBJECT_STORE: s3
+      SCENEBOOK_S3_BUCKET: scenebook
+      SCENEBOOK_S3_REGION: us-east-1
+      SCENEBOOK_S3_ENDPOINT: http://minio:9000
+      SCENEBOOK_S3_ACCESS_KEY_ID: ${SCENEBOOK_GATEWAY_S3_ACCESS_KEY_ID:?set SCENEBOOK_GATEWAY_S3_ACCESS_KEY_ID}
+      SCENEBOOK_S3_SECRET_ACCESS_KEY: ${SCENEBOOK_GATEWAY_S3_SECRET_ACCESS_KEY:?set SCENEBOOK_GATEWAY_S3_SECRET_ACCESS_KEY}
+      SCENEBOOK_S3_FORCE_PATH_STYLE: 'true'
+    ports:
+      - 127.0.0.1:${SCENEBOOK_GATEWAY_PORT:-4320}:4320
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:4320/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp:size=2g,uid=1000,gid=1000,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    networks: [backend, edge]
+
+  studio:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.studio
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:${SCENEBOOK_STUDIO_PORT:-8080}:8080
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=32m,uid=101,gid=101,mode=0755
+      - /var/run:size=4m,uid=101,gid=101,mode=0755
+    security_opt:
+      - no-new-privileges:true
+    networks: [edge]
+
+  static:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.static
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:${SCENEBOOK_STATIC_PORT:-8081}:8080
+    volumes:
+      - ./published:/usr/share/nginx/html:ro
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=32m,uid=101,gid=101,mode=0755
+      - /var/run:size=4m,uid=101,gid=101,mode=0755
+    security_opt:
+      - no-new-privileges:true
+    networks: [edge]
+
+volumes:
+  postgres_data:
+  minio_data:
+
+networks:
+  backend:
+    internal: true
+  edge:

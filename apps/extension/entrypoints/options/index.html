@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>Scenebook Recorder settings</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Studio connection</h1>
+      <p>
+        Choose where <strong>Open in Studio</strong> sends your downloaded scene. The extension
+        never uploads it automatically.
+      </p>
+      <form id="settings-form">
+        <label for="studio-url">Studio URL</label>
+        <input id="studio-url" name="studio-url" type="url" required spellcheck="false" />
+        <small>Use HTTPS, except for a local loopback address.</small>
+        <div class="actions">
+          <button class="primary" type="submit">Save connection</button>
+          <button id="reset" type="button">Restore default</button>
+        </div>
+      </form>
+      <p id="status" role="status" aria-live="polite"></p>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

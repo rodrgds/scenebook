@@ -1,0 +1,36 @@
+#!/bin/sh
+set -eu
+
+test "${1:-}" = compose || { echo "Unexpected docker invocation" >&2; exit 2; }
+command=${2:-}
+case "$command" in
+  ps)
+    exit 0
+    ;;
+  exec)
+    printf '%s\n' 'mock-postgresql-dump'
+    ;;
+  run)
+    backup=
+    for argument in "$@"; do
+      case "$argument" in
+        *:/backup) backup=${argument%:/backup} ;;
+      esac
+    done
+    case "$backup" in
+      "$SCENEBOOK_BACKUP_TEST_ROOT"/*) ;;
+      *) echo "Unsafe mock backup path: $backup" >&2; exit 2 ;;
+    esac
+    mkdir -p "$backup/objects/nested"
+    printf '%s\n' 'mock-object' >"$backup/objects/nested/object.bin"
+    chmod 700 "$backup/objects" "$backup/objects/nested"
+    chmod 600 "$backup/objects/nested/object.bin"
+    ;;
+  images)
+    printf '%s\n' '{"Service":"mock","Repository":"scenebook/mock","Tag":"test"}'
+    ;;
+  *)
+    echo "Unexpected docker compose command: $command" >&2
+    exit 2
+    ;;
+esac

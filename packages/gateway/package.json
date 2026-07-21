@@ -1,0 +1,48 @@
+{
+  "name": "@scenebook/gateway",
+  "version": "0.1.0",
+  "description": "Hardened Scenebook publication data plane",
+  "type": "module",
+  "source": "./src/index.ts",
+  "private": true,
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "tsconfig.json",
+    "tsconfig.build.json"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist coverage"
+  },
+  "dependencies": {
+    "@scenebook/core": "workspace:*",
+    "@scenebook/schema": "workspace:*",
+    "@scenebook/server": "workspace:*",
+    "fflate": "0.8.3",
+    "hono": "4.12.31",
+    "jose": "6.2.3",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "AGPL-3.0-only"
+}

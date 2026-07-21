@@ -1,0 +1,12 @@
+.git
+.turbo
+**/.turbo
+**/node_modules
+**/dist
+**/coverage
+tmp
+examples/**/scenebook-dist
+**/.scenebook
+**/.scenebook/**
+examples/**/*-dist
+examples/**/*-dist/**

@@ -1,0 +1,5 @@
+*
+!deploy
+!deploy/nginx-static.conf
+!deploy/published
+!deploy/published/**

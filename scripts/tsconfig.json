@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "types": ["bun", "vitest/globals"]
+  },
+  "include": [
+    "publish-release.ts",
+    "release-packages.ts",
+    "release.test.ts",
+    "sync-release-metadata.ts",
+    "verify-release.ts"
+  ]
+}

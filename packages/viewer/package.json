@@ -1,0 +1,50 @@
+{
+  "name": "@scenebook/viewer",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "description": "Accessible, framework-neutral Scenebook walkthrough player",
+  "type": "module",
+  "source": "./src/index.ts",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "sideEffects": true,
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist coverage"
+  },
+  "devDependencies": {
+    "happy-dom": "20.11.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rodrgds/scenebook.git",
+    "directory": "packages/viewer"
+  },
+  "homepage": "https://github.com/rodrgds/scenebook#readme",
+  "bugs": {
+    "url": "https://github.com/rodrgds/scenebook/issues"
+  }
+}

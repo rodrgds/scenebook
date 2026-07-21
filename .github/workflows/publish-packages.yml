@@ -1,0 +1,74 @@
+name: Publish public packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type PUBLISH to run the protected npm publication
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-public-packages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: npm-production
+    env:
+      NPM_CONFIG_PROVENANCE: 'true'
+      SCENEBOOK_RELEASE_CONFIRM: ${{ inputs.confirm }}
+    steps:
+      - name: Validate protected invocation
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          test "$SCENEBOOK_RELEASE_CONFIRM" = PUBLISH
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+      - name: Pin trusted-publishing npm client
+        run: npm install --global npm@11.18.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.3
+      - run: bun install --frozen-lockfile
+      - name: Install system motion encoder
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+      - name: Require owner-configured package metadata
+        run: bun run release:metadata:check
+      - name: Check formatting
+        run: bun run format:check
+      - name: Typecheck
+        run: bun run check
+      - name: Test
+        run: SCENEBOOK_FFMPEG_PATH="$(command -v ffmpeg)" bun run test
+      - name: Build
+        run: bun run build
+      - name: Bun-pack and clean-install every public package
+        run: >-
+          bun scripts/verify-release.ts --strict-metadata --output .release/tarballs --keep
+      - name: Require a versioned, reproducible checkout
+        run: |
+          test -z "$(find .changeset -maxdepth 1 -name '*.md' -print -quit)"
+          git diff --exit-code
+      - name: Retain verified tarballs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scenebook-npm-tarballs-${{ github.sha }}
+          path: .release/tarballs
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish in verified dependency order with provenance
+        run: >-
+          bun scripts/publish-release.ts --manifest .release/tarballs/release-manifest.json

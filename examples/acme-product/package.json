@@ -1,0 +1,20 @@
+{
+  "name": "@scenebook/acme-product",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test:replay": "playwright test --config playwright.config.ts"
+  },
+  "dependencies": {
+    "@playwright/test": "1.61.1",
+    "@scenebook/cli": "workspace:*",
+    "@scenebook/playwright": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "typescript": "7.0.2"
+  }
+}

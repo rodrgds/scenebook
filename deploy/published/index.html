@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>No publication available</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+        background: #f4f5f6;
+        color: #1c1d1f;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: #f4f5f6;
+      }
+      main {
+        width: min(100%, 40rem);
+        padding: clamp(28px, 6vw, 56px);
+        border: 1px solid #dfe2e5;
+        border-radius: 20px;
+        background: #fff;
+      }
+      h1 {
+        max-width: 18ch;
+        margin: 0;
+        font-family: ui-serif, Charter, Georgia, serif;
+        font-size: clamp(2rem, 7vw, 3.5rem);
+        line-height: 1;
+        letter-spacing: -0.03em;
+      }
+      p {
+        max-width: 52ch;
+        margin: 20px 0 0;
+        color: #5f646b;
+        font-size: 1.0625rem;
+        line-height: 1.65;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root,
+        body {
+          background: #161719;
+          color: #f4f5f6;
+        }
+        main {
+          border-color: #36393d;
+          background: #202225;
+        }
+        p {
+          color: #b8bdc3;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>No publication is available</h1>
+      <p>This site has not published a walkthrough yet. Try again later.</p>
+    </main>
+  </body>
+</html>

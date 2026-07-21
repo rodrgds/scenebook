@@ -1,0 +1,411 @@
+schemaVersion: 1
+id: invite-member
+slug: invite-member
+title: Invite a teammate
+description: Add a teammate to the Acme Studio workspace and confirm their invitation.
+status: published
+capability: verified
+criticality: important
+audience:
+  - workspace-admin
+tags:
+  - team-management
+  - onboarding
+defaultLocale: en
+locales: []
+theme:
+  file: theme.yaml
+  variables: {}
+steps:
+  - id: open-invitation-form
+    kind: browser
+    title: Open the invitation form
+    instruction: Choose Invite member.
+    caption: Start from the Members page and open a new invitation.
+    altText: Acme Studio Members page with the Invite member button highlighted.
+    states:
+      before:
+        id: members-before-invite
+        route: /?scenebook=1
+        screenshot:
+          sha256: ffeaf0b71e4dcee1e729bb5696868b6ddee6ed04a4a9895bb34898f393f1392d
+          path: assets/ffeaf0b71e4dcee1e729bb5696868b6ddee6ed04a4a9895bb34898f393f1392d.png
+          mediaType: image/png
+          byteLength: 62613
+          role: screenshot
+          width: 1440
+          height: 900
+        viewport:
+          width: 1440
+          height: 900
+          deviceScaleFactor: 1
+          isMobile: false
+        scroll:
+          x: 0
+          y: 0
+        capturedAt: 2026-07-20T12:00:00.000Z
+    target:
+      role: button
+      accessibleName: Invite member
+      selectors:
+        - engine: role
+          value: "getByRole('button', { name: 'Invite member' })"
+          confidence: 0.99
+          generated: false
+        - engine: css
+          value: '#invite'
+          confidence: 0.8
+          generated: true
+      normalizedRect:
+        x: 0.837554
+        y: 0.172222
+        width: 0.09439
+        height: 0.044444
+      visible: true
+      occluded: false
+    actions:
+      - id: click-invite
+        kind: click
+        target:
+          role: button
+          accessibleName: Invite member
+          selectors:
+            - engine: role
+              value: "getByRole('button', { name: 'Invite member' })"
+              confidence: 0.99
+              generated: false
+            - engine: css
+              value: '#invite'
+              confidence: 0.8
+              generated: true
+          normalizedRect:
+            x: 0.837554
+            y: 0.172222
+            width: 0.09439
+            height: 0.044444
+          visible: true
+          occluded: false
+    checks: []
+    presentation:
+      durationMs: 2600
+      annotations:
+        - id: open-invitation-hotspot
+          kind: hotspot
+          rect:
+            x: 0.837554
+            y: 0.172222
+            width: 0.09439
+            height: 0.044444
+      autoAdvance: false
+      transition: fade
+      state: before
+      visibility:
+        interactive: true
+        guide: true
+        motion: true
+        launchMedia: true
+      practiceMode: false
+    masks: []
+    choices: []
+  - id: enter-invitee
+    kind: browser
+    title: Enter your teammate’s email
+    instruction: Enter the teammate’s work email. Scenebook masks this field before capture.
+    caption: Add the person you want to invite. Sensitive values stay out of the Scene source.
+    altText: Invitation dialog with the email field irreversibly masked.
+    states:
+      before:
+        id: invite-form-empty
+        route: /?scenebook=1
+        screenshot:
+          sha256: 935955996e878e352c722f3d22baa0f67120c294a9c614be3593743d52736d43
+          path: assets/935955996e878e352c722f3d22baa0f67120c294a9c614be3593743d52736d43.png
+          mediaType: image/png
+          byteLength: 99541
+          role: screenshot
+          width: 1440
+          height: 900
+        viewport:
+          width: 1440
+          height: 900
+          deviceScaleFactor: 1
+          isMobile: false
+        scroll:
+          x: 0
+          y: 0
+        capturedAt: 2026-07-20T12:00:00.000Z
+    target:
+      role: textbox
+      accessibleName: Email address
+      selectors:
+        - engine: role
+          value: getByLabel('Email address')
+          confidence: 0.99
+          generated: false
+        - engine: css
+          value: '#invite-email'
+          confidence: 0.8
+          generated: true
+      normalizedRect:
+        x: 0.370139
+        y: 0.439444
+        width: 0.259722
+        height: 0.044444
+      visible: true
+      occluded: false
+    actions:
+      - id: fill-email
+        kind: fill
+        target:
+          role: textbox
+          accessibleName: Email address
+          selectors:
+            - engine: role
+              value: getByLabel('Email address')
+              confidence: 0.99
+              generated: false
+            - engine: css
+              value: '#invite-email'
+              confidence: 0.8
+              generated: true
+          normalizedRect:
+            x: 0.370139
+            y: 0.439444
+            width: 0.259722
+            height: 0.044444
+          visible: true
+          occluded: false
+        value:
+          kind: fixture
+          name: invitee_email
+          sensitive: true
+    checks: []
+    presentation:
+      durationMs: 2600
+      annotations:
+        - id: invitee-email-hotspot
+          kind: hotspot
+          rect:
+            x: 0.370139
+            y: 0.439444
+            width: 0.259722
+            height: 0.044444
+      autoAdvance: false
+      transition: fade
+      state: before
+      visibility:
+        interactive: true
+        guide: true
+        motion: true
+        launchMedia: true
+      practiceMode: false
+    masks:
+      - id: invitee-email-mask
+        mode: opaque
+        source: attribute
+        scope: both
+        rect:
+          x: 0.370139
+          y: 0.439444
+          width: 0.259722
+          height: 0.044444
+        reason: Example invitee address
+        classification: email
+    choices: []
+  - id: send-invitation
+    kind: browser
+    title: Send the invitation
+    instruction: Review the selected role, then send the invitation.
+    caption: The new member starts with the Member role. You can change it before sending.
+    altText: Completed invitation form with the Send invitation button highlighted and email masked.
+    states:
+      before:
+        id: invite-form-complete
+        route: /?scenebook=1
+        screenshot:
+          sha256: 935955996e878e352c722f3d22baa0f67120c294a9c614be3593743d52736d43
+          path: assets/935955996e878e352c722f3d22baa0f67120c294a9c614be3593743d52736d43.png
+          mediaType: image/png
+          byteLength: 99541
+          role: screenshot
+          width: 1440
+          height: 900
+        viewport:
+          width: 1440
+          height: 900
+          deviceScaleFactor: 1
+          isMobile: false
+        scroll:
+          x: 0
+          y: 0
+        capturedAt: 2026-07-20T12:00:00.000Z
+    target:
+      role: button
+      accessibleName: Send invitation
+      selectors:
+        - engine: role
+          value: "getByRole('button', { name: 'Send invitation' })"
+          confidence: 0.99
+          generated: false
+      normalizedRect:
+        x: 0.559635
+        y: 0.681667
+        width: 0.070226
+        height: 0.042222
+      visible: true
+      occluded: false
+    actions:
+      - id: click-send
+        kind: click
+        target:
+          role: button
+          accessibleName: Send invitation
+          selectors:
+            - engine: role
+              value: "getByRole('button', { name: 'Send invitation' })"
+              confidence: 0.99
+              generated: false
+          normalizedRect:
+            x: 0.559635
+            y: 0.681667
+            width: 0.070226
+            height: 0.042222
+          visible: true
+          occluded: false
+    checks: []
+    presentation:
+      durationMs: 2600
+      annotations:
+        - id: send-invitation-hotspot
+          kind: hotspot
+          rect:
+            x: 0.559635
+            y: 0.681667
+            width: 0.070226
+            height: 0.042222
+      autoAdvance: false
+      transition: fade
+      state: before
+      visibility:
+        interactive: true
+        guide: true
+        motion: true
+        launchMedia: true
+      practiceMode: false
+    masks:
+      - id: invitee-email-mask
+        mode: opaque
+        source: attribute
+        scope: both
+        rect:
+          x: 0.370139
+          y: 0.439444
+          width: 0.259722
+          height: 0.044444
+        reason: Example invitee address
+        classification: email
+    choices: []
+  - id: confirm-invitation
+    kind: browser
+    title: Confirm the invitation
+    instruction: Look for the confirmation and the new pending member.
+    caption: The invitation is sent and the teammate appears in the member list.
+    altText: Members page showing an invitation sent confirmation and a pending member.
+    states:
+      after:
+        id: invite-sent
+        route: /?scenebook=1
+        screenshot:
+          sha256: 09830cb828f7fe4cf5753a651e8591ab716f2b274daaa6eb8a7b347af2fa4e6d
+          path: assets/09830cb828f7fe4cf5753a651e8591ab716f2b274daaa6eb8a7b347af2fa4e6d.png
+          mediaType: image/png
+          byteLength: 73786
+          role: screenshot
+          width: 1440
+          height: 900
+        viewport:
+          width: 1440
+          height: 900
+          deviceScaleFactor: 1
+          isMobile: false
+        scroll:
+          x: 0
+          y: 0
+        capturedAt: 2026-07-20T12:00:00.000Z
+    actions: []
+    checks:
+      - id: invitation-sent-visible
+        kind: visible
+        description: Invitation sent confirmation is visible
+        critical: true
+    presentation:
+      durationMs: 2600
+      annotations: []
+      autoAdvance: false
+      transition: fade
+      state: after
+      visibility:
+        interactive: true
+        guide: true
+        motion: true
+        launchMedia: true
+      practiceMode: false
+    masks: []
+    choices: []
+  - id: invite-another
+    kind: end
+    title: Your teammate is on the way
+    caption: Share this guide with another workspace admin, or return to the product.
+    states: {}
+    actions: []
+    checks: []
+    presentation:
+      durationMs: 2600
+      annotations: []
+      autoAdvance: false
+      transition: fade
+      state: before
+      visibility:
+        interactive: true
+        guide: true
+        motion: true
+        launchMedia: true
+      practiceMode: false
+    masks: []
+    choices: []
+    cta:
+      kind: restart
+      label: Watch again
+      fields: []
+assets:
+  - sha256: ffeaf0b71e4dcee1e729bb5696868b6ddee6ed04a4a9895bb34898f393f1392d
+    path: assets/ffeaf0b71e4dcee1e729bb5696868b6ddee6ed04a4a9895bb34898f393f1392d.png
+    mediaType: image/png
+    byteLength: 62613
+    role: screenshot
+    width: 1440
+    height: 900
+  - sha256: 935955996e878e352c722f3d22baa0f67120c294a9c614be3593743d52736d43
+    path: assets/935955996e878e352c722f3d22baa0f67120c294a9c614be3593743d52736d43.png
+    mediaType: image/png
+    byteLength: 99541
+    role: screenshot
+    width: 1440
+    height: 900
+  - sha256: 09830cb828f7fe4cf5753a651e8591ab716f2b274daaa6eb8a7b347af2fa4e6d
+    path: assets/09830cb828f7fe4cf5753a651e8591ab716f2b274daaa6eb8a7b347af2fa4e6d.png
+    mediaType: image/png
+    byteLength: 73786
+    role: screenshot
+    width: 1440
+    height: 900
+automation:
+  level: verified
+  framework: playwright
+  replayPath: automation/replay.ts
+createdAt: 2026-07-20T12:00:00.000Z
+updatedAt: 2026-07-20T12:00:00.000Z
+metadata:
+  owner: Developer Experience
+  environment: example
+  release: '2026.7'

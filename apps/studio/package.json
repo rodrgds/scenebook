@@ -1,0 +1,35 @@
+{
+  "name": "@scenebook/studio",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev --host 127.0.0.1",
+    "build": "vite build && bun ../../deploy/scripts/verify-studio-csp.mjs build/index.html ../../deploy/nginx-studio.conf",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf .svelte-kit build coverage"
+  },
+  "dependencies": {
+    "@scenebook/schema": "workspace:*",
+    "@scenebook/viewer": "workspace:*",
+    "@sveltejs/kit": "2.70.1",
+    "fflate": "0.8.3",
+    "svelte": "5.56.7",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@scenebook/compiler": "workspace:*",
+    "@sveltejs/adapter-static": "3.0.10",
+    "@sveltejs/vite-plugin-svelte": "7.2.0",
+    "@testing-library/svelte": "5.4.2",
+    "happy-dom": "20.11.0",
+    "svelte-check": "4.7.3",
+    "typescript": "6.0.3",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}

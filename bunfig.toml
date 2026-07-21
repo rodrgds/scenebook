@@ -1,0 +1,6 @@
+[install]
+exact = false
+linker = "isolated"
+
+[test]
+coverage = true

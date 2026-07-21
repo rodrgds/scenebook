@@ -1,0 +1,66 @@
+{
+  "name": "@scenebook/cli",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "description": "Command-line workbench for Scenebook",
+  "type": "module",
+  "source": "./src/index.ts",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "scenebook": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist coverage"
+  },
+  "dependencies": {
+    "@babel/parser": "8.0.4",
+    "@scenebook/adapters": "workspace:*",
+    "@scenebook/compiler": "workspace:*",
+    "@scenebook/core": "workspace:*",
+    "@scenebook/policy": "workspace:*",
+    "@scenebook/privacy": "workspace:*",
+    "@scenebook/playwright": "workspace:*",
+    "@scenebook/schema": "workspace:*",
+    "fflate": "0.8.3",
+    "jiti": "2.7.0",
+    "tinyglobby": "0.2.17",
+    "yaml": "2.9.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rodrgds/scenebook.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/rodrgds/scenebook#readme",
+  "bugs": {
+    "url": "https://github.com/rodrgds/scenebook/issues"
+  }
+}

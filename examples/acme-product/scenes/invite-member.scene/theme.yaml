@@ -1,0 +1,12 @@
+id: paper-vermilion
+name: Paper and vermilion
+fontFamily: Inter, ui-sans-serif, system-ui, sans-serif
+headingFontFamily: Georgia, ui-serif, serif
+background: '#f7f2ea'
+surface: '#fffdf8'
+foreground: '#191714'
+muted: '#6f685f'
+accent: '#df4b31'
+frame: browser
+cursor: pointer
+radius: 14

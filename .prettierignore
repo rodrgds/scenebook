@@ -1,0 +1,15 @@
+.svelte-kit
+.turbo
+.agents
+.output
+.wxt
+.scenebook
+build
+coverage
+dist
+node_modules
+playwright-report
+test-results
+bun.lock
+examples/**/scenebook-dist
+examples/**/*-dist

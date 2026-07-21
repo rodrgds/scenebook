@@ -1,0 +1,9 @@
+{
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": true,
+    "strict": true,
+    "types": ["chrome"]
+  },
+  "include": ["entrypoints/**/*.ts", "src/**/*.ts", "wxt.config.ts", ".wxt/wxt.d.ts"]
+}

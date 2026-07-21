@@ -1,0 +1,215 @@
+name: Scenebook
+description: Verify portable product stories and retain a privacy-safe, commit-bound visual review.
+branding:
+  icon: book-open
+  color: orange
+inputs:
+  config:
+    description: Path to scenebook.config.ts, relative to working-directory.
+    default: scenebook.config.ts
+  working-directory:
+    description: Repository directory containing the Scenebook project.
+    default: .
+  version:
+    description: Published @scenebook/cli version. Pin this in production.
+    default: 0.1.0
+  target:
+    description: Exact configured Run Target ID. Required when more than one target is enabled.
+    default: ''
+  upload:
+    description: Explicitly upload functionally passed, privacy-clear evidence (unchanged or reviewable changed) through GitHub OIDC.
+    default: 'false'
+  server-url:
+    description: HTTPS Scenebook control-plane URL. Required only when upload is true.
+    default: ''
+  workspace-id:
+    description: Scenebook Workspace ID. This identifier is not a secret.
+    default: ''
+  project-id:
+    description: Scenebook Project ID, which must match the configured Project. This identifier is not a secret.
+    default: ''
+  oidc-audience:
+    description: GitHub OIDC audience accepted by the Scenebook control plane.
+    default: scenebook
+  provider:
+    description: Local OCR provider used to attest exact Run screenshots before CI evidence is finalized (tesseract or command).
+    default: tesseract
+  command-json:
+    description: JSON argument array for the command OCR provider; no shell is invoked.
+    default: ''
+  scanner-id:
+    description: Stable identifier for the command OCR provider.
+    default: ''
+  scanner-version:
+    description: Version of the command OCR provider.
+    default: ''
+  evidence-directory:
+    description: Reporter evidence directory, relative to working-directory.
+    default: .scenebook/runs
+  artifact-name:
+    description: Safe 1-80 character prefix for the uniquely named retained visual review artifact.
+    default: scenebook-visual-review
+  post-checks:
+    description: Explicitly create GitHub Check Runs after the privacy-safe artifact is retained.
+    default: 'false'
+  github-token:
+    description: Explicit GitHub Actions token used only when post-checks is true. Grant checks write; never use a PAT.
+    default: ''
+outputs:
+  verification-exit-code:
+    description: Original scenebook ci exit code, retained even though report/upload steps run afterward.
+    value: ${{ steps.verify.outputs.exit-code }}
+  artifact-url:
+    description: Authenticated GitHub URL for the retained privacy-safe review artifact.
+    value: ${{ steps.artifact.outputs.artifact-url }}
+  artifact-digest:
+    description: GitHub-computed SHA-256 digest of the retained artifact archive.
+    value: ${{ steps.artifact.outputs.artifact-digest }}
+runs:
+  using: composite
+  steps:
+    - name: Install pinned Node.js runtime
+      uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      with:
+        node-version: 24.18.0
+        check-latest: false
+    - name: Install pinned Bun runtime
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version: 1.3.3
+    - name: Run Scenebook verification
+      id: verify
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        SCENEBOOK_ACTION_CONFIG: ${{ inputs.config }}
+        SCENEBOOK_ACTION_VERSION: ${{ inputs.version }}
+        SCENEBOOK_ACTION_TARGET: ${{ inputs.target }}
+        SCENEBOOK_ACTION_UPLOAD: ${{ inputs.upload }}
+        SCENEBOOK_ACTION_SERVER_URL: ${{ inputs.server-url }}
+        SCENEBOOK_ACTION_WORKSPACE_ID: ${{ inputs.workspace-id }}
+        SCENEBOOK_ACTION_PROJECT_ID: ${{ inputs.project-id }}
+        SCENEBOOK_ACTION_OIDC_AUDIENCE: ${{ inputs.oidc-audience }}
+        SCENEBOOK_ACTION_OCR_PROVIDER: ${{ inputs.provider }}
+        SCENEBOOK_ACTION_OCR_COMMAND_JSON: ${{ inputs.command-json }}
+        SCENEBOOK_ACTION_OCR_SCANNER_ID: ${{ inputs.scanner-id }}
+        SCENEBOOK_ACTION_OCR_SCANNER_VERSION: ${{ inputs.scanner-version }}
+        SCENEBOOK_ACTION_POST_CHECKS: ${{ inputs.post-checks }}
+        SCENEBOOK_ACTION_ARTIFACT_NAME: ${{ inputs.artifact-name }}
+      run: |
+        set -euo pipefail
+        verification_started_at="$(NODE_OPTIONS= NODE_PATH= node -e 'process.stdout.write(new Date().toISOString())')"
+        set +e
+        bash "$GITHUB_ACTION_PATH/scripts/github-action-verify.sh"
+        verification_exit_code="$?"
+        set -e
+        if [[ ! "$verification_exit_code" =~ ^[0-9]+$ ]] || (( verification_exit_code < 0 || verification_exit_code > 255 )); then
+          verification_exit_code=255
+        fi
+        echo "exit-code=$verification_exit_code" >> "$GITHUB_OUTPUT"
+        echo "started-at=$verification_started_at" >> "$GITHUB_OUTPUT"
+
+    - name: Build privacy-safe visual review
+      id: report
+      if: always()
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        SCENEBOOK_ACTION_EVIDENCE_DIRECTORY: ${{ inputs.evidence-directory }}
+        SCENEBOOK_ACTION_VERIFICATION_EXIT_CODE: ${{ steps.verify.outputs.exit-code }}
+        SCENEBOOK_ACTION_VERIFICATION_STARTED_AT: ${{ steps.verify.outputs.started-at }}
+        SCENEBOOK_ACTION_ARTIFACT_NAME: ${{ inputs.artifact-name }}
+        NODE_OPTIONS: ''
+        NODE_PATH: ''
+      run: |
+        set -euo pipefail
+        report_root="$(mktemp -d "$RUNNER_TEMP/scenebook-review.XXXXXXXXXXXX")"
+        report_directory="$report_root/artifact"
+        artifact_prefix="$SCENEBOOK_ACTION_ARTIFACT_NAME"
+        if [[ ! "$artifact_prefix" =~ ^[A-Za-z0-9._+-]{1,80}$ ]]; then
+          artifact_prefix=scenebook-visual-review
+        fi
+        run_id="${GITHUB_RUN_ID:-local}"
+        run_attempt="${GITHUB_RUN_ATTEMPT:-0}"
+        if [[ ! "$run_id" =~ ^[0-9]+$ ]]; then run_id=local; fi
+        if [[ ! "$run_attempt" =~ ^[0-9]+$ ]]; then run_attempt=0; fi
+        report_suffix="${report_root##*.}"
+        artifact_name="$artifact_prefix-$run_id-$run_attempt-$report_suffix"
+        set +e
+        node "$GITHUB_ACTION_PATH/scripts/github-review-artifact.mjs" \
+          --working-directory "$PWD" \
+          --evidence-directory "$SCENEBOOK_ACTION_EVIDENCE_DIRECTORY" \
+          --output "$report_directory" \
+          --verification-exit-code "${SCENEBOOK_ACTION_VERIFICATION_EXIT_CODE:-255}" \
+          --verification-started-at "$SCENEBOOK_ACTION_VERIFICATION_STARTED_AT" \
+          --expected-commit "${GITHUB_SHA:-}"
+        report_exit_code="$?"
+        set -e
+        ready=false
+        if [[ -f "$report_directory/manifest.json" && ! -L "$report_directory/manifest.json" && -f "$report_directory/index.html" && ! -L "$report_directory/index.html" ]]; then
+          ready=true
+          if [[ -n "${GITHUB_STEP_SUMMARY:-}" && -f "$report_directory/summary.md" && ! -L "$report_directory/summary.md" ]]; then
+            printf '\n' >> "$GITHUB_STEP_SUMMARY"
+            command cat "$report_directory/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+        fi
+        echo "directory=$report_directory" >> "$GITHUB_OUTPUT"
+        echo "artifact-name=$artifact_name" >> "$GITHUB_OUTPUT"
+        echo "exit-code=$report_exit_code" >> "$GITHUB_OUTPUT"
+        echo "ready=$ready" >> "$GITHUB_OUTPUT"
+
+    - name: Retain privacy-safe visual review
+      id: artifact
+      if: always() && steps.report.outputs.ready == 'true'
+      continue-on-error: true
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ steps.report.outputs.artifact-name }}
+        path: ${{ steps.report.outputs.directory }}
+        if-no-files-found: error
+        include-hidden-files: false
+        retention-days: 14
+
+    - name: Post exact GitHub Checks
+      id: checks
+      if: always() && inputs.post-checks == 'true' && steps.artifact.outcome == 'success' && github.event_name != 'pull_request_target' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      continue-on-error: true
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        SCENEBOOK_ACTION_GITHUB_TOKEN: ${{ inputs.github-token }}
+        SCENEBOOK_ACTION_EVIDENCE_DIRECTORY: ${{ inputs.evidence-directory }}
+        SCENEBOOK_ACTION_ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+        NODE_OPTIONS: ''
+        NODE_PATH: ''
+        NODE_EXTRA_CA_CERTS: ''
+        NODE_TLS_REJECT_UNAUTHORIZED: ''
+        SSL_CERT_FILE: ''
+        SSL_CERT_DIR: ''
+        HTTPS_PROXY: ''
+        HTTP_PROXY: ''
+        ALL_PROXY: ''
+        https_proxy: ''
+        http_proxy: ''
+        all_proxy: ''
+      run: |
+        set -euo pipefail
+        node "$GITHUB_ACTION_PATH/scripts/github-post-checks.mjs" \
+          --working-directory "$PWD" \
+          --evidence-directory "$SCENEBOOK_ACTION_EVIDENCE_DIRECTORY" \
+          --report-directory "${{ steps.report.outputs.directory }}" \
+          --artifact-url "$SCENEBOOK_ACTION_ARTIFACT_URL"
+
+    - name: Return verification result
+      if: always()
+      shell: bash
+      env:
+        SCENEBOOK_ACTION_VERIFICATION_EXIT_CODE: ${{ steps.verify.outputs.exit-code }}
+        SCENEBOOK_ACTION_REPORT_EXIT_CODE: ${{ steps.report.outputs.exit-code }}
+        SCENEBOOK_ACTION_REPORT_READY: ${{ steps.report.outputs.ready }}
+        SCENEBOOK_ACTION_ARTIFACT_OUTCOME: ${{ steps.artifact.outcome }}
+        SCENEBOOK_ACTION_CHECKS_OUTCOME: ${{ steps.checks.outcome }}
+        SCENEBOOK_ACTION_CHECKS_ALLOWED: ${{ github.event_name != 'pull_request_target' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        SCENEBOOK_ACTION_POST_CHECKS: ${{ inputs.post-checks }}
+      run: |
+        bash "$GITHUB_ACTION_PATH/scripts/github-action-result.sh"

@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.3
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Install system motion encoder
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+      - name: Check formatting
+        run: bun run format:check
+      - name: Typecheck
+        run: bun run check
+      - name: Unit and contract tests
+        run: SCENEBOOK_FFMPEG_PATH="$(command -v ffmpeg)" bun run test
+      - name: Build all packages and applications
+        run: bun run build
+      - name: Install reference browser
+        run: bunx playwright install --with-deps chromium
+      - name: Run reference Scene replay
+        run: bun run --cwd examples/acme-product test:replay
+      - name: Run recorder Chromium E2E
+        run: bun run --cwd apps/extension test:e2e
+      - name: Regenerate reference Scene
+        run: bun run example:seed
+      - name: Assert generated source is committed
+        run: git diff --exit-code -- examples/acme-product
+      - name: Upload extension package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scenebook-extension-chrome
+          path: apps/extension/.output/chrome-mv3
+          if-no-files-found: error
+          retention-days: 14
+
+  backend-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17.10-alpine3.23@sha256:8189a1f6e40904781fc9e2612687877791d21679866db58b1de996b31fc312e4
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: scenebook
+          POSTGRES_PASSWORD: backend-integration-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U scenebook -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.3
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build backend integration dependencies
+        run: bunx turbo run build --filter=@scenebook/playwright
+      - name: Start and provision policy-restricted MinIO
+        env:
+          MINIO_ROOT_USER: scenebook-integration-root
+          MINIO_ROOT_PASSWORD: backend-integration-root-password
+          SCENEBOOK_S3_ACCESS_KEY_ID: scenebook-integration-app
+          SCENEBOOK_S3_SECRET_ACCESS_KEY: backend-integration-app-password
+        run: |
+          docker run --detach --name scenebook-integration-minio \
+            --label com.scenebook.test=backend-integration \
+            --publish 9000:9000 \
+            --env MINIO_ROOT_USER \
+            --env MINIO_ROOT_PASSWORD \
+            minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e server /data
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent --show-error http://127.0.0.1:9000/minio/health/live >/dev/null
+          docker run --rm --network host --entrypoint /bin/sh \
+            --env MINIO_ROOT_USER \
+            --env MINIO_ROOT_PASSWORD \
+            --env SCENEBOOK_S3_ACCESS_KEY_ID \
+            --env SCENEBOOK_S3_SECRET_ACCESS_KEY \
+            --volume "$PWD/deploy/minio-policy.json:/config/scenebook-policy.json:ro" \
+            minio/mc:RELEASE.2025-04-16T18-13-26Z@sha256:aead63c77f9db9107f1696fb08ecb0faeda23729cde94b0f663edf4fe09728e3 -eu -c '
+              mc alias set local http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+              mc mb --ignore-existing local/scenebook
+              mc anonymous set none local/scenebook
+              mc admin policy create local scenebook-cloud /config/scenebook-policy.json
+              mc admin user add local "$SCENEBOOK_S3_ACCESS_KEY_ID" "$SCENEBOOK_S3_SECRET_ACCESS_KEY"
+              mc admin user enable local "$SCENEBOOK_S3_ACCESS_KEY_ID"
+              mc admin policy attach local scenebook-cloud --user "$SCENEBOOK_S3_ACCESS_KEY_ID"
+            '
+      - name: Run real PostgreSQL and MinIO backend gate
+        env:
+          SCENEBOOK_BACKEND_INTEGRATION: '1'
+          SCENEBOOK_TEST_POSTGRES_ADMIN_URL: postgresql://scenebook:backend-integration-postgres-password@127.0.0.1:5432/postgres
+          SCENEBOOK_TEST_MINIO_ENDPOINT: http://127.0.0.1:9000
+          SCENEBOOK_TEST_MINIO_ACCESS_KEY_ID: scenebook-integration-app
+          SCENEBOOK_TEST_MINIO_SECRET_ACCESS_KEY: backend-integration-app-password
+          SCENEBOOK_TEST_MINIO_BUCKET: scenebook
+        run: bun run test:integration:backend
+      - name: Stop integration services
+        if: always()
+        run: docker rm --force scenebook-integration-minio >/dev/null 2>&1 || true
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: high

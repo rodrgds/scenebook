@@ -1,0 +1,29 @@
+{
+  "name": "@scenebook/cloud",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "Scenebook self-hosted control-plane process",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc -p tsconfig.json",
+    "dev": "node --watch --enable-source-maps src/index.ts",
+    "start": "node --enable-source-maps dist/index.js",
+    "test": "vitest run --passWithNoTests",
+    "test:coverage": "vitest run --passWithNoTests --coverage",
+    "clean": "rm -rf dist coverage"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.0.10",
+    "@scenebook/server": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
