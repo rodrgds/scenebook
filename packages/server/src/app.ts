@@ -6293,11 +6293,11 @@ export function createControlPlaneApp(
     context.header('cache-control', 'no-store');
     context.header(
       'content-security-policy',
-      `default-src 'none'; script-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`,
+      `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`,
     );
     return context.html(`<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Private Scenebook</title></head>
-<body><main><h1>Private Scenebook</h1><p id="status">Continuing to the publication gateway…</p></main>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f4f2ed"><title>Opening private publication</title><style nonce="${nonce}">:root{color-scheme:light dark;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f2ed;color:#25231f;--muted:#68645d}*{box-sizing:border-box}body{min-height:100vh;margin:0;display:grid;place-items:center;padding:clamp(20px,5vw,64px);background:#f4f2ed;color:#25231f}main{width:min(100%,38rem);padding-block:clamp(24px,6vw,56px)}h1{max-width:20ch;margin:0;font-size:clamp(2rem,8vw,3.25rem);font-weight:720;line-height:1.05;letter-spacing:-.035em}p{max-width:52ch;margin:18px 0 0;color:var(--muted);font-size:1.0625rem;line-height:1.6}noscript p{color:#942b20}@media(max-width:360px){body{place-items:start}main{padding-top:32px}}@media(prefers-color-scheme:dark){:root{background:#191815;color:#f4f2ed;--muted:#c2bdb3}body{background:#191815;color:#f4f2ed}noscript p{color:#ff9c90}}</style></head>
+<body><main aria-busy="true"><h1>Opening private publication</h1><p id="status" role="status" aria-live="polite">Continuing securely to the publication gateway…</p><noscript><p>JavaScript is required to preserve and open this private invitation. Enable it, then reopen the link.</p></noscript></main>
 <script nonce="${nonce}">(()=>{const destination=${JSON.stringify(`${dependencies.publicationBaseUrl.replace(/\/$/u, '')}/share`)};location.replace(destination+location.hash)})();</script></body></html>`);
   });
 

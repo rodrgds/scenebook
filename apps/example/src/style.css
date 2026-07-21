@@ -46,6 +46,11 @@ select:focus-visible {
   outline-offset: 3px;
 }
 
+button:active:not(:disabled),
+a:active {
+  filter: brightness(0.84);
+}
+
 [hidden] {
   display: none !important;
 }
@@ -311,6 +316,8 @@ main {
 
 .search-field:focus-within {
   border-color: #4c63d2;
+  outline: 3px solid #315ed1;
+  outline-offset: 3px;
 }
 
 .search-field input {
@@ -328,7 +335,8 @@ main {
 }
 
 .search-field button {
-  min-height: 32px;
+  min-height: 44px;
+  min-width: 44px;
   padding: 0 7px;
   border: 0;
   background: transparent;

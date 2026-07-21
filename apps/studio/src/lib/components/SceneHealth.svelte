@@ -47,6 +47,18 @@
   let functionalChanges = $derived(
     reviewChanges.filter((change) => change.dimension === 'functional'),
   );
+  let opaqueMaskCount = $derived(
+    scene.steps.reduce(
+      (count, step) => count + step.masks.filter((mask) => mask.mode === 'opaque').length,
+      0,
+    ),
+  );
+  let presentationBlurCount = $derived(
+    scene.steps.reduce(
+      (count, step) => count + step.masks.filter((mask) => mask.mode === 'blur').length,
+      0,
+    ),
+  );
   let audit = $derived.by(runAudit);
   let errors = $derived(audit.filter((item) => item.level === 'error'));
   let warnings = $derived(audit.filter((item) => item.level === 'warning'));
@@ -274,15 +286,16 @@
               : 'Ready for portable export'}
         </h2>
         <p>
-          This audit checks the current Scene source. It does not claim to replay the product or
+          This audit checks the current scene source. It does not claim to replay the product or
           compare visual baselines.
         </p>
       </div>
     </div>
     <div class="audit-meta">
-      <span><strong>{passes.length}</strong> passed</span><span
-        ><strong>{warnings.length}</strong> warnings</span
-      ><span><strong>{errors.length}</strong> errors</span>
+      <span
+        ><strong>{passes.length}</strong> passed · <strong>{warnings.length}</strong> warnings ·
+        <strong>{errors.length}</strong> errors</span
+      >
       <button class="button" type="button" onclick={rerunAudit}
         ><Icon name="runs" size={13} />Run again</button
       >
@@ -291,14 +304,14 @@
   </header>
 
   {#if scene.runEvidence?.length}
-    <section class="evidence-picker" aria-label="Attached Run evidence">
+    <section class="evidence-picker" aria-label="Attached run evidence">
       <div>
         <strong
-          >{scene.runEvidence.length} exact Run revision{scene.runEvidence.length === 1 ? '' : 's'} attached</strong
+          >{scene.runEvidence.length} exact run revision{scene.runEvidence.length === 1 ? '' : 's'} attached</strong
         >
       </div>
       <label>
-        Review Run
+        Review run
         <select bind:value={selectedRevision}>
           {#each scene.runEvidence as evidence (evidence.runRevision)}
             <option value={evidence.runRevision}>
@@ -588,7 +601,11 @@
         <dl>
           <div>
             <dt>Opaque masks</dt>
-            <dd>{scene.steps.reduce((count, step) => count + step.masks.length, 0)}</dd>
+            <dd>{opaqueMaskCount}</dd>
+          </div>
+          <div>
+            <dt>Presentation blurs</dt>
+            <dd>{presentationBlurCount}</dd>
           </div>
           <div>
             <dt>Screenshots</dt>
@@ -608,7 +625,7 @@
         <p>
           {selectedEvidence
             ? `This exact Run reports scanner ${selectedEvidence.run.privacy.scannerVersion ?? 'not recorded'} at ${selectedEvidence.run.privacy.scannedAt ? new Date(selectedEvidence.run.privacy.scannedAt).toLocaleString() : 'an unknown time'}.`
-            : 'Studio preserves configured masks. It does not claim an OCR or PII scan unless evidence is imported.'}
+            : 'Opaque masks remove pixels from exported output. Presentation blurs are reversible and do not count as privacy protection. Studio does not claim an OCR or PII scan unless evidence is imported.'}
         </p>
       </details>
     </aside>
@@ -669,7 +686,7 @@
   }
   .health-state p {
     color: var(--muted);
-    font-size: 0.75rem;
+    font-size: 0.84rem;
     line-height: 1.5;
     margin: 0;
   }
@@ -677,18 +694,18 @@
     align-items: center;
     display: grid;
     gap: 4px 10px;
-    grid-template-columns: repeat(3, auto) auto;
+    grid-template-columns: 1fr auto;
   }
   .audit-meta span {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
   .audit-meta span strong {
     color: var(--ink);
   }
   .audit-meta small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     grid-column: 1 / -1;
     text-align: right;
   }
@@ -714,7 +731,7 @@
   .evidence-picker label {
     color: var(--muted);
     display: grid;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     gap: 4px;
     min-width: min(430px, 55vw);
   }
@@ -760,7 +777,7 @@
   }
   .card-heading > span {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
   .health-disclosure > summary {
     align-items: center;
@@ -794,11 +811,11 @@
     display: block;
   }
   .health-disclosure > summary strong {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
   }
   .health-disclosure > summary small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     margin-top: 2px;
   }
   .audit-card ul,
@@ -848,19 +865,19 @@
   .audit-card strong,
   .checks-card strong,
   .results-card strong {
-    font-size: 0.72rem;
+    font-size: 0.8rem;
   }
   .audit-card small,
   .checks-card small,
   .results-card small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     line-height: 1.4;
     margin-top: 2px;
   }
   .audit-card code {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .visual-grid {
     display: grid;
@@ -874,7 +891,7 @@
   }
   .visual-grid figcaption {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     padding: 8px 10px;
   }
   .visual-grid img {
@@ -906,11 +923,11 @@
     display: block;
   }
   .evidence-state header strong {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .evidence-state header small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin-top: 2px;
   }
   .evidence-visual-grid {
@@ -921,7 +938,7 @@
     aspect-ratio: 16 / 9;
     color: var(--muted);
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     justify-content: center;
     padding: 18px;
     text-align: center;
@@ -946,20 +963,20 @@
   }
   .state-change-list span {
     color: var(--info);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 720;
     text-transform: uppercase;
   }
   .state-change-list strong,
   .state-change-list small {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
   }
   .state-change-list small {
     color: var(--muted);
   }
   .empty {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     margin: 0;
     padding: 24px;
     text-align: center;
@@ -969,7 +986,7 @@
   .results-card > p,
   .privacy-card > p {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     line-height: 1.5;
     margin: 0;
     padding: 12px 14px;
@@ -986,7 +1003,7 @@
   }
   aside dt,
   aside dd {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     margin: 0;
   }
   aside dt {

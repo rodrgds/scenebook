@@ -118,7 +118,55 @@ try {
   worker ??= await context.waitForEvent('serviceworker', { timeout: 10_000 });
   const extensionId = new URL(worker.url()).hostname;
   const extensionPage = await context.newPage();
+  await extensionPage.setViewportSize({ width: 320, height: 600 });
   await extensionPage.goto(`chrome-extension://${extensionId}/popup.html`);
+  const popupLayouts = await extensionPage.evaluate(() => {
+    const viewIds = ['idle-view', 'active-view', 'finished-view'];
+    const initial = viewIds.map((id) => document.getElementById(id)!.hidden);
+    const layouts = viewIds.map((visibleId) => {
+      for (const id of viewIds) document.getElementById(id)!.hidden = id !== visibleId;
+      const viewportWidth = document.documentElement.clientWidth;
+      return {
+        visibleId,
+        viewportWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        buttons: [...document.querySelectorAll<HTMLButtonElement>('button')]
+          .filter((button) => button.getClientRects().length > 0)
+          .map((button) => {
+            const bounds = button.getBoundingClientRect();
+            return {
+              id: button.id,
+              height: bounds.height,
+              left: bounds.left,
+              right: bounds.right,
+            };
+          }),
+      };
+    });
+    viewIds.forEach((id, index) => {
+      document.getElementById(id)!.hidden = initial[index]!;
+    });
+    return layouts;
+  });
+  for (const layout of popupLayouts) {
+    assert.equal(layout.viewportWidth, 320, `${layout.visibleId} must render at the 320px target`);
+    assert.equal(
+      layout.scrollWidth,
+      layout.viewportWidth,
+      `${layout.visibleId} must not overflow horizontally`,
+    );
+    assert(layout.buttons.length > 0, `${layout.visibleId} must expose its action controls`);
+    for (const button of layout.buttons) {
+      assert(
+        button.height >= 44,
+        `${layout.visibleId} action ${button.id} must retain a 44px target`,
+      );
+      assert(
+        button.left >= 0 && button.right <= layout.viewportWidth,
+        `${layout.visibleId} action ${button.id} must remain within the viewport`,
+      );
+    }
+  }
   const productPagePromise = context.waitForEvent('page');
   const createdTab = await extensionPage.evaluate(
     async (url) => chrome.tabs.create({ url, active: true }),
@@ -145,7 +193,8 @@ try {
   assert(privateFrameBox, 'Cross-origin private frame must be visible');
   const phaseBox = await page.locator('#phase').boundingBox();
   assert(phaseBox, 'Screenshot-phase marker must be visible');
-  await page.getByRole('button', { name: 'Invite member' }).click();
+  await page.getByRole('button', { name: 'Invite member' }).focus();
+  await page.keyboard.press('Enter');
 
   const deadline = Date.now() + 8_000;
   let session:
@@ -180,7 +229,7 @@ try {
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
   }
 
-  assert.equal(session?.steps?.length, 1, 'A click should create one captured Step');
+  assert.equal(session?.steps?.length, 1, 'A keyboard activation should create one captured step');
   assert.equal(
     session?.steps?.[0]?.masks.length,
     3,

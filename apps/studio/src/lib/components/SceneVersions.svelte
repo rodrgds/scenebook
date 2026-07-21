@@ -144,7 +144,7 @@
   }
 </script>
 
-<section class="versions-view" aria-label="Local Scene revisions">
+<section class="versions-view" aria-label="Local scene revisions">
   <header>
     <div>
       <h2>Scene revisions</h2>
@@ -161,7 +161,7 @@
     >
   </header>
 
-  {#if error}<p class="error-banner" role="alert">{error}</p>{/if}
+  {#if error && loadState !== 'error'}<p class="error-banner" role="alert">{error}</p>{/if}
 
   {#if loadState === 'loading'}
     <div class="state-card" aria-live="polite" aria-busy="true">
@@ -170,6 +170,7 @@
   {:else if loadState === 'error'}
     <div class="state-card">
       <Icon name="warning" size={20} /><strong>Revision history is unavailable.</strong>
+      <p>{error}</p>
       <button class="button" type="button" onclick={() => loadVersions()}>Try again</button>
     </div>
   {:else if versions.length === 0}
@@ -199,7 +200,7 @@
                 <span>
                   <strong>Revision {version.revision}</strong>
                   <small>{new Date(version.savedAt).toLocaleString()}</small>
-                  <em>{version.stepCount} Steps · {version.title}</em>
+                  <em>{version.stepCount} steps · {version.title}</em>
                 </span>
                 {#if version.revision === currentRevision}<span class="current-badge">Current</span
                   >{/if}
@@ -251,7 +252,7 @@
           </dl>
 
           <details class="snapshot-outline">
-            <summary>Step outline <small>{selected.steps.length} Steps</small></summary>
+            <summary>Step outline <small>{selected.steps.length} steps</small></summary>
             <ol>
               {#each selected.steps as step, index}
                 <li>
@@ -329,7 +330,7 @@
   .revision-detail header p,
   .state-card p {
     color: var(--muted);
-    font-size: 0.75rem;
+    font-size: 0.84rem;
     line-height: 1.5;
     margin: 0;
     max-width: 70ch;
@@ -339,7 +340,7 @@
     border: 1px solid color-mix(in srgb, var(--broken) 25%, transparent);
     border-radius: 8px;
     color: var(--broken);
-    font-size: 0.72rem;
+    font-size: 0.82rem;
     margin: 0;
     padding: 10px 12px;
   }
@@ -374,7 +375,7 @@
     align-items: center;
     border-bottom: 1px solid var(--line);
     display: flex;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     justify-content: space-between;
     padding: 11px 12px;
   }
@@ -425,7 +426,7 @@
   .version-list small,
   .version-list em {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-style: normal;
     margin-top: 2px;
   }
@@ -434,7 +435,7 @@
     background: var(--pass-soft);
     border-radius: 999px;
     color: var(--pass);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     padding: 4px 7px;
   }
   .revision-state:not(.current) {
@@ -464,12 +465,12 @@
   }
   .revision-detail dt {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .revision-detail dd {
     align-items: center;
     display: flex;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     gap: 6px;
     margin: 4px 0 0;
   }
@@ -508,7 +509,7 @@
   }
   .snapshot-outline summary small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 500;
     margin-left: auto;
   }
@@ -523,10 +524,10 @@
   .snapshot-outline li span,
   .snapshot-outline li small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .snapshot-outline li strong {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .revision-detail footer {
     border-top: 1px solid var(--line);

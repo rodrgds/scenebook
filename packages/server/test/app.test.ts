@@ -62,6 +62,103 @@ class FakeOidcVerifier implements GitHubOidcVerifier {
 
 const roots: string[] = [];
 
+function generatedClientFunction(script: string, name: string): string {
+  const source = script
+    .split('\n')
+    .find((line) => line.trimStart().startsWith(`function ${name}(`))
+    ?.trim();
+  if (!source) throw new Error(`Generated client function ${name} was not found`);
+  return source;
+}
+
+class GeneratedElement {
+  readonly attributes = new Map<string, string>();
+  readonly children: unknown[] = [];
+  readonly listeners = new Map<string, (...args: unknown[]) => unknown>();
+  textContent = '';
+  className = '';
+  value = '';
+  name = '';
+  alt = '';
+  src = '';
+  hidden = false;
+  disabled = false;
+  open = false;
+  focused = false;
+  removed = false;
+  afterNode: unknown;
+  onsubmit: ((event: { preventDefault(): void }) => Promise<void>) | null = null;
+  onclick: (() => void) | null = null;
+  oncancel: ((event: { preventDefault(): void }) => void) | null = null;
+  onclose: (() => void) | null = null;
+
+  constructor(readonly tagName = 'div') {}
+
+  append(...values: unknown[]): void {
+    this.children.push(...values);
+  }
+
+  replaceChildren(...values: unknown[]): void {
+    this.children.splice(0, this.children.length, ...values);
+  }
+
+  querySelectorAll(): GeneratedElement[] {
+    const matches: GeneratedElement[] = [];
+    const visit = (value: unknown) => {
+      if (!(value instanceof GeneratedElement)) return;
+      if (['input', 'select', 'textarea'].includes(value.tagName)) matches.push(value);
+      value.children.forEach(visit);
+    };
+    this.children.forEach(visit);
+    return matches;
+  }
+
+  querySelector(): GeneratedElement | null {
+    return this.querySelectorAll()[0] ?? null;
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
+
+  removeAttribute(name: string): void {
+    this.attributes.delete(name);
+    if (name === 'src') this.src = '';
+  }
+
+  addEventListener(name: string, listener: (...args: unknown[]) => unknown): void {
+    this.listeners.set(name, listener);
+  }
+
+  after(value: unknown): void {
+    this.afterNode = value;
+  }
+
+  remove(): void {
+    this.removed = true;
+  }
+
+  focus(): void {
+    this.focused = true;
+  }
+
+  reportValidity(): boolean {
+    return true;
+  }
+
+  showModal(): void {
+    this.open = true;
+  }
+
+  close(): void {
+    this.open = false;
+  }
+}
+
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
@@ -387,6 +484,16 @@ describe('control-plane HTTP API', () => {
     expect(html).toContain('Side by side');
     expect(html).toContain('Difference is an inspection blend');
     expect(html).toContain('Comment on this visual region');
+    expect(html).toContain('pageSize=12');
+    expect(html).toContain('Comparisons are paged to keep large reviews responsive');
+    expect(html).toContain('Show next "+Math.min(pageSize,states.length-end)+" after-states');
+    expect(html).not.toContain('.slice(0,4)');
+    expect(html).toContain('aria-keyshortcuts');
+    expect(html).toContain('Use arrow keys to choose a region and Enter to comment');
+    expect(html).toContain('id="modal-error"');
+    expect(html).toContain('options.commit');
+    expect(html).toContain('button.setAttribute("aria-busy","true")');
+    expect(html).toContain('new AbortController()');
     expect(html).toContain('Assign reviewers');
     expect(html).toContain('Comment reopened');
     expect(html).toContain('Create a verification schedule');
@@ -400,6 +507,426 @@ describe('control-plane HTTP API', () => {
     )?.[1];
     expect(script).toBeTruthy();
     expect(() => new Function(script!)).not.toThrow();
+  });
+
+  it('executes Console modal pending, retained-commit, and retry behavior', async () => {
+    const { app } = await fixture();
+    const response = await app.request('/console');
+    const html = await response.text();
+    const nonce = /<script nonce="([a-f0-9]+)">/u.exec(html)?.[1];
+    const script = new RegExp(`<script nonce="${nonce}">([\\s\\S]*?)<\\/script>`, 'u').exec(
+      html,
+    )?.[1];
+    expect(script).toBeTruthy();
+
+    const elements = new Map(
+      [
+        'modal',
+        'modal-form',
+        'modal-fields',
+        'modal-submit',
+        'modal-cancel',
+        'modal-error',
+        'modal-title',
+        'modal-description',
+      ].map((id) => [id, new GeneratedElement(id === 'modal' ? 'dialog' : 'div')]),
+    );
+    const fields = elements.get('modal-fields')!;
+    const q = (id: string) => elements.get(id)!;
+    const clear = (node: GeneratedElement) => {
+      node.replaceChildren();
+      return node;
+    };
+    const h = (tag: string, attributes: Record<string, unknown>, ...values: unknown[]) => {
+      const node = new GeneratedElement(tag);
+      for (const [key, value] of Object.entries(attributes ?? {})) {
+        if (value === undefined || value === null || value === false) continue;
+        if (key === 'className') node.className = String(value);
+        else if (key === 'text') node.textContent = String(value);
+        else if (key === 'value') node.value = String(value);
+        else if (key === 'name') node.name = String(value);
+        else node.setAttribute(key, value === true ? '' : String(value));
+      }
+      node.append(...values);
+      return node;
+    };
+    class FormValues {
+      constructor(_form: unknown) {}
+
+      forEach(callback: (value: string, key: string) => void): void {
+        for (const control of fields.querySelectorAll()) {
+          if (!control.disabled && control.name) callback(control.value, control.name);
+        }
+      }
+    }
+    const ask = new Function(
+      'q',
+      'clear',
+      'h',
+      'FormData',
+      `${generatedClientFunction(script!, 'ask')}; return ask;`,
+    )(q, clear, h, FormValues) as (options: Record<string, unknown>) => Promise<unknown>;
+    const commitOnce = new Function(
+      `${generatedClientFunction(script!, 'commitOnce')}; return commitOnce;`,
+    )() as (
+      mutate: (values: Record<string, string>) => Promise<unknown>,
+      finish: (result: unknown, values: Record<string, string>) => Promise<void>,
+    ) => (values: Record<string, string>) => Promise<void>;
+    const submitEvent = { preventDefault() {} };
+
+    let releasePending!: () => void;
+    let pendingCalls = 0;
+    const pendingResult = ask({
+      title: 'Pending action',
+      fields: [{ name: 'name', label: 'Name', value: 'Preserved value' }],
+      commit: () => {
+        pendingCalls += 1;
+        return new Promise<void>((resolve) => {
+          releasePending = resolve;
+        });
+      },
+    });
+    const form = elements.get('modal-form')!;
+    const firstSubmit = form.onsubmit!(submitEvent);
+    const duplicateSubmit = form.onsubmit!(submitEvent);
+    expect(pendingCalls).toBe(1);
+    expect(elements.get('modal')!.open).toBe(true);
+    expect(elements.get('modal-submit')!.textContent).toBe('Working…');
+    expect(fields.querySelector()!.disabled).toBe(true);
+    releasePending();
+    await Promise.all([firstSubmit, duplicateSubmit]);
+    expect(await pendingResult).toBe(true);
+    expect(elements.get('modal')!.open).toBe(false);
+
+    let createCalls = 0;
+    let refreshCalls = 0;
+    const retainedCommit = commitOnce(
+      async (values) => {
+        createCalls += 1;
+        return { credential: 'one-time-value', name: values.name };
+      },
+      async () => {
+        refreshCalls += 1;
+        if (refreshCalls === 1) throw new Error('Refresh is offline.');
+      },
+    );
+    const retainedResult = ask({
+      title: 'Create credential',
+      submit: 'Create',
+      fields: [{ name: 'name', label: 'Name', value: 'Customer runner' }],
+      commit: retainedCommit,
+    });
+    await form.onsubmit!(submitEvent);
+    expect(elements.get('modal')!.open).toBe(true);
+    expect(elements.get('modal-submit')!.textContent).toBe('Retry update');
+    expect(fields.querySelector()!.value).toBe('Customer runner');
+    expect(fields.querySelector()!.disabled).toBe(true);
+    expect(elements.get('modal-error')!.textContent).toContain('The change was saved.');
+    expect(elements.get('modal-error')!.textContent).toContain('Refresh is offline.');
+
+    await form.onsubmit!(submitEvent);
+    expect(await retainedResult).toBe(true);
+    expect(createCalls).toBe(1);
+    expect(refreshCalls).toBe(2);
+    expect(elements.get('modal')!.open).toBe(false);
+
+    let destructiveCalls = 0;
+    let destructiveRefreshes = 0;
+    const destructiveResult = ask({
+      title: 'Revoke token',
+      submit: 'Revoke',
+      danger: true,
+      fields: [],
+      commit: commitOnce(
+        async () => {
+          destructiveCalls += 1;
+          return { expectedVersion: 7 };
+        },
+        async () => {
+          destructiveRefreshes += 1;
+          if (destructiveRefreshes === 1) throw new Error('Updated data is unavailable.');
+        },
+      ),
+    });
+    await form.onsubmit!(submitEvent);
+    expect(elements.get('modal')!.open).toBe(true);
+    expect(elements.get('modal-submit')!.className).toBe('danger');
+    expect(elements.get('modal-submit')!.textContent).toBe('Retry update');
+    await form.onsubmit!(submitEvent);
+    expect(await destructiveResult).toBe(true);
+    expect(destructiveCalls).toBe(1);
+    expect(destructiveRefreshes).toBe(2);
+  });
+
+  it('bounds a 100,000-state review to one accessible comparison page', async () => {
+    const { app } = await fixture();
+    const response = await app.request('/console');
+    const html = await response.text();
+    const nonce = /<script nonce="([a-f0-9]+)">/u.exec(html)?.[1];
+    const script = new RegExp(`<script nonce="${nonce}">([\\s\\S]*?)<\\/script>`, 'u').exec(
+      html,
+    )?.[1];
+    expect(script).toBeTruthy();
+
+    const states = Array.from({ length: 100_000 }, (_, index) => ({
+      id: `state-${index}`,
+      stepId: `step-${index}`,
+      phase: 'after',
+    }));
+    const runFor = () => ({
+      run: { selectedAttemptId: 'attempt-1', attempts: [{ id: 'attempt-1', states }] },
+    });
+    const h = (tag: string, attributes: Record<string, unknown>, ...values: unknown[]) => {
+      const node = new GeneratedElement(tag);
+      for (const [key, value] of Object.entries(attributes ?? {})) {
+        if (value === undefined || value === null || value === false) continue;
+        if (key === 'className') node.className = String(value);
+        else if (key === 'onclick')
+          node.listeners.set('click', value as (...args: unknown[]) => unknown);
+        else node.setAttribute(key, value === true ? '' : String(value));
+      }
+      node.append(...values.filter((value) => value !== null && value !== false));
+      return node;
+    };
+    const clear = (node: GeneratedElement) => {
+      node.replaceChildren();
+      return node;
+    };
+    const children = (parent: GeneratedElement, values: unknown[]) => {
+      parent.append(
+        ...values
+          .flat(Number.POSITIVE_INFINITY)
+          .filter((value) => value !== null && value !== undefined && value !== false),
+      );
+      return parent;
+    };
+    let comparisons = 0;
+    const comparisonPair = () => {
+      comparisons += 1;
+      return new GeneratedElement('comparison');
+    };
+    let releases = 0;
+    const comparison = new Function(
+      'runFor',
+      'baselineFor',
+      'h',
+      'clear',
+      'children',
+      'comparisonPair',
+      'releaseAssets',
+      `${generatedClientFunction(script!, 'comparison')}; return comparison;`,
+    )(
+      runFor,
+      () => null,
+      h,
+      clear,
+      children,
+      comparisonPair,
+      () => {
+        releases += 1;
+      },
+    ) as (review: Record<string, unknown>) => GeneratedElement;
+
+    const root = comparison({ subject: { kind: 'run', id: 'run-1' } });
+    const list = root.children[1] as GeneratedElement;
+    const pagination = root.children[2] as GeneratedElement;
+    const status = pagination.children[1] as GeneratedElement;
+    const next = pagination.children[2] as GeneratedElement;
+    expect(comparisons).toBe(12);
+    expect(list.children).toHaveLength(12);
+    expect(status.textContent).toBe('Showing 1–12 of 100000 after-states');
+    expect(next.getAttribute('aria-label')).toBe('Show next 12 after-states');
+    expect(releases).toBe(0);
+
+    await next.listeners.get('click')?.();
+    expect(comparisons).toBe(24);
+    expect(list.children).toHaveLength(12);
+    expect(status.textContent).toBe('Showing 13–24 of 100000 after-states');
+    expect(releases).toBe(1);
+  });
+
+  it('releases review evidence when sidebar navigation changes section', async () => {
+    const { app } = await fixture();
+    const response = await app.request('/console');
+    const html = await response.text();
+    const nonce = /<script nonce="([a-f0-9]+)">/u.exec(html)?.[1];
+    const script = new RegExp(`<script nonce="${nonce}">([\\s\\S]*?)<\\/script>`, 'u').exec(
+      html,
+    )?.[1];
+    expect(script).toBeTruthy();
+
+    const nav = new GeneratedElement('nav');
+    const h = (tag: string, attributes: Record<string, unknown>, ...values: unknown[]) => {
+      const node = new GeneratedElement(tag);
+      for (const [key, value] of Object.entries(attributes ?? {})) {
+        if (value === undefined || value === null || value === false) continue;
+        if (key === 'className') node.className = String(value);
+        else if (key === 'onclick')
+          node.listeners.set('click', value as (...args: unknown[]) => unknown);
+        else node.setAttribute(key, value === true ? '' : String(value));
+      }
+      node.append(...values.filter((value) => value !== null && value !== false));
+      return node;
+    };
+    const state = { section: 'reviews', data: null, loadedSections: {} };
+    let releases = 0;
+    let renders = 0;
+    const renderNav = new Function(
+      'q',
+      'clear',
+      'sections',
+      'has',
+      'state',
+      'h',
+      'releaseAssets',
+      'render',
+      `${generatedClientFunction(script!, 'renderNav')}; return renderNav;`,
+    )(
+      () => nav,
+      (node: GeneratedElement) => {
+        node.replaceChildren();
+        return node;
+      },
+      [{ id: 'dashboard', label: 'Overview', glyph: '◆', group: 'Workspace' }],
+      () => true,
+      state,
+      h,
+      () => {
+        releases += 1;
+      },
+      () => {
+        renders += 1;
+      },
+    ) as () => void;
+
+    renderNav();
+    const dashboard = nav.children[1] as GeneratedElement;
+    await dashboard.listeners.get('click')?.();
+    expect(state.section).toBe('dashboard');
+    expect(releases).toBe(1);
+    expect(renders).toBe(1);
+
+    await dashboard.listeners.get('click')?.();
+    expect(releases).toBe(1);
+    expect(renders).toBe(2);
+  });
+
+  it('defers, deduplicates, and retries generated evidence-image loads', async () => {
+    const { app } = await fixture();
+    const response = await app.request('/console');
+    const html = await response.text();
+    const nonce = /<script nonce="([a-f0-9]+)">/u.exec(html)?.[1];
+    const script = new RegExp(`<script nonce="${nonce}">([\\s\\S]*?)<\\/script>`, 'u').exec(
+      html,
+    )?.[1];
+    expect(script).toBeTruthy();
+
+    const h = (tag: string, attributes: Record<string, unknown>, ...values: unknown[]) => {
+      const node = new GeneratedElement(tag);
+      for (const [key, value] of Object.entries(attributes ?? {})) {
+        if (value === undefined || value === null || value === false) continue;
+        if (key === 'className') node.className = String(value);
+        else if (key === 'alt') node.alt = String(value);
+        else node.setAttribute(key, value === true ? '' : String(value));
+      }
+      node.append(...values.filter((value) => value !== null && value !== false));
+      return node;
+    };
+    type RetryAction = { readonly label: string; readonly run: () => Promise<unknown> };
+    const action = (label: string, run: () => Promise<unknown>): RetryAction => ({ label, run });
+    class VisibleObserver {
+      static readonly instances: VisibleObserver[] = [];
+      disconnected = false;
+
+      constructor(readonly callback: (entries: { isIntersecting: boolean }[]) => void) {
+        VisibleObserver.instances.push(this);
+      }
+
+      observe(): void {}
+
+      disconnect(): void {
+        this.disconnected = true;
+      }
+
+      show(): void {
+        this.callback([{ isIntersecting: true }]);
+      }
+    }
+    const state = {
+      assetUrls: new Map<string, string>(),
+      assetPromises: new Map<string, Promise<string>>(),
+      assetObservers: new Set<VisibleObserver>(),
+      assetGeneration: 0,
+    };
+    let finishShared!: (value: unknown) => void;
+    const sharedBlob = new Promise<unknown>((resolve) => {
+      finishShared = resolve;
+    });
+    const attempts = new Map<string, number>();
+    const assetBlob = (asset: { sha256: string }) => {
+      attempts.set(asset.sha256, (attempts.get(asset.sha256) ?? 0) + 1);
+      if (asset.sha256 === 'shared') return sharedBlob;
+      if (asset.sha256 === 'retry' && attempts.get(asset.sha256) === 1)
+        return Promise.reject(new Error('You do not have permission to view this evidence image.'));
+      return Promise.resolve({});
+    };
+    let urlSequence = 0;
+    const objectUrl = {
+      createObjectURL() {
+        urlSequence += 1;
+        return `blob:evidence-${urlSequence}`;
+      },
+      revokeObjectURL() {},
+    };
+    const browserWindow = { IntersectionObserver: VisibleObserver };
+    const assetImage = new Function(
+      'h',
+      'state',
+      'assetBlob',
+      'action',
+      'URL',
+      'window',
+      'IntersectionObserver',
+      'setTimeout',
+      `${generatedClientFunction(script!, 'assetImage')}; return assetImage;`,
+    )(h, state, assetBlob, action, objectUrl, browserWindow, VisibleObserver, setTimeout) as (
+      asset: { sha256: string; mediaType: string },
+      label: string,
+    ) => GeneratedElement;
+    const settle = async () => {
+      for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+    };
+
+    const first = assetImage({ sha256: 'shared', mediaType: 'image/png' }, 'First');
+    const second = assetImage({ sha256: 'shared', mediaType: 'image/png' }, 'Second');
+    expect(attempts.get('shared')).toBeUndefined();
+    expect(first.getAttribute('data-state')).toBe('waiting');
+    VisibleObserver.instances[0]!.show();
+    VisibleObserver.instances[1]!.show();
+    expect(attempts.get('shared')).toBe(1);
+    expect(first.getAttribute('data-state')).toBe('loading');
+    expect(second.getAttribute('data-state')).toBe('loading');
+    finishShared({});
+    await settle();
+    expect(first.getAttribute('data-state')).toBe('loaded');
+    expect(second.getAttribute('data-state')).toBe('loaded');
+    expect(first.src).toBe(second.src);
+
+    const retry = assetImage({ sha256: 'retry', mediaType: 'image/png' }, 'Retry');
+    VisibleObserver.instances[2]!.show();
+    await settle();
+    expect(retry.getAttribute('data-state')).toBe('error');
+    expect(retry.alt).toBe('Retry unavailable');
+    const retryStatus = retry.afterNode as GeneratedElement;
+    const retryAction = retryStatus.children.find(
+      (value): value is RetryAction =>
+        typeof value === 'object' && value !== null && 'run' in value,
+    );
+    expect(retryAction?.label).toBe('Try again');
+    await retryAction!.run();
+    await settle();
+    expect(attempts.get('retry')).toBe(2);
+    expect(retry.getAttribute('data-state')).toBe('loaded');
   });
 
   it('streams a no-store portable Workspace export and fails closed when retention is disabled', async () => {

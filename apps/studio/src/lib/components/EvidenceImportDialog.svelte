@@ -5,6 +5,7 @@
     type EvidenceImportInspection,
   } from '../evidence';
   import { studioSceneLibrary, type ImportRunEvidenceResult } from '../scene-library';
+  import { trapDialogFocus } from '../dialog-focus';
   import Icon from './Icon.svelte';
 
   let {
@@ -49,7 +50,7 @@
     else if (!visible && dialog?.open) dialog.close();
   });
 
-  function reset() {
+  function reset(focusPicker = false) {
     importState = 'idle';
     inspection = null;
     filenames = [];
@@ -58,6 +59,7 @@
     dragActive = false;
     if (fileInput) fileInput.value = '';
     if (folderInput) folderInput.value = '';
+    if (focusPicker) queueMicrotask(() => fileInput?.focus({ preventScroll: true }));
   }
 
   function handleClose() {
@@ -67,12 +69,13 @@
   }
 
   async function inspect(files: readonly File[]) {
-    if (files.length === 0) return;
+    if (files.length === 0 || importState === 'reading' || importState === 'importing') return;
     filenames = files.map((file) => file.name);
     importState = 'reading';
     inspection = null;
     error = '';
     issues = [];
+    queueMicrotask(() => dialog?.focus({ preventScroll: true }));
     try {
       inspection = await inspectEvidenceFiles(files);
       importState = 'ready';
@@ -87,12 +90,14 @@
   }
 
   async function applyImport() {
-    if (!inspection) return;
+    if (!inspection || importState !== 'ready') return;
     importState = 'importing';
     error = '';
     issues = [];
+    queueMicrotask(() => dialog?.focus({ preventScroll: true }));
     try {
       const imported = await studioSceneLibrary.importRunEvidence(inspection.candidates);
+      importState = 'ready';
       onimported?.(imported);
       dialog?.close();
     } catch (candidate) {
@@ -105,7 +110,10 @@
 
 <dialog
   bind:this={dialog}
+  tabindex="-1"
   aria-labelledby="import-evidence-title"
+  aria-busy={importState === 'reading' || importState === 'importing'}
+  onkeydown={(event) => trapDialogFocus(event, dialog)}
   onclose={handleClose}
   oncancel={(event) => {
     if (importState === 'reading' || importState === 'importing') event.preventDefault();
@@ -113,7 +121,7 @@
 >
   <div class="dialog-head">
     <div>
-      <h2 id="import-evidence-title">Import Run evidence</h2>
+      <h2 id="import-evidence-title">Import run evidence</h2>
     </div>
     <button
       class="icon-button"
@@ -127,14 +135,18 @@
   </div>
 
   {#if importState === 'idle' || importState === 'reading'}
-    <p>
-      Import a ZIP of <span class="mono">.scenebook/runs</span>, or select Run, Review, optional
-      Baseline JSON and referenced screenshots together. Studio validates schemas, exact artifact
-      and source revisions, paths, media bytes, and SHA-256 identities before saving.
-    </p>
+    <p>Choose an evidence ZIP, folder, or file set. Studio checks every artifact before saving.</p>
+    <details class="validation-details">
+      <summary>What Studio validates</summary>
+      <p>
+        Run and review data, optional baselines, source revisions, paths, screenshots, and file
+        integrity must agree exactly.
+      </p>
+    </details>
     <label
       class="drop-zone"
       class:active={dragActive}
+      aria-disabled={importState === 'reading'}
       ondragenter={(event) => {
         event.preventDefault();
         dragActive = true;
@@ -152,6 +164,7 @@
         class="sr-only"
         type="file"
         multiple
+        disabled={importState === 'reading'}
         accept=".json,.zip,application/json,application/zip,image/png,image/jpeg,image/webp"
         onchange={(event) => void inspect([...(event.currentTarget.files ?? [])])}
       />
@@ -161,7 +174,7 @@
           ? `Verifying ${filenames.length} file${filenames.length === 1 ? '' : 's'}…`
           : 'Choose or drop an evidence ZIP or file set'}</strong
       >
-      <small>Run JSON is required · Review, Baseline, and screenshots are linked exactly</small>
+      <small>Run JSON is required · reviews, baselines, and screenshots are linked exactly</small>
     </label>
     <div class="folder-row">
       <span>Keeping the generated directory layout?</span>
@@ -171,30 +184,36 @@
           class="sr-only"
           type="file"
           multiple
+          disabled={importState === 'reading'}
           webkitdirectory={true}
           onchange={(event) => void inspect([...(event.currentTarget.files ?? [])])}
         />
         Choose evidence folder
       </label>
     </div>
-  {:else if importState === 'ready' && inspection}
+  {:else if (importState === 'ready' || importState === 'importing') && inspection}
     <section class="file-summary" aria-live="polite">
       <span class="file-mark"><Icon name="check" size={22} /></span>
       <div>
         <strong
-          >{inspection.candidates.length} exact Run artifact{inspection.candidates.length === 1
+          >{inspection.candidates.length} exact run artifact{inspection.candidates.length === 1
             ? ''
             : 's'}</strong
         >
         <small
-          >{sceneCount} Scene{sceneCount === 1 ? '' : 's'} · {reviewCount} Review{reviewCount === 1
+          >{sceneCount} scene{sceneCount === 1 ? '' : 's'} · {reviewCount} review{reviewCount === 1
             ? ''
-            : 's'} · {inspection.buildCount} Build manifest{inspection.buildCount === 1
+            : 's'} · {inspection.buildCount} build manifest{inspection.buildCount === 1
             ? ''
             : 's'}</small
         >
       </div>
-      <button class="button" type="button" onclick={reset}>Choose another</button>
+      <button
+        class="button"
+        type="button"
+        disabled={importState === 'importing'}
+        onclick={() => reset(true)}>Choose another</button
+      >
     </section>
 
     <div class="integrity-grid" aria-label="Evidence integrity summary">
@@ -204,7 +223,7 @@
       >
       <span
         ><strong>{inspection.candidates.filter((item) => item.evidence.baseline).length}</strong
-        ><small>exact Baselines</small></span
+        ><small>exact baselines</small></span
       >
     </div>
 
@@ -241,7 +260,8 @@
           </ul>{/if}
       </div>
     </section>
-    <button class="button" type="button" onclick={reset}>Choose another file set</button>
+    <button class="button" type="button" onclick={() => reset(true)}>Choose another file set</button
+    >
   {/if}
 
   <div class="dialog-actions">
@@ -275,7 +295,7 @@
     width: 100%;
   }
   dialog::backdrop {
-    background: rgba(25, 24, 22, 0.46);
+    background: var(--backdrop);
   }
   .dialog-head {
     align-items: start;
@@ -289,9 +309,24 @@
   }
   dialog > p {
     color: var(--muted);
-    font-size: 0.75rem;
+    font-size: 0.84rem;
     line-height: 1.55;
     margin: 12px 0 18px;
+  }
+  .validation-details {
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin: -8px 0 18px;
+  }
+  .validation-details summary {
+    cursor: pointer;
+    font-weight: 650;
+    min-height: 40px;
+    padding-block: 9px;
+  }
+  .validation-details p {
+    line-height: 1.55;
+    margin: 2px 0 0;
   }
   .drop-zone {
     align-items: center;
@@ -333,14 +368,14 @@
   .file-summary small {
     color: var(--muted);
     display: block;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin-top: 4px;
   }
   .folder-row {
     align-items: center;
     color: var(--muted);
     display: flex;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     justify-content: space-between;
     padding: 9px 2px 0;
   }
@@ -381,12 +416,12 @@
   }
   .integrity-grid small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin-top: 2px;
   }
   .integrity-grid .warning {
     background: var(--changed-soft);
-    border-color: #dfc589;
+    border-color: color-mix(in srgb, var(--changed) 32%, var(--line));
   }
   .run-list {
     border: 1px solid var(--line);
@@ -413,12 +448,12 @@
     display: block;
   }
   .run-list strong {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .run-list small,
   .run-list code {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .status-dot {
     background: var(--pass);
@@ -436,11 +471,11 @@
   }
   .warning-box {
     background: var(--changed-soft);
-    border: 1px solid #dfc589;
+    border: 1px solid color-mix(in srgb, var(--changed) 32%, var(--line));
     border-radius: 8px;
     color: var(--changed);
     display: grid;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     gap: 6px;
     margin-top: 10px;
     padding: 10px;
@@ -461,7 +496,7 @@
   }
   .error-box ul {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin: 7px 0 0;
     max-height: 150px;
     overflow: auto;

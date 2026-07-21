@@ -17,11 +17,13 @@
   let summaries = $state<SceneSummary[]>([]);
   let workspaceState = $state<'loading' | 'ready' | 'error'>('loading');
   let workspaceError = $state('');
+  let exportError = $state('');
   let exporting = $state(false);
 
   async function loadWorkspace() {
     workspaceState = 'loading';
     workspaceError = '';
+    exportError = '';
     try {
       project = await studioSceneLibrary.loadProject();
     } catch (error) {
@@ -39,7 +41,7 @@
   async function exportWorkspace() {
     if (summaries.length === 0) return;
     exporting = true;
-    workspaceError = '';
+    exportError = '';
     const loaded: LoadedScene[] = [];
     try {
       for (const summary of await studioSceneLibrary.list()) {
@@ -49,7 +51,7 @@
       const scenes = loaded.flatMap((result) => (result.scene ? [result.scene] : []));
       downloadPortable(await exportProjectZip(scenes, project ?? defaultProject(scenes)));
     } catch (error) {
-      workspaceError =
+      exportError =
         error instanceof Error ? error.message : 'The project export could not be built.';
     } finally {
       releaseLocalMediaUrls(loaded);
@@ -66,7 +68,7 @@
 
 <AppShell active="catalog">
   <div class="catalog-page">
-    <header class="catalog-header">
+    <header class="surface-header catalog-header">
       <div>
         <h1>Scenes</h1>
         <p>Create, review, and organize your product walkthroughs.</p>
@@ -77,7 +79,7 @@
           type="button"
           disabled={workspaceState !== 'ready' || summaries.length === 0 || exporting}
           title={summaries.length === 0
-            ? 'Save or import a Scene before exporting a project.'
+            ? 'Save or import a scene before exporting a project.'
             : undefined}
           onclick={exportWorkspace}
           ><Icon name="file" size={16} />{exporting ? 'Building…' : 'Export project'}</button
@@ -91,6 +93,12 @@
         <span><strong>Project settings could not be loaded.</strong> {workspaceError}</span>
         <button class="button" type="button" onclick={loadWorkspace}>Try again</button>
       </div>
+    {/if}
+    {#if exportError}
+      <p class="catalog-error" role="alert">
+        <Icon name="warning" size={17} />
+        <span><strong>Project export failed.</strong> {exportError}</span>
+      </p>
     {/if}
 
     <CatalogView title="All scenes" onloaded={handleCatalogLoaded} />
@@ -112,15 +120,9 @@
     gap: 24px;
     justify-content: space-between;
   }
-  h1 {
-    font-size: 1.8rem;
-    letter-spacing: -0.035em;
-    line-height: 1.1;
-    margin: 0 0 7px;
-  }
   .catalog-header p {
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: 0.9rem;
     line-height: 1.45;
     margin: 0;
   }
@@ -134,9 +136,12 @@
     border-radius: var(--radius-sm);
     color: var(--broken);
     display: flex;
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     gap: 9px;
     padding: 10px 12px;
+  }
+  p.catalog-error {
+    margin: 0;
   }
   .catalog-error span {
     flex: 1;

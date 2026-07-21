@@ -32,6 +32,12 @@
         scene.screenAssetCount < scene.screenStepCount || scene.hiddenStepCount > 0 || scene.sample,
     ).length,
   );
+  let releaseBlocked = $derived(
+    !projectPersisted ||
+      incompleteScenes > 0 ||
+      coverage.length === 0 ||
+      coverage.some((item) => item.releaseBlockers.length > 0),
+  );
 
   async function loadPublish() {
     loadState = 'loading';
@@ -87,7 +93,7 @@
       project = structuredClone(parsed.data);
       projectPersisted = true;
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'The Channel could not be saved.';
+      error = cause instanceof Error ? cause.message : 'The channel could not be saved.';
     } finally {
       action = null;
     }
@@ -125,27 +131,16 @@
         <h1>Release</h1>
         <p>Resolve blockers, review channel policy, then export source for the release pipeline.</p>
       </div>
-      <div class="surface-actions">
-        <button
-          class="button primary"
-          type="button"
-          disabled={loadState !== 'ready' || scenes.length === 0 || Boolean(action)}
-          onclick={exportWorkspace}
-          ><Icon name="download" size={15} />{action === 'export'
-            ? 'Building archive…'
-            : 'Export project source'}</button
-        >
-      </div>
     </header>
 
-    {#if error}<p class="surface-error" role="alert">{error}</p>{/if}
+    {#if error && loadState !== 'error'}<p class="surface-error" role="alert">{error}</p>{/if}
 
     {#if loadState === 'loading'}
       <div class="surface-state" aria-busy="true">
         <Icon name="clock" />
         <div>
           <strong>Computing publication readiness…</strong><small
-            >Reading Project policy and compact Scene metadata.</small
+            >Reading project policy and compact scene metadata.</small
           >
         </div>
       </div>
@@ -156,28 +151,72 @@
         <button class="button" type="button" onclick={loadPublish}>Try again</button>
       </div>
     {:else}
-      <section
-        class="release-summary"
-        class:blocked={incompleteScenes > 0}
-        aria-label="Release readiness"
-      >
-        <span class="release-summary-icon"
-          ><Icon name={incompleteScenes ? 'warning' : 'check'} size={18} /></span
-        >
-        <div>
-          <strong
-            >{incompleteScenes
-              ? `${incompleteScenes} scene${incompleteScenes === 1 ? '' : 's'} need attention`
-              : 'Source is ready to export'}</strong
-          >
-          <small
-            >{scenes.length} scenes · {project?.collections.length ?? 0} collections · {project
-              ?.channels.length ?? 0} channels · privacy blocks at {privacy?.blockAt ??
-              'default'}</small
-          >
+      <section class="scene-readiness" aria-labelledby="scene-readiness-title">
+        <div class="section-title">
+          <div>
+            <h2 id="scene-readiness-title">Authoring blockers</h2>
+          </div>
+          <p>Only scenes that need attention are shown.</p>
         </div>
-        {#if !projectPersisted}<span class="status-chip warning">default project</span>{/if}
-        <a class="button" href="/settings">Project settings</a>
+        {#if scenes.length === 0}
+          <div class="surface-state">
+            <Icon name="file" />
+            <div>
+              <strong>No scenes to publish</strong><small
+                >Create or import portable source before configuring output.</small
+              >
+            </div>
+            <a class="button primary" href="/catalog?action=create">New scene</a>
+          </div>
+        {:else if incompleteScenes === 0}
+          <div class="surface-state">
+            <Icon name="check" />
+            <div>
+              <strong>No authoring blockers</strong><small
+                >All scenes have visuals and at least one visible output step.</small
+              >
+            </div>
+            <a class="button" href="/catalog">View scenes</a>
+          </div>
+        {:else}
+          <div class="scene-grid">
+            {#each scenes as scene (scene.id)}
+              {@const issues =
+                (scene.sample ? 1 : 0) +
+                (scene.screenAssetCount < scene.screenStepCount ? 1 : 0) +
+                (scene.hiddenStepCount > 0 ? 1 : 0)}
+              {#if issues > 0}<article class="surface-card">
+                  <div>
+                    <span class="status-chip {issues ? 'warning' : 'ready'}"
+                      >{issues
+                        ? `${issues} authoring note${issues === 1 ? '' : 's'}`
+                        : 'source ready'}</span
+                    >
+                    <h3>{scene.title}</h3>
+                    <p>
+                      {scene.stepCount} steps · {scene.screenAssetCount}/{scene.screenStepCount} screen
+                      visuals · {scene.translationCount} translations
+                    </p>
+                  </div>
+                  <div class="readiness-notes">
+                    {#if scene.sample}<span
+                        ><Icon name="warning" size={12} />Synthetic sample is not release evidence</span
+                      >{/if}{#if scene.screenAssetCount < scene.screenStepCount}<span
+                        ><Icon name="warning" size={12} />Some screen steps lack visuals</span
+                      >{/if}{#if scene.hiddenStepCount}<span
+                        ><Icon name="warning" size={12} />{scene.hiddenStepCount} step{scene.hiddenStepCount ===
+                        1
+                          ? ''
+                          : 's'} hidden from every output</span
+                      >{/if}
+                  </div>
+                  <a class="button" href={`/scenes/${encodeURIComponent(scene.id)}?tab=publish`}
+                    >Configure outputs <Icon name="arrow-right" size={13} /></a
+                  >
+                </article>{/if}
+            {/each}
+          </div>
+        {/if}
       </section>
 
       <section class="channels" aria-labelledby="channels-title">
@@ -194,9 +233,9 @@
           <div class="surface-state">
             <Icon name="publish" />
             <div>
-              <strong>No Channel configured</strong><small
-                >Add a conservative static Channel selecting every local Collection, or import a
-                reviewed Project definition.</small
+              <strong>No channel configured</strong><small
+                >Add a conservative static channel selecting every local collection, or import a
+                reviewed project definition.</small
               >
             </div>
             <button
@@ -204,8 +243,8 @@
               type="button"
               disabled={scenes.length === 0 || action === 'channel'}
               onclick={addStaticChannel}
-              >{action === 'channel' ? 'Saving…' : 'Add static Channel'}</button
-            ><a class="button" href="/settings?action=import">Import Project</a>
+              >{action === 'channel' ? 'Saving…' : 'Add static channel'}</button
+            ><a class="button" href="/settings?action=import">Import project</a>
           </div>
         {:else}
           <div class="channel-grid">
@@ -236,7 +275,7 @@
                     <dd>{item.sceneIds.length}</dd>
                   </div>
                   <div>
-                    <dt>Passed Runs</dt>
+                    <dt>Passed runs</dt>
                     <dd>{item.passedSceneCount}/{item.sceneIds.length}</dd>
                   </div>
                   <div>
@@ -269,74 +308,48 @@
         {/if}
       </section>
 
-      <section class="scene-readiness" aria-labelledby="scene-readiness-title">
+      <section class="export-handoff" aria-labelledby="export-title">
         <div class="section-title">
           <div>
-            <h2 id="scene-readiness-title">Authoring blockers</h2>
+            <h2 id="export-title">Export handoff</h2>
           </div>
-          <p>Only scenes that need attention are shown.</p>
+          <p>Export portable source only after reviewing authoring and channel blockers.</p>
         </div>
-        {#if scenes.length === 0}
-          <div class="surface-state">
-            <Icon name="file" />
-            <div>
-              <strong>No Scenes to publish</strong><small
-                >Create or import portable source before configuring output.</small
-              >
-            </div>
-            <a class="button primary" href="/catalog?action=create">New Scene</a>
+        <div
+          class="release-summary"
+          class:blocked={releaseBlocked}
+          aria-label="Release source handoff"
+        >
+          <span class="release-summary-icon"
+            ><Icon name={releaseBlocked ? 'warning' : 'check'} size={18} /></span
+          >
+          <div>
+            <strong
+              >{releaseBlocked
+                ? 'Draft source handoff — release blockers remain'
+                : 'Source is ready for the release pipeline'}</strong
+            >
+            <small
+              >{scenes.length} scenes · {project?.collections.length ?? 0} collections · {project
+                ?.channels.length ?? 0} channels · privacy blocks at {privacy?.blockAt ??
+                'default'}</small
+            >
           </div>
-        {:else if incompleteScenes === 0}
-          <div class="surface-state">
-            <Icon name="check" />
-            <div>
-              <strong>No authoring blockers</strong><small
-                >All scenes have visuals and at least one visible output step.</small
-              >
-            </div>
-            <a class="button" href="/catalog">View scenes</a>
-          </div>
-        {:else}
-          <div class="scene-grid">
-            {#each scenes as scene (scene.id)}
-              {@const issues =
-                (scene.sample ? 1 : 0) +
-                (scene.screenAssetCount < scene.screenStepCount ? 1 : 0) +
-                (scene.hiddenStepCount > 0 ? 1 : 0)}
-              {#if issues > 0}<article class="surface-card">
-                  <div>
-                    <span class="status-chip {issues ? 'warning' : 'ready'}"
-                      >{issues
-                        ? `${issues} authoring note${issues === 1 ? '' : 's'}`
-                        : 'source ready'}</span
-                    >
-                    <h3>{scene.title}</h3>
-                    <p>
-                      {scene.stepCount} Steps · {scene.screenAssetCount}/{scene.screenStepCount} screen
-                      visuals · {scene.translationCount} translations
-                    </p>
-                  </div>
-                  <div class="readiness-notes">
-                    {#if scene.sample}<span
-                        ><Icon name="warning" size={12} />Synthetic sample is not release evidence</span
-                      >{/if}{#if scene.screenAssetCount < scene.screenStepCount}<span
-                        ><Icon name="warning" size={12} />Some screen Steps lack visuals</span
-                      >{/if}{#if scene.hiddenStepCount}<span
-                        ><Icon name="warning" size={12} />{scene.hiddenStepCount} Step{scene.hiddenStepCount ===
-                        1
-                          ? ''
-                          : 's'} hidden from every output</span
-                      >{/if}{#if issues === 0}<span
-                        ><Icon name="check" size={12} />Portable authoring checks summarized</span
-                      >{/if}
-                  </div>
-                  <a class="button" href={`/scenes/${encodeURIComponent(scene.id)}?tab=publish`}
-                    >Configure outputs <Icon name="arrow-right" size={13} /></a
-                  >
-                </article>{/if}
-            {/each}
-          </div>
-        {/if}
+          {#if !projectPersisted}<span class="status-chip warning">default project</span>{/if}
+          <a class="button" href="/settings">Project settings</a>
+          <button
+            class="button"
+            class:primary={!releaseBlocked}
+            type="button"
+            disabled={scenes.length === 0 || Boolean(action)}
+            onclick={exportWorkspace}
+            ><Icon name="download" size={15} />{action === 'export'
+              ? 'Building archive…'
+              : releaseBlocked
+                ? 'Export draft project source'
+                : 'Export project source'}</button
+          >
+        </div>
       </section>
     {/if}
   </div>
@@ -349,6 +362,7 @@
     border: 1px solid var(--line);
     border-radius: var(--radius);
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
     padding: 12px 14px;
   }
@@ -383,11 +397,12 @@
   }
   .release-summary small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     margin-top: 2px;
   }
   .channels,
-  .scene-readiness {
+  .scene-readiness,
+  .export-handoff {
     display: grid;
     gap: 14px;
   }
@@ -424,7 +439,7 @@
   .channel-grid p,
   .scene-grid p {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     margin: 0;
   }
   .channel-grid dl {
@@ -444,10 +459,10 @@
   }
   dt {
     color: var(--faint);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
   dd {
-    font-size: 0.74rem;
+    font-size: 0.78rem;
     font-weight: 700;
     margin: 3px 0 0;
   }
@@ -456,7 +471,7 @@
     padding-top: 12px;
   }
   .gate-list strong {
-    font-size: 0.74rem;
+    font-size: 0.8rem;
   }
   .gate-list ul {
     display: grid;
@@ -469,7 +484,7 @@
     align-items: start;
     color: var(--muted);
     display: flex;
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     gap: 5px;
     line-height: 1.4;
   }
@@ -480,7 +495,7 @@
     background: var(--ink);
     border-radius: 7px;
     color: white;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     overflow-wrap: anywhere;
     padding: 9px;
   }
@@ -491,8 +506,9 @@
   .handoff-details summary {
     color: var(--muted);
     cursor: pointer;
-    font-size: 0.74rem;
+    font-size: 0.8rem;
     font-weight: 650;
+    min-height: 40px;
   }
   .handoff-details .gate-list {
     border: 0;
@@ -520,16 +536,23 @@
     align-items: center;
     color: var(--muted);
     display: flex;
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     gap: 5px;
   }
   @media (max-width: 550px) {
     .release-summary {
       align-items: flex-start;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+    }
+    .release-summary > div,
+    .release-summary > .status-chip {
+      grid-column: 2;
+      justify-self: start;
     }
     .release-summary > .button {
-      flex: 1 1 100%;
+      grid-column: 1 / -1;
+      width: 100%;
     }
     .channel-grid {
       grid-template-columns: 1fr;
@@ -540,6 +563,9 @@
     }
     .channel-grid dl div {
       border: 0;
+    }
+    .handoff-details summary {
+      min-height: 44px;
     }
   }
 </style>

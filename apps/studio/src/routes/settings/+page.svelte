@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { beforeNavigate } from '$app/navigation';
   import { onMount } from 'svelte';
   import { ProjectSchema, type Project } from '@scenebook/schema';
 
@@ -138,7 +139,7 @@
       }
       const sources = loaded.flatMap((item) => (item.scene ? [item.scene] : []));
       downloadPortable(await exportProjectZip(sources, valid));
-      status = 'Portable Project archive downloaded.';
+      status = 'Portable project archive downloaded.';
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Project archive could not be built.';
     } finally {
@@ -146,6 +147,16 @@
       action = null;
     }
   }
+
+  beforeNavigate((navigation) => {
+    if (
+      dirty &&
+      !navigation.willUnload &&
+      !window.confirm('Leave Settings and discard your unsaved changes?')
+    ) {
+      navigation.cancel();
+    }
+  });
 
   onMount(() => void loadSettings());
 </script>
@@ -177,7 +188,7 @@
       </div>
     </header>
 
-    {#if error}<p class="surface-error" role="alert">{error}</p>{/if}
+    {#if error && loadState !== 'error'}<p class="surface-error" role="alert">{error}</p>{/if}
     {#if status}<p class="success-banner" role="status">
         <Icon name="check" size={14} />{status}
       </p>{/if}
@@ -186,8 +197,8 @@
       <div class="surface-state" aria-busy="true">
         <Icon name="clock" />
         <div>
-          <strong>Reading Project settings…</strong><small
-            >Loading the active local Project record.</small
+          <strong>Reading project settings…</strong><small
+            >Loading the active local project record.</small
           >
         </div>
       </div>
@@ -234,7 +245,8 @@
                   maxlength="10000"></textarea></label
               >
               <label class="field"
-                ><span class="field-label">Locales <small>Comma separated BCP 47 tags</small></span
+                ><span class="field-label"
+                  >Available languages <small>Comma-separated language tags</small></span
                 ><input
                   class="input"
                   bind:value={localesText}
@@ -243,7 +255,9 @@
                 /></label
               >
               <label class="field"
-                ><span class="field-label">Default locale</span><input
+                ><span class="field-label"
+                  >Default language <small>Fallback language tag</small></span
+                ><input
                   class="input"
                   bind:value={draft.defaultLocale}
                   oninput={markDirty}
@@ -264,7 +278,7 @@
               <label
                 ><span
                   ><strong>Allow search indexing</strong><small
-                    >Only eligible public-catalog and static Channels can apply this.</small
+                    >Only eligible public-catalog and static channels can apply this.</small
                   ></span
                 ><input
                   type="checkbox"
@@ -395,7 +409,7 @@
               onclick={exportArchive}
               ><Icon name="download" size={14} />{action === 'zip'
                 ? 'Building archive…'
-                : `Download Project ZIP (${scenes.length})`}</button
+                : `Download project ZIP (${scenes.length})`}</button
             >
           </section>
           <details class="surface-card inventory-card">
@@ -455,7 +469,7 @@
     border-radius: var(--radius-sm);
     color: var(--pass);
     display: flex;
-    font-size: 0.76rem;
+    font-size: 0.8rem;
     gap: 6px;
     margin: 0;
     padding: 10px 12px;
@@ -482,8 +496,14 @@
     align-items: center;
     border-bottom: 1px solid var(--line);
     display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
     justify-content: space-between;
     padding: 16px 19px;
+  }
+  .settings-section > header .status-chip {
+    max-width: 100%;
+    white-space: normal;
   }
   h2 {
     font-size: 1rem;
@@ -491,17 +511,18 @@
   }
   .project-id {
     color: var(--muted);
-    font-size: 0.74rem;
+    font-size: 0.78rem;
     text-align: right;
   }
   .project-id summary {
     cursor: pointer;
     font-weight: 650;
+    min-height: 40px;
   }
   .project-id code {
     display: block;
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     margin-top: 4px;
   }
   .form-grid {
@@ -539,12 +560,12 @@
   }
   .toggle-list strong,
   .toggle-field strong {
-    font-size: 0.78rem;
+    font-size: 0.82rem;
   }
   .toggle-list small,
   .toggle-field small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     line-height: 1.4;
     margin-top: 3px;
   }
@@ -564,10 +585,10 @@
   }
   .advanced-summary dt {
     color: var(--faint);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
   .advanced-summary dd {
-    font-size: 0.73rem;
+    font-size: 0.78rem;
     margin: 3px 0 0;
     overflow-wrap: anywhere;
   }
@@ -575,7 +596,7 @@
     background: var(--changed-soft);
     border-bottom: 1px solid var(--line);
     color: var(--ink-2);
-    font-size: 0.73rem;
+    font-size: 0.8rem;
     line-height: 1.5;
     margin: 0;
     padding: 12px 19px;
@@ -597,7 +618,7 @@
   .export-card p,
   .inventory-card p {
     color: var(--muted);
-    font-size: 0.73rem;
+    font-size: 0.8rem;
     line-height: 1.5;
     margin: 0;
   }
@@ -609,6 +630,7 @@
   .inventory-card > summary {
     cursor: pointer;
     list-style: none;
+    min-height: 40px;
   }
   .inventory-card > summary::-webkit-details-marker {
     display: none;
@@ -620,7 +642,7 @@
   }
   .inventory-card > summary small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 400;
     margin-top: 3px;
   }
@@ -636,7 +658,7 @@
   }
   .inventory-card dt {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
   }
   .inventory-card dd {
     font-size: 0.76rem;
@@ -658,6 +680,10 @@
     }
     .privacy-grid > span {
       display: none;
+    }
+    .project-id summary,
+    .inventory-card > summary {
+      min-height: 44px;
     }
   }
 </style>

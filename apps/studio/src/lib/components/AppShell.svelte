@@ -267,8 +267,12 @@
         <button class="button" type="button" onclick={() => openWorkspaceDialog('import')}
           ><Icon name="download" size={16} />Import</button
         >
-        <button class="button primary" type="button" onclick={() => openWorkspaceDialog('create')}
-          ><Icon name="plus" size={16} />New Scene</button
+        <button
+          class="button"
+          class:primary={active === 'catalog'}
+          type="button"
+          onclick={() => openWorkspaceDialog('create')}
+          ><Icon name="plus" size={16} />New scene</button
         >
       </div>
     </header>
@@ -338,6 +342,7 @@
     font-weight: 760;
     gap: 9px;
     letter-spacing: -0.025em;
+    min-height: 44px;
     text-decoration: none;
   }
   .brand svg {
@@ -378,7 +383,7 @@
     border-radius: 7px;
     color: white;
     display: flex;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 800;
     height: 28px;
     justify-content: center;
@@ -397,12 +402,12 @@
   }
   .project-switcher small {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     margin-top: 1px;
   }
   .nav-label {
     color: var(--faint);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 650;
     margin: 0 9px 6px;
   }
@@ -419,7 +424,7 @@
     font-weight: 590;
     gap: 10px;
     grid-template-columns: 19px 1fr auto;
-    min-height: 42px;
+    min-height: 44px;
     padding: 8px 9px;
     text-decoration: none;
   }
@@ -493,7 +498,8 @@
   }
   .global-search:focus-within {
     border-color: var(--accent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
     color: var(--ink);
   }
   kbd {
@@ -503,7 +509,7 @@
     box-shadow: 0 1px 0 var(--line);
     color: var(--faint);
     font-family: inherit;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     padding: 3px 6px;
     white-space: nowrap;
   }
@@ -545,7 +551,7 @@
       max-width: min(86vw, 280px);
       position: fixed;
       transform: translateX(-105%);
-      transition: transform 180ms ease;
+      transition: transform 180ms cubic-bezier(0.165, 0.84, 0.44, 1);
       width: 100%;
     }
     .sidebar.open {

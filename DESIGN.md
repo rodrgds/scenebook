@@ -13,7 +13,7 @@ Every screen has one primary job and at most one persistent primary action. Safe
 - Chroma-neutral light surfaces with one terracotta action accent.
 - Semantic green, amber, red, and blue are reserved for real status meaning.
 - System sans-serif for product UI and system monospace for source, commands, IDs, and hashes.
-- Fixed product type scale. Page title `2.35rem` desktop / `2rem` mobile, section title `1.25–1.3rem`, body `0.9rem`, metadata no smaller than `0.7rem`.
+- Fixed product type scale. Task-page titles are `1.8rem`; the Home welcome can reach `2.35rem` desktop / `2rem` mobile. Section titles are `1.25–1.3rem`, operational body copy is `0.82–0.9rem`, and true metadata is never smaller than `0.75rem`.
 - Heading tracking never tighter than `-0.04em`.
 - Default content width `1280px`; prose remains within roughly 65–75 characters.
 - Controls are at least 40px on desktop and 44px on touch layouts.
@@ -35,6 +35,7 @@ Every screen has one primary job and at most one persistent primary action. Safe
 - Scenes: browse and filter the full library.
 - Review and Runs: actionable items first; technical evidence on expansion.
 - Editor: content first; interaction, appearance, output, and developer details on demand.
+- Mobile editor: expose one of Steps, Canvas, or Inspector at a time through a keyboard-operable view switch.
 - Release: blockers first, channels second, export handoff last.
 - Public viewer: walkthrough first; transcript and downloads collapsed by default.
 

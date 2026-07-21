@@ -81,15 +81,27 @@
         <Icon name="clock" />
         <div>
           <strong>Computing local coverage…</strong><small
-            >Reading compact Scene and Project summaries.</small
+            >Reading compact scene and project summaries.</small
           >
         </div>
       </div>
     {:else if loadState === 'error'}
       <div class="surface-state">
         <Icon name="warning" />
-        <div><strong>Insights are unavailable</strong><small>{error}</small></div>
+        <div><strong>Coverage is unavailable</strong><small>{error}</small></div>
         <button class="button" type="button" onclick={loadInsights}>Try again</button>
+      </div>
+    {:else if metrics && metrics.sceneCount === 0}
+      <div class="surface-state coverage-empty">
+        <Icon name="insights" />
+        <div>
+          <strong>Coverage starts with a scene</strong><small
+            >Create a scene or import a project to begin tracking visuals, run evidence,
+            collections, and release channels.</small
+          >
+        </div>
+        <a class="button primary" href="/catalog?action=create">New scene</a>
+        <a class="button" href="/settings?action=import">Import project</a>
       </div>
     {:else if metrics}
       <dl class="coverage-summary" aria-label="Authoring coverage summary">
@@ -132,7 +144,7 @@
             <span class="status-chip local">{metrics.sceneCount} total</span>
           </header>
           <div class="bar-list">
-            {#each [{ label: 'Screen visuals attached', value: metrics.screenAssetCount, total: metrics.screenStepCount, detail: `${metrics.screenAssetCount} / ${metrics.screenStepCount} screen Steps` }, { label: 'Automation monitored', value: metrics.monitoredCount, total: metrics.sceneCount, detail: `${metrics.monitoredCount} Scenes with monitored or verified automation` }, { label: 'Verified portable source', value: metrics.verifiedSourceCount, total: metrics.sceneCount, detail: `${metrics.verifiedSourceCount} Scenes declare verified capability` }, { label: 'Passed attached Runs', value: metrics.passedCount, total: metrics.sceneCount, detail: `${metrics.passedCount} non-synthetic passed statuses` }] as row}
+            {#each [{ label: 'Screen visuals attached', value: metrics.screenAssetCount, total: metrics.screenStepCount, detail: `${metrics.screenAssetCount} / ${metrics.screenStepCount} screen steps` }, { label: 'Automation monitored', value: metrics.monitoredCount, total: metrics.sceneCount, detail: `${metrics.monitoredCount} scenes with monitored or verified automation` }, { label: 'Verified portable source', value: metrics.verifiedSourceCount, total: metrics.sceneCount, detail: `${metrics.verifiedSourceCount} scenes declare verified capability` }, { label: 'Passed attached runs', value: metrics.passedCount, total: metrics.sceneCount, detail: `${metrics.passedCount} non-synthetic passed statuses` }] as row}
               <div class="bar-row">
                 <div><strong>{row.label}</strong><span>{percent(row.value, row.total)}%</span></div>
                 <div class="bar"><i style={`width: ${percent(row.value, row.total)}%`}></i></div>
@@ -154,7 +166,7 @@
             <div>
               <h2 id="freshness-title">Freshness</h2>
             </div>
-            <a href="/runs">Open Runs <Icon name="arrow-right" size={12} /></a>
+            <a href="/runs">Open runs <Icon name="arrow-right" size={12} /></a>
           </header>
           <div class="freshness-summary">
             <span class="fresh"><strong>{freshCount}</strong><small>Fresh &lt;14d</small></span
@@ -171,7 +183,7 @@
                 ><span
                   ><strong>{scene.title}</strong><small
                     >{freshness.ageDays === null
-                      ? 'No real Run timestamp attached'
+                      ? 'No real run timestamp attached'
                       : `${freshness.ageDays} day${freshness.ageDays === 1 ? '' : 's'} since attached evidence`}</small
                   ></span
                 ><span
@@ -205,10 +217,6 @@
 </AppShell>
 
 <style>
-  .insights-page :global(.surface-header h1) {
-    font-size: 1.8rem;
-    letter-spacing: -0.035em;
-  }
   .coverage-summary {
     border-block: 1px solid var(--line);
     display: grid;
@@ -223,7 +231,7 @@
   }
   .coverage-summary dt {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
   }
   .coverage-summary dd {
     font-size: 1.05rem;
@@ -232,7 +240,7 @@
   }
   .coverage-summary dd span {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 500;
     margin-left: 6px;
   }
@@ -262,9 +270,10 @@
     align-items: center;
     color: var(--accent);
     display: inline-flex;
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     font-weight: 680;
     gap: 4px;
+    min-height: 40px;
     text-decoration: none;
   }
   .bar-list {
@@ -278,7 +287,7 @@
   }
   .bar-row > div:first-child {
     display: flex;
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     justify-content: space-between;
   }
   .bar-row > div:first-child span {
@@ -296,11 +305,10 @@
     border-radius: inherit;
     display: block;
     height: 100%;
-    min-width: 2px;
   }
   .bar-row small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
   }
   .coverage-card footer {
     align-items: center;
@@ -315,11 +323,11 @@
     display: block;
   }
   .coverage-card footer strong {
-    font-size: 0.7rem;
+    font-size: 0.8rem;
   }
   .coverage-card footer small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     margin-top: 2px;
   }
   .freshness-summary {
@@ -341,7 +349,7 @@
   }
   .freshness-summary small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .freshness-summary .fresh strong {
     color: var(--pass);
@@ -377,11 +385,11 @@
     display: block;
   }
   .freshness-list strong {
-    font-size: 0.72rem;
+    font-size: 0.8rem;
   }
   .freshness-list small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin-top: 3px;
   }
   .analytics-details {
@@ -393,16 +401,17 @@
     align-items: center;
     cursor: pointer;
     display: flex;
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     font-weight: 680;
     gap: 12px;
     justify-content: space-between;
+    min-height: 40px;
     padding: 13px 15px;
   }
   .analytics-details p {
     border-top: 1px solid var(--line);
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     line-height: 1.5;
     margin: 0;
     padding: 12px 15px;
@@ -425,6 +434,10 @@
     }
     .freshness-summary {
       grid-template-columns: 1fr 1fr;
+    }
+    .freshness-card header a,
+    .analytics-details summary {
+      min-height: 44px;
     }
   }
 </style>

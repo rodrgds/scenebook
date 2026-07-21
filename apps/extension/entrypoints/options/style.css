@@ -94,6 +94,13 @@ button:focus-visible {
   outline: 2px solid #b33b24;
   outline-offset: 2px;
 }
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+button:disabled {
+  cursor: progress;
+  opacity: 0.58;
+}
 #status {
   min-height: 22px;
   margin: 18px 0 0;
@@ -101,4 +108,10 @@ button:focus-visible {
 }
 #status[data-kind='success'] {
   color: #4f7242;
+}
+#status[data-kind='info'] {
+  color: #686159;
+}
+#status[data-kind='error'] {
+  color: #a73221;
 }

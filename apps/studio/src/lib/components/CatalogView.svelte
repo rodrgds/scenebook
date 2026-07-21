@@ -171,7 +171,7 @@
   <div class="section-heading">
     <h2 id="catalog-heading">{title}</h2>
     <div class="heading-actions">
-      <div class="layout-switch" aria-label="Catalog layout">
+      <div class="layout-switch" role="group" aria-label="Catalog layout">
         <button
           class:active={layout === 'grid'}
           type="button"
@@ -217,6 +217,7 @@
         id="scene-filter-controls"
         class="filter-controls"
         class:open={filtersOpen}
+        role="group"
         aria-label="Scene filters"
       >
         <label>
@@ -263,7 +264,7 @@
   {#if loadState === 'loading'}
     <div class="catalog-loading" aria-live="polite" aria-busy="true">
       <span></span><span></span><span></span>
-      <p>Reading local Scenes…</p>
+      <p>Reading local scenes…</p>
     </div>
   {:else if loadState === 'error'}
     <div class="empty-state" role="alert">
@@ -333,7 +334,7 @@
     </div>
     {#if nextCursor}
       <button class="button load-more" type="button" onclick={() => loadScenes(true)}
-        >Load more Scenes</button
+        >Load more scenes</button
       >
     {/if}
   {:else}
@@ -415,21 +416,22 @@
     color: var(--muted);
     display: flex;
     gap: 8px;
-    min-height: 38px;
+    min-height: 40px;
     min-width: 0;
     padding: 0 10px;
   }
   .catalog-search input {
     background: transparent;
     border: 0;
-    font-size: 0.77rem;
+    font-size: 0.82rem;
     min-width: 0;
     outline: 0;
     width: 100%;
   }
   .catalog-search:focus-within {
     border-color: var(--accent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
   .filter-controls {
     display: flex;
@@ -455,7 +457,7 @@
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: 7px;
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     height: 40px;
     padding: 0 8px;
     width: 148px;
@@ -468,7 +470,7 @@
   }
   .result-count {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     text-align: right;
     white-space: nowrap;
   }
@@ -476,8 +478,9 @@
     background: transparent;
     border: 0;
     color: var(--accent);
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     font-weight: 650;
+    min-height: 40px;
     padding: 6px;
     white-space: nowrap;
   }
@@ -497,7 +500,7 @@
     border-color: var(--line-strong);
   }
   .scene-image {
-    background: #24211e;
+    background: var(--preview-surface);
     display: block;
     height: 190px;
     overflow: hidden;
@@ -511,10 +514,10 @@
   }
   .missing-preview {
     align-items: center;
-    color: #aaa39a;
+    color: var(--preview-muted);
     display: flex;
     flex-direction: column;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     gap: 5px;
     height: 100%;
     justify-content: center;
@@ -542,7 +545,7 @@
   .scene-title-row p {
     color: var(--muted);
     display: -webkit-box;
-    font-size: 0.72rem;
+    font-size: 0.82rem;
     line-clamp: 2;
     line-height: 1.45;
     margin: 4px 0 0;
@@ -562,7 +565,7 @@
     align-items: center;
     border-radius: 999px;
     display: inline-flex;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 680;
     gap: 5px;
     min-height: 24px;
@@ -582,8 +585,8 @@
     color: var(--broken);
   }
   .status-stale {
-    background: #e9e5dd;
-    color: #6b665e;
+    background: var(--paper-2);
+    color: var(--muted);
   }
   .publication-state.unpublished {
     background: var(--info-soft);
@@ -594,8 +597,8 @@
     color: var(--pass);
   }
   .publication-state.archived {
-    background: #e9e5dd;
-    color: #6b665e;
+    background: var(--paper-2);
+    color: var(--muted);
   }
   .sample-badge {
     background: var(--changed-soft);
@@ -607,7 +610,7 @@
     color: var(--muted);
     display: flex;
     flex-wrap: wrap;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     gap: 6px 12px;
     padding-top: 10px;
   }
@@ -672,7 +675,7 @@
   }
   .catalog-loading p {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     grid-column: 1 / -1;
     margin: 0;
     text-align: center;
@@ -705,7 +708,7 @@
   }
   .empty-state p {
     color: var(--muted);
-    font-size: 0.74rem;
+    font-size: 0.82rem;
     margin: 0 0 15px;
   }
   @media (max-width: 1220px) {
@@ -730,6 +733,9 @@
     }
     .filterbar {
       grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .catalog-search {
+      min-height: 44px;
     }
     .filter-summary {
       grid-column: auto;

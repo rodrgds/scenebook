@@ -51,13 +51,13 @@
       project = effectiveLocalProject(persisted, nextScenes);
       loadState = 'ready';
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Local Run evidence could not be read.';
+      error = cause instanceof Error ? cause.message : 'Local run evidence could not be read.';
       loadState = 'error';
     }
   }
 
   function imported(result: ImportRunEvidenceResult) {
-    success = `${result.runCount} exact Run${result.runCount === 1 ? '' : 's'} attached across ${result.scenes.length} Scene${result.scenes.length === 1 ? '' : 's'}.`;
+    success = `${result.runCount} exact run${result.runCount === 1 ? '' : 's'} attached across ${result.scenes.length} scene${result.scenes.length === 1 ? '' : 's'}.`;
     void loadRuns();
   }
 
@@ -127,7 +127,7 @@
     </header>
 
     {#if success}<p class="surface-success" role="status">{success}</p>{/if}
-    {#if error}<p class="surface-error" role="alert">{error}</p>{/if}
+    {#if error && loadState !== 'error'}<p class="surface-error" role="alert">{error}</p>{/if}
 
     <details class="targets">
       <summary>
@@ -233,7 +233,7 @@
             <strong>No matching evidence</strong><small
               >{runs.length
                 ? 'Choose another filter.'
-                : 'Import a generated Run directory or evidence ZIP to attach real execution results.'}</small
+                : 'Import a generated run directory or evidence ZIP to attach real execution results.'}</small
             >
           </div>
           <button class="button" type="button" onclick={() => (importVisible = true)}
@@ -340,16 +340,12 @@
     display: grid;
     gap: 14px;
   }
-  .runs-page :global(.surface-header h1) {
-    font-size: 1.8rem;
-    letter-spacing: -0.035em;
-  }
   .surface-success {
     background: var(--pass-soft);
     border: 1px solid color-mix(in srgb, var(--pass) 30%, transparent);
     border-radius: 8px;
     color: var(--pass);
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     margin: 0;
     padding: 9px 11px;
   }
@@ -364,6 +360,7 @@
     display: flex;
     gap: 14px;
     justify-content: space-between;
+    min-height: 40px;
     padding: 14px 16px;
   }
   .targets > summary strong,
@@ -376,7 +373,7 @@
   .targets > summary div span,
   .targets > summary > span {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     margin-top: 2px;
   }
   .target-content {
@@ -399,29 +396,29 @@
   }
   .target-grid p {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     margin: 0;
   }
   .target-grid code {
     background: var(--paper-2);
     border: 1px solid var(--line);
     border-radius: 7px;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     line-height: 1.45;
     overflow-wrap: anywhere;
     padding: 9px;
   }
   .section-title > div > p {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     margin: 4px 0 0;
   }
   .run-filter select {
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
-    font-size: 0.72rem;
-    min-height: 38px;
+    font-size: 0.8rem;
+    min-height: 40px;
     padding: 7px 10px;
   }
   .missing-grid {
@@ -441,11 +438,11 @@
     display: block;
   }
   .missing-card strong {
-    font-size: 0.72rem;
+    font-size: 0.82rem;
   }
   .missing-card small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     margin-top: 3px;
   }
   .run-card {
@@ -464,7 +461,7 @@
   }
   .run-heading p {
     color: var(--faint);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     margin: 0;
   }
   .run-facts {
@@ -486,11 +483,11 @@
   }
   .run-facts small {
     color: var(--faint);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin-bottom: 3px;
   }
   .run-facts strong {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     overflow-wrap: anywhere;
   }
   .run-details {
@@ -499,8 +496,9 @@
   .run-details summary {
     color: var(--muted);
     cursor: pointer;
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     font-weight: 650;
+    min-height: 40px;
     width: max-content;
   }
   .run-details dl {
@@ -511,16 +509,16 @@
   }
   .run-details dt {
     color: var(--faint);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .run-details dd {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin: 3px 0 0;
     overflow-wrap: anywhere;
   }
   .run-details p {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     margin: 10px 0 0;
   }
   .asset-warning {
@@ -557,6 +555,11 @@
     }
     .missing-card .button {
       grid-column: 1 / -1;
+    }
+    .targets > summary,
+    .run-filter select,
+    .run-details summary {
+      min-height: 44px;
     }
   }
 </style>

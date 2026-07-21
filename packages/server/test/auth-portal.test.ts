@@ -166,9 +166,13 @@ describe('human identity and private portal authorization', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+    expect(response.headers.get('content-security-policy')).toContain("style-src 'nonce-");
     const body = await response.text();
     expect(body).toContain('https://publish.scenebook.example.com/share');
     expect(body).toContain('destination+location.hash');
+    expect(body).toContain('role="status"');
+    expect(body).toContain('<noscript>');
+    expect(body).toContain('Opening private publication');
     expect(body).not.toContain('/v1/portal/share/resolve');
     expect(body).not.toContain('fetch(');
   });

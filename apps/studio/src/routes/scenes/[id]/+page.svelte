@@ -11,6 +11,7 @@
   import ScenePreview from '$lib/components/ScenePreview.svelte';
   import ScenePublish from '$lib/components/ScenePublish.svelte';
   import SceneVersions from '$lib/components/SceneVersions.svelte';
+  import { trapDialogFocus } from '$lib/dialog-focus';
   import { demoScene } from '$lib/demo';
   import { cloneScene } from '$lib/model';
   import type { EditorScene } from '$lib/model';
@@ -31,6 +32,8 @@
   let actionsDialog = $state<HTMLDialogElement>();
   let deleteDialog = $state<HTMLDialogElement>();
   let actionError = $state('');
+  let duplicating = $state(false);
+  let deleting = $state(false);
   let flushEditor: (() => Promise<void>) | null = null;
   let loadGeneration = 0;
   let destroyed = false;
@@ -167,26 +170,32 @@
   }
 
   async function duplicateCurrent() {
-    if (!scene) return;
+    if (!scene || duplicating) return;
+    duplicating = true;
     actionError = '';
     try {
       const copy = await studioSceneLibrary.duplicate(scene);
       actionsDialog?.close();
       await goto(`/scenes/${encodeURIComponent(copy.id)}`);
     } catch (error) {
-      actionError = error instanceof Error ? error.message : 'The Scene could not be duplicated.';
+      actionError = error instanceof Error ? error.message : 'The scene could not be duplicated.';
+    } finally {
+      duplicating = false;
     }
   }
 
   async function deleteCurrent() {
-    if (!scene) return;
+    if (!scene || deleting) return;
+    deleting = true;
     actionError = '';
     try {
       await studioSceneLibrary.delete(scene.id);
       deleteDialog?.close();
       await goto('/catalog');
     } catch (error) {
-      actionError = error instanceof Error ? error.message : 'The Scene could not be deleted.';
+      actionError = error instanceof Error ? error.message : 'The scene could not be deleted.';
+    } finally {
+      deleting = false;
     }
   }
 </script>
@@ -200,7 +209,7 @@
     <section class="route-state" aria-live="polite" aria-busy="true">
       <span class="state-mark"><Icon name="clock" size={22} /></span>
       <div>
-        <h1>Opening Scene…</h1>
+        <h1>Opening scene…</h1>
         <p>Reading the durable local workspace.</p>
       </div>
     </section>
@@ -208,7 +217,7 @@
     <section class="route-state error-state" role="alert">
       <span class="state-mark"><Icon name="warning" size={22} /></span>
       <div>
-        <h1>Studio could not open this Scene</h1>
+        <h1>Studio could not open this scene</h1>
         <p>{loadError}</p>
       </div>
       <button class="button" type="button" onclick={() => loadScene(loadKey)}>Retry</button>
@@ -219,7 +228,7 @@
       <span class="state-mark"><Icon name="file" size={22} /></span>
       <div>
         <h1>Scene not found</h1>
-        <p>No local Scene exists at <span class="mono">{loadKey}</span>.</p>
+        <p>No local scene exists at <span class="mono">{loadKey}</span>.</p>
       </div>
       <a class="button primary" href="/catalog">Open catalog</a>
     </section>
@@ -239,7 +248,9 @@
             <span>Studio found changes newer than the last durable save.</span>
           {/if}
         </div>
-        <button class="button" type="button" onclick={discardRecovery}>Discard</button>
+        <button class="button" type="button" onclick={discardRecovery}
+          >Discard recovered edits</button
+        >
         <button class="button primary" type="button" onclick={restoreRecovery}>Restore edits</button
         >
       </section>
@@ -270,8 +281,11 @@
         <button
           class="icon-button"
           type="button"
-          aria-label="More Scene actions"
-          onclick={() => actionsDialog?.showModal()}><Icon name="more" size={16} /></button
+          aria-label="More scene actions"
+          onclick={() => {
+            actionError = '';
+            actionsDialog?.showModal();
+          }}><Icon name="more" size={16} /></button
         >
       </div>
     </header>
@@ -280,11 +294,12 @@
       {#each tabs as tab, index}
         <button
           class:active={activeTab === tab.id}
+          id={`scene-tab-${tab.id}`}
           type="button"
           role="tab"
           data-scene-tab={tab.id}
           aria-selected={activeTab === tab.id}
-          aria-controls={`${tab.id}-panel`}
+          aria-controls={activeTab === tab.id ? `${tab.id}-panel` : undefined}
           tabindex={activeTab === tab.id ? 0 : -1}
           onclick={() => selectTab(tab.id)}
           onkeydown={(event) => handleTabKey(event, index)}
@@ -294,7 +309,7 @@
       {/each}
     </div>
 
-    <div id={`${activeTab}-panel`} role="tabpanel" aria-label={`${activeTab} panel`}>
+    <div id={`${activeTab}-panel`} role="tabpanel" aria-labelledby={`scene-tab-${activeTab}`}>
       {#if activeTab === 'edit'}
         <SceneEditor
           bind:scene
@@ -312,19 +327,31 @@
       {/if}
     </div>
 
-    <dialog bind:this={actionsDialog} class="action-dialog" aria-labelledby="actions-title">
+    <dialog
+      bind:this={actionsDialog}
+      class="action-dialog"
+      tabindex="-1"
+      aria-labelledby="actions-title"
+      onkeydown={(event) => trapDialogFocus(event, actionsDialog)}
+      oncancel={(event) => {
+        if (duplicating) event.preventDefault();
+      }}
+    >
       <form method="dialog" class="dialog-head">
         <div>
           <h2 id="actions-title">Scene actions</h2>
         </div>
-        <button class="icon-button" value="cancel" aria-label="Close Scene actions"
-          ><Icon name="close" /></button
+        <button
+          class="icon-button"
+          value="cancel"
+          aria-label="Close scene actions"
+          disabled={duplicating}><Icon name="close" /></button
         >
       </form>
       {#if actionError}<div class="dialog-error" role="alert">{actionError}</div>{/if}
-      <button class="wide-action" type="button" onclick={duplicateCurrent}
+      <button class="wide-action" type="button" disabled={duplicating} onclick={duplicateCurrent}
         ><Icon name="copy" size={17} /><span
-          ><strong>Duplicate Scene</strong><small
+          ><strong>{duplicating ? 'Duplicating…' : 'Duplicate scene'}</strong><small
             >Create an independent local draft with a new ID.</small
           ></span
         ><Icon name="chevron-right" size={15} /></button
@@ -332,13 +359,15 @@
       <button
         class="wide-action danger-action"
         type="button"
+        disabled={duplicating}
         onclick={() => {
+          actionError = '';
           actionsDialog?.close();
           deleteDialog?.showModal();
         }}
         ><Icon name="trash" size={17} /><span
-          ><strong>Delete local Scene</strong><small
-            >Remove this Scene and its recovery journal from this browser.</small
+          ><strong>Delete local scene</strong><small
+            >Remove this scene and its recovery journal from this browser.</small
           ></span
         ><Icon name="chevron-right" size={15} /></button
       >
@@ -347,15 +376,25 @@
     <dialog
       bind:this={deleteDialog}
       class="action-dialog confirm-dialog"
+      tabindex="-1"
       aria-labelledby="delete-title"
+      onkeydown={(event) => trapDialogFocus(event, deleteDialog)}
+      oncancel={(event) => {
+        if (deleting) event.preventDefault();
+      }}
     >
       <span class="danger-mark"><Icon name="trash" size={21} /></span>
       <h2 id="delete-title">Delete “{scene.title}”?</h2>
       <p>This permanently removes the local saved copy and its crash-recovery journal.</p>
       {#if actionError}<div class="dialog-error" role="alert">{actionError}</div>{/if}
       <div class="dialog-actions">
-        <form method="dialog"><button class="button" value="cancel">Keep Scene</button></form>
-        <button class="button danger" type="button" onclick={deleteCurrent}>Delete Scene</button>
+        <form method="dialog">
+          <button class="button" type="submit" value="cancel" disabled={deleting}>Keep scene</button
+          >
+        </form>
+        <button class="button danger" type="button" disabled={deleting} onclick={deleteCurrent}
+          >{deleting ? 'Deleting…' : 'Delete scene'}</button
+        >
       </div>
     </dialog>
   {/if}
@@ -417,11 +456,11 @@
     flex: 1;
   }
   .recovery-banner strong {
-    font-size: 0.73rem;
+    font-size: 0.75rem;
   }
   .recovery-banner span {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .scene-header {
     align-items: center;
@@ -470,7 +509,7 @@
     border-radius: 999px;
     color: var(--muted);
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 680;
     gap: 4px;
     min-height: 28px;
@@ -526,7 +565,7 @@
     background: var(--paper-2);
     border-radius: 999px;
     display: flex;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     height: 22px;
     justify-content: center;
     min-width: 22px;
@@ -568,7 +607,7 @@
     border: 1px solid color-mix(in srgb, var(--broken) 32%, transparent);
     border-radius: 8px;
     color: var(--broken);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     margin: 10px 0;
     padding: 9px 10px;
   }
@@ -603,7 +642,7 @@
   }
   .wide-action small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin-top: 3px;
   }
   .danger-action {
@@ -641,7 +680,15 @@
       width: 100%;
     }
     .scene-tabs {
+      gap: 0;
       padding: 0 7px;
+    }
+    .scene-tabs button {
+      flex: 1 0 auto;
+      padding-inline: 8px;
+    }
+    .scene-tabs button :global(svg) {
+      display: none;
     }
     .recovery-banner {
       align-items: stretch;

@@ -20,6 +20,8 @@ const styles = String.raw`
     --sb-line: #d7dade;
     --sb-accent: #b83b24;
     --sb-on-accent: #ffffff;
+    --sb-focus: #1c1d1f;
+    --sb-focus-contrast: #f4f5f6;
     --sb-accent-soft: color-mix(in srgb, var(--sb-accent) 14%, white);
     --sb-radius: 14px;
     color: var(--sb-ink);
@@ -39,7 +41,7 @@ const styles = String.raw`
   }
   .topline {
     align-items: center;
-    background: color-mix(in srgb, var(--sb-paper) 92%, white);
+    background: var(--sb-surface);
     border-bottom: 1px solid var(--sb-line);
     display: flex;
     gap: 14px;
@@ -49,8 +51,11 @@ const styles = String.raw`
   }
   :host([compact]) .topline { display: none; }
   .scene-name { font-size: 14px; font-weight: 650; letter-spacing: -.01em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .verified { align-items: center; color: #267152; display: inline-flex; font-size: 12px; font-weight: 650; gap: 6px; white-space: nowrap; }
+  .evidence { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+  .verified { align-items: center; color: var(--sb-ink); display: inline-flex; font-size: 12px; font-weight: 650; gap: 6px; white-space: nowrap; }
   .verified::before { background: currentColor; border-radius: 50%; content: ""; height: 7px; width: 7px; }
+  .provenance summary { align-items: center; cursor: pointer; display: inline-flex; font-size: 12px; font-weight: 650; min-height: 44px; padding: 0 4px; }
+  .provenance code { color: var(--sb-muted); display: block; font-size: .75rem; max-width: 42ch; overflow-wrap: anywhere; padding: 0 4px 8px; }
   .stage {
     aspect-ratio: 16 / 10;
     background: #24221f;
@@ -67,9 +72,9 @@ const styles = String.raw`
   .browser-chrome { align-items: center; background: #f2eee6; border-bottom: 1px solid #cfc8bc; color: #706a62; display: flex; flex: 0 0 30px; font-size: 10px; gap: 5px; min-width: 0; padding: 0 10px; }
   .browser-chrome i { background: #aaa39a; border-radius: 50%; height: 6px; width: 6px; }
   .browser-chrome i:first-child { background: #d15c48; }
-  .browser-chrome span { overflow: hidden; padding-left: 6px; text-overflow: ellipsis; white-space: nowrap; }
+  .browser-chrome span { overflow: hidden; padding-inline-start: 6px; text-overflow: ellipsis; white-space: nowrap; }
   .mobile-chrome { align-self: center; background: #050505; border-radius: 999px; height: 6px; margin: 0 0 6px; width: 34%; }
-  .media-viewport { background: #181715; flex: 1 1 auto; min-height: 0; overflow: hidden; position: relative; width: 100%; }
+  .media-viewport { background: #181715; container-type: inline-size; flex: 1 1 auto; min-height: 0; overflow: hidden; position: relative; width: 100%; }
   .frame-mobile .media-viewport { border-radius: 15px; }
   .image-plane { position: absolute; }
   .image-plane img { display: block; height: 100%; object-fit: fill; user-select: none; width: 100%; }
@@ -104,7 +109,10 @@ const styles = String.raw`
     pointer-events: auto;
   }
   .hotspot::before { background: var(--sb-accent); border-radius: 50%; content: ""; height: 12px; margin: 0 14px; width: 12px; }
-  .hotspot-label { background: var(--sb-ink); border-radius: 8px; color: white; font-size: 12px; font-weight: 650; left: 50%; max-width: 220px; padding: 7px 9px; pointer-events: none; position: absolute; top: calc(100% + 12px); transform: translateX(-50%); white-space: nowrap; }
+  .hotspot-label { background: var(--sb-ink); border-radius: 8px; color: var(--sb-on-ink); font-size: 12px; font-weight: 650; left: 50%; max-width: min(220px, 70vw); max-width: min(220px, 70cqw); overflow-wrap: anywhere; padding: 7px 9px; pointer-events: none; position: absolute; text-align: center; top: calc(100% + 12px); transform: translateX(-50%); white-space: normal; width: max-content; }
+  .hotspot.label-left .hotspot-label { left: 50%; transform: none; }
+  .hotspot.label-right .hotspot-label { left: auto; right: 50%; transform: none; }
+  .hotspot.label-above .hotspot-label { bottom: calc(100% + 12px); top: auto; }
   :host([practice]) .hotspot { background: transparent; border-color: transparent; box-shadow: none; }
   :host([practice]) .hotspot::before, :host([practice]) .hotspot-label { opacity: 0; }
   :host([practice]) .hotspot:focus-visible { border-color: var(--sb-accent); box-shadow: 0 0 0 4px var(--sb-accent-soft); }
@@ -119,13 +127,14 @@ const styles = String.raw`
   .comparison { display:grid; grid-template-columns:1fr 1fr; height:100%; width:100%; }
   .comparison .image-plane { overflow:hidden; position:relative; }
   .comparison .image-plane img { height:100%; object-fit:contain; width:100%; }
-  .choice, .cta { align-items: flex-start; background: #2c2a27; border: 1px solid #56514a; border-radius: 10px; color: white; cursor: pointer; display: flex; flex-direction: column; gap: 3px; justify-content: center; min-height: 58px; padding: 12px 14px; text-align: left; text-decoration: none; }
-  .choice:hover, .choice:focus-visible, .cta:hover, .cta:focus-visible { border-color: var(--sb-accent); outline: 3px solid color-mix(in srgb, var(--sb-accent) 35%, transparent); outline-offset: 2px; }
+  .choice, .cta { align-items: flex-start; background: #2c2a27; border: 1px solid #56514a; border-radius: 10px; color: white; cursor: pointer; display: flex; flex-direction: column; gap: 3px; justify-content: center; min-height: 58px; padding: 12px 14px; text-align: start; text-decoration: none; }
+  .choice:hover, .cta:hover { border-color: var(--sb-accent); }
   .choice small { color: #bbb6ae; }
   .cta.primary { background: var(--sb-accent); border-color: var(--sb-accent); color: var(--sb-on-accent); }
   .cta-form { background:#2c2a27; border:1px solid #56514a; border-radius:10px; display:grid; gap:10px; padding:14px; }
-  .cta-form label { display:grid; font-size:12px; gap:5px; }
-  .cta-form input:not([type="checkbox"]) { background:#171614; border:1px solid #6d675f; border-radius:7px; color:white; font:inherit; padding:8px 10px; }
+  .cta-form label { display:grid; font-size:12px; gap:5px; min-height:44px; }
+  .cta-form label:has(input[type="checkbox"]) { align-items:center; cursor:pointer; grid-template-columns:1fr auto; }
+  .cta-form input:not([type="checkbox"]) { background:#171614; border:1px solid #6d675f; border-radius:7px; color:white; font:inherit; min-height:44px; padding:8px 10px; }
   .cta-form button { background:var(--sb-accent); border:1px solid var(--sb-accent); border-radius:8px; color:var(--sb-on-accent); cursor:pointer; font:inherit; font-weight:650; min-height:44px; padding:8px 12px; }
   .cta-result { color:#c9c5bd; font-size:12px; margin:0; }
   .cta-result[data-state="error"] { color:#ffb4a8; }
@@ -133,24 +142,27 @@ const styles = String.raw`
   .controls { align-items: center; background: var(--sb-surface); border-top: 1px solid var(--sb-line); display: grid; gap: 14px; grid-template-columns: auto minmax(120px, 1fr) auto; padding: 11px 14px; }
   .nav { align-items: center; display: flex; gap: 8px; }
   .control { align-items: center; background: transparent; border: 1px solid var(--sb-line); border-radius: 8px; cursor: pointer; display: inline-flex; font-weight: 650; gap: 7px; justify-content: center; min-height: 44px; min-width: 44px; padding: 8px 12px; }
-  .control:hover:not(:disabled) { background: var(--sb-paper); border-color: #aaa296; }
-  .control:focus-visible, summary:focus-visible, .transcript button:focus-visible { outline: 3px solid color-mix(in srgb, var(--sb-accent) 36%, transparent); outline-offset: 2px; }
+  .control:hover:not(:disabled) { background: var(--sb-paper); border-color: var(--sb-muted); }
+  .autoplay-control[aria-pressed="true"] { background: var(--sb-paper); border-color: var(--sb-muted); }
+  .autoplay-state { color: var(--sb-muted); font-size: .75rem; }
+  .hotspot:focus-visible, .choice:focus-visible, .cta:focus-visible, .cta-form input:focus-visible, .cta-form button:focus-visible, .control:focus-visible, summary:focus-visible, .transcript button:focus-visible { box-shadow: 0 0 0 6px var(--sb-focus-contrast); outline: 3px solid var(--sb-focus); outline-offset: 3px; }
+  .hotspot:active, .choice:active, .cta:active, .cta-form button:active:not(:disabled), .control:active:not(:disabled), summary:active, .transcript button:active { filter: brightness(.84); }
   .control:disabled { cursor: not-allowed; opacity: .38; }
   .progress { align-items: center; display: grid; gap: 7px; grid-template-columns: 1fr auto; min-width: 0; }
-  .bar { background: #e7e1d7; border-radius: 999px; height: 5px; overflow: hidden; }
+  .bar { background: var(--sb-line); border-radius: 999px; height: 5px; overflow: hidden; }
   .bar > span { background: var(--sb-accent); display: block; height: 100%; transform: scaleX(var(--sb-progress, 0)); transform-origin: left; transition: transform 180ms ease-out; width: 100%; }
-  .progress-text { color: var(--sb-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; white-space: nowrap; }
+  .progress-text { color: var(--sb-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; white-space: nowrap; }
   .transcript { background: var(--sb-paper); border-top: 1px solid var(--sb-line); }
   .transcript summary { cursor: pointer; font-size: 13px; font-weight: 650; min-height: 44px; padding: 13px 16px; }
   .transcript ol { display: grid; gap: 3px; list-style: none; margin: 0; max-height: 230px; overflow: auto; padding: 0 10px 12px; }
-  .transcript button { align-items: baseline; background: transparent; border: 0; border-radius: 7px; color: var(--sb-muted); cursor: pointer; display: grid; gap: 10px; grid-template-columns: 24px 1fr; min-height: 44px; padding: 9px; text-align: left; width: 100%; }
+  .transcript button { align-items: baseline; background: transparent; border: 0; border-radius: 7px; color: var(--sb-muted); cursor: pointer; display: grid; gap: 10px; grid-template-columns: 24px 1fr; min-height: 44px; padding: 9px; text-align: start; width: 100%; }
   .transcript button[aria-current="step"] { background: var(--sb-accent-soft); color: var(--sb-ink); }
-  .step-number { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+  .step-number { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; }
   .empty { background: var(--sb-paper); border: 1px dashed var(--sb-line); border-radius: var(--sb-radius); color: var(--sb-muted); padding: 40px; text-align: center; }
   .sr-only { height: 1px; margin: -1px; overflow: hidden; padding: 0; position: absolute; width: 1px; clip: rect(0,0,0,0); white-space: nowrap; }
   @media (max-width: 620px) {
     .topline { min-height: 46px; }
-    .verified-detail { display: none; }
+    .provenance code { max-width: 28ch; }
     .stage { aspect-ratio: 4 / 3; }
     .copy { padding: 14px 16px; }
     .controls { grid-template-columns: 1fr auto; }
@@ -168,7 +180,11 @@ const styles = String.raw`
     .hotspot, .choice, .cta, .control { forced-color-adjust: auto; }
     .bar > span { background: Highlight; }
   }
+  :host(:dir(rtl)) .bar > span { transform-origin: right; }
+  :host(:dir(rtl)) .directional-icon { display: inline-block; transform: scaleX(-1); }
 `;
+
+const AUTOPLAY_STORAGE_KEY = 'scenebook:autoplay-enabled';
 
 function escapeHtml(value: unknown): string {
   return String(value ?? '')
@@ -256,12 +272,50 @@ function bestTextColor(background: string): '#111315' | '#ffffff' {
     : '#ffffff';
 }
 
+function mixColor(from: string, to: string, amount: number): string {
+  const start = parseOpaqueColor(from);
+  const end = parseOpaqueColor(to);
+  if (!start || !end) return from;
+  const channel = (left: number, right: number): string =>
+    Math.round(left + (right - left) * amount)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${channel(start.red, end.red)}${channel(start.green, end.green)}${channel(start.blue, end.blue)}`;
+}
+
+function readableTone(
+  foreground: string,
+  background: string,
+  surfaces: readonly string[],
+  minimumContrast: number,
+): string {
+  let lower = 0;
+  let upper = 1;
+  let result = foreground;
+  for (let iteration = 0; iteration < 24; iteration += 1) {
+    const amount = (lower + upper) / 2;
+    const candidate = mixColor(foreground, background, amount);
+    if (surfaces.every((surface) => contrastRatio(candidate, surface) >= minimumContrast)) {
+      result = candidate;
+      lower = amount;
+    } else {
+      upper = amount;
+    }
+  }
+  return result;
+}
+
 function accessibleTheme(theme: SceneDefinition['theme']): {
   readonly accent: string;
+  readonly focus: string;
+  readonly focusContrast: string;
   readonly ink: string;
+  readonly line: string;
+  readonly muted: string;
   readonly onAccent: string;
   readonly onInk: string;
   readonly paper: string;
+  readonly surface: string;
 } {
   const defaultPaper = '#f4f5f6';
   const defaultInk = '#1c1d1f';
@@ -278,12 +332,20 @@ function accessibleTheme(theme: SceneDefinition['theme']): {
     parseOpaqueColor(requestedAccent) && contrastRatio(requestedAccent, '#ffffff') >= 4.5
       ? requestedAccent
       : defaultAccent;
+  const mixedSurface = mixColor(paper, ink, 0.04);
+  const surface = contrastRatio(ink, mixedSurface) >= 4.5 ? mixedSurface : paper;
+  const surfaces = [paper, surface];
   return {
     accent,
+    focus: ink,
+    focusContrast: paper,
     ink,
+    line: readableTone(ink, paper, surfaces, 3),
+    muted: readableTone(ink, paper, surfaces, 4.5),
     onAccent: bestTextColor(accent),
     onInk: bestTextColor(ink),
     paper,
+    surface,
   };
 }
 
@@ -300,6 +362,12 @@ export class ScenebookPlayerElement extends HTMLElement {
   #ctaSubmitter: SceneCtaSubmitter | null = null;
   #formsDisabled = false;
   #transcriptOpen = false;
+  #reflectingStep = false;
+  #autoplayEnabled = false;
+  #focusPaused = false;
+  #hoverPaused = false;
+  #keyboardPaused = false;
+  #pointerPaused = false;
   readonly #submissionIds = new Map<string, string>();
 
   constructor() {
@@ -358,15 +426,39 @@ export class ScenebookPlayerElement extends HTMLElement {
   }
 
   connectedCallback(): void {
+    this.#loadAutoplayPreference();
+    this.#focusPaused = false;
+    this.#hoverPaused = false;
+    this.#keyboardPaused = false;
+    this.#pointerPaused = false;
     if (!this.hasAttribute('tabindex')) this.tabIndex = 0;
     if (!this.hasAttribute('aria-label'))
       this.setAttribute('aria-label', 'Interactive walkthrough');
     this.addEventListener('keydown', this.#onKeyDown);
+    this.addEventListener('keyup', this.#onKeyboardEnd);
+    this.addEventListener('focusin', this.#onFocusIn);
+    this.addEventListener('focusout', this.#onFocusOut);
+    this.addEventListener('pointerenter', this.#onPointerEnter);
+    this.addEventListener('pointerleave', this.#onPointerLeave);
+    this.addEventListener('pointerdown', this.#onPointerStart);
+    this.ownerDocument.addEventListener('visibilitychange', this.#onVisibilityChange);
     this.#render();
   }
 
   disconnectedCallback(): void {
     this.removeEventListener('keydown', this.#onKeyDown);
+    this.removeEventListener('keyup', this.#onKeyboardEnd);
+    this.removeEventListener('focusin', this.#onFocusIn);
+    this.removeEventListener('focusout', this.#onFocusOut);
+    this.removeEventListener('pointerenter', this.#onPointerEnter);
+    this.removeEventListener('pointerleave', this.#onPointerLeave);
+    this.removeEventListener('pointerdown', this.#onPointerStart);
+    this.#removePointerReleaseListeners();
+    this.ownerDocument.removeEventListener('visibilitychange', this.#onVisibilityChange);
+    this.#focusPaused = false;
+    this.#hoverPaused = false;
+    this.#keyboardPaused = false;
+    this.#pointerPaused = false;
     this.#clearTimer();
   }
 
@@ -378,7 +470,10 @@ export class ScenebookPlayerElement extends HTMLElement {
       if (transcript) transcript.open = this.#transcriptOpen;
       return;
     }
-    if (name === 'step' && this.#scene) this.#index = findStepIndex(this.#scene, value);
+    if (name === 'step' && this.#scene) {
+      this.#index = findStepIndex(this.#scene, value);
+      if (this.#reflectingStep) return;
+    }
     this.#render();
   }
 
@@ -424,7 +519,16 @@ export class ScenebookPlayerElement extends HTMLElement {
     this.#setIndex(0, 'restart');
   }
 
+  #isRightToLeft(): boolean {
+    const declaredDirection = this.closest<HTMLElement>('[dir]')?.dir.toLowerCase();
+    if (declaredDirection === 'rtl') return true;
+    if (declaredDirection === 'ltr') return false;
+    return this.ownerDocument.defaultView?.getComputedStyle(this).direction === 'rtl';
+  }
+
   #onKeyDown = (event: KeyboardEvent): void => {
+    this.#keyboardPaused = true;
+    this.#clearTimer();
     const target = event.composedPath()[0];
     if (
       target instanceof HTMLInputElement ||
@@ -437,10 +541,12 @@ export class ScenebookPlayerElement extends HTMLElement {
           )))
     )
       return;
-    if (event.key === 'ArrowRight' || event.key === 'PageDown') {
+    const nextArrow = this.#isRightToLeft() ? 'ArrowLeft' : 'ArrowRight';
+    const previousArrow = this.#isRightToLeft() ? 'ArrowRight' : 'ArrowLeft';
+    if (event.key === nextArrow || event.key === 'PageDown') {
       event.preventDefault();
       this.next();
-    } else if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+    } else if (event.key === previousArrow || event.key === 'PageUp') {
       event.preventDefault();
       this.previous();
     } else if (event.key === 'Home') {
@@ -452,6 +558,57 @@ export class ScenebookPlayerElement extends HTMLElement {
     }
   };
 
+  #onFocusIn = (): void => {
+    this.#focusPaused = true;
+    this.#refreshAutoplay();
+  };
+
+  #onFocusOut = (): void => {
+    queueMicrotask(() => {
+      this.#focusPaused =
+        Boolean(this.#root.activeElement) || this.ownerDocument.activeElement === this;
+      this.#refreshAutoplay();
+    });
+  };
+
+  #onPointerEnter = (): void => {
+    this.#hoverPaused = true;
+    this.#refreshAutoplay();
+  };
+
+  #onPointerLeave = (): void => {
+    this.#hoverPaused = false;
+    this.#refreshAutoplay();
+  };
+
+  #onKeyboardEnd = (): void => {
+    this.#keyboardPaused = false;
+    this.#refreshAutoplay();
+  };
+
+  #onPointerStart = (): void => {
+    this.#pointerPaused = true;
+    this.ownerDocument.addEventListener('pointerup', this.#onPointerEnd, true);
+    this.ownerDocument.addEventListener('pointercancel', this.#onPointerEnd, true);
+    this.#refreshAutoplay();
+  };
+
+  #onPointerEnd = (): void => {
+    if (!this.#pointerPaused) return;
+    this.#pointerPaused = false;
+    this.#removePointerReleaseListeners();
+    this.#refreshAutoplay();
+  };
+
+  #removePointerReleaseListeners(): void {
+    this.ownerDocument.removeEventListener('pointerup', this.#onPointerEnd, true);
+    this.ownerDocument.removeEventListener('pointercancel', this.#onPointerEnd, true);
+  }
+
+  #onVisibilityChange = (): void => {
+    this.#refreshAutoplay();
+  };
+
   #setIndex(index: number, source: string, force = false): void {
     if (!this.#scene || validateScene(this.#scene, this.#scenes).length > 0) {
       this.#render();
@@ -461,7 +618,12 @@ export class ScenebookPlayerElement extends HTMLElement {
     const next = Math.max(0, Math.min(index, this.#scene.steps.length - 1));
     if (next === this.#index && source !== 'restart' && !force) return;
     this.#index = next;
-    this.setAttribute('step', this.#scene.steps[next]?.id ?? String(next));
+    this.#reflectingStep = true;
+    try {
+      this.setAttribute('step', this.#scene.steps[next]?.id ?? String(next));
+    } finally {
+      this.#reflectingStep = false;
+    }
     this.#render();
     this.#emit('scenebook:stepchange', { ...this.#detail(), source });
     const step = this.#scene.steps[next];
@@ -579,8 +741,79 @@ export class ScenebookPlayerElement extends HTMLElement {
     this.#autoTimer = null;
   }
 
+  #loadAutoplayPreference(): void {
+    try {
+      const stored = this.ownerDocument.defaultView?.localStorage.getItem(AUTOPLAY_STORAGE_KEY);
+      if (stored === 'false') this.#autoplayEnabled = false;
+      else if (stored === 'true') this.#autoplayEnabled = true;
+    } catch {
+      // Storage can be unavailable in sandboxed embeds; the in-memory control still works.
+    }
+  }
+
+  #persistAutoplayPreference(): void {
+    try {
+      this.ownerDocument.defaultView?.localStorage.setItem(
+        AUTOPLAY_STORAGE_KEY,
+        String(this.#autoplayEnabled),
+      );
+    } catch {
+      // Storage can be unavailable in sandboxed embeds; the in-memory control still works.
+    }
+  }
+
+  #autoplayPaused(): boolean {
+    const reducedMotion =
+      this.ownerDocument.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches ??
+      false;
+    return (
+      !this.isConnected ||
+      !this.#autoplayEnabled ||
+      this.#focusPaused ||
+      this.#hoverPaused ||
+      this.#keyboardPaused ||
+      this.#pointerPaused ||
+      this.ownerDocument.hidden ||
+      reducedMotion
+    );
+  }
+
+  #autoplayState(): 'Off' | 'On' | 'Paused' {
+    if (!this.#autoplayEnabled) return 'Off';
+    return this.#autoplayPaused() ? 'Paused' : 'On';
+  }
+
+  #updateAutoplayControl(): void {
+    const control = this.#root.querySelector<HTMLButtonElement>('[data-autoplay]');
+    if (!control) return;
+    const state = this.#autoplayState();
+    control.setAttribute('aria-pressed', String(this.#autoplayEnabled));
+    control.setAttribute(
+      'aria-label',
+      `Autoplay ${state.toLowerCase()}. ${this.#autoplayEnabled ? 'Turn autoplay off' : 'Turn autoplay on'}`,
+    );
+    const stateLabel = control.querySelector<HTMLElement>('.autoplay-state');
+    if (stateLabel) stateLabel.textContent = state;
+  }
+
+  #toggleAutoplay(): void {
+    this.#autoplayEnabled = !this.#autoplayEnabled;
+    this.#persistAutoplayPreference();
+    this.#render();
+  }
+
+  #refreshAutoplay(): void {
+    const step = this.#scene?.steps[this.#index];
+    if (step) this.#schedule(step);
+    else {
+      this.#clearTimer();
+      this.#updateAutoplayControl();
+    }
+  }
+
   #schedule(step: PlayerStep): void {
     this.#clearTimer();
+    this.#updateAutoplayControl();
     if (
       !step.autoAdvance ||
       !step.durationMs ||
@@ -590,7 +823,7 @@ export class ScenebookPlayerElement extends HTMLElement {
       (step.ctas?.length ?? 0) > 0
     )
       return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (this.#autoplayPaused()) return;
     this.#autoTimer = setTimeout(() => this.next(), Math.max(800, step.durationMs));
   }
 
@@ -598,7 +831,9 @@ export class ScenebookPlayerElement extends HTMLElement {
     if (step.type === 'choice') {
       const choices = (step.choices ?? [])
         .map(
-          (choice) => `<button class="choice" type="button" data-choice="${escapeHtml(choice.id)}">
+          (
+            choice,
+          ) => `<button class="choice" type="button" data-choice="${escapeHtml(choice.id)}" data-focus-key="choice:${escapeHtml(choice.id)}">
             <strong>${escapeHtml(choice.label)}</strong>
             ${choice.description ? `<small>${escapeHtml(choice.description)}</small>` : ''}
           </button>`,
@@ -617,16 +852,16 @@ export class ScenebookPlayerElement extends HTMLElement {
             const fields = (cta.fields ?? [])
               .map(
                 (field) =>
-                  `<label>${escapeHtml(field.label)} <input type="${escapeHtml(field.type)}" name="${escapeHtml(field.id)}" ${field.required ? 'required' : ''} autocomplete="${field.type === 'email' ? 'email' : 'off'}"></label>`,
+                  `<label>${escapeHtml(field.label)} <input type="${escapeHtml(field.type)}" name="${escapeHtml(field.id)}" data-focus-key="field:${escapeHtml(cta.id)}:${escapeHtml(field.id)}" ${field.required ? 'required' : ''} autocomplete="${field.type === 'email' ? 'email' : 'off'}"></label>`,
               )
               .join('');
-            return `<form class="cta-form" data-cta-form="${escapeHtml(cta.id)}">${fields}<button type="submit">${escapeHtml(cta.label)}</button><p class="cta-result" role="status" aria-live="polite"></p></form>`;
+            return `<form class="cta-form" data-cta-form="${escapeHtml(cta.id)}">${fields}<button type="submit" data-focus-key="form:${escapeHtml(cta.id)}">${escapeHtml(cta.label)}</button><p class="cta-result" role="status" aria-live="polite"></p></form>`;
           }
           const classes = `cta ${cta.variant === 'primary' ? 'primary' : ''}`;
           const href = safeNavigationUrl(cta.href, this.ownerDocument.baseURI);
           return href
-            ? `<a class="${classes}" href="${escapeHtml(href)}" data-cta="${escapeHtml(cta.id)}">${escapeHtml(cta.label)}</a>`
-            : `<button class="${classes}" type="button" data-cta="${escapeHtml(cta.id)}">${escapeHtml(cta.label)}</button>`;
+            ? `<a class="${classes}" href="${escapeHtml(href)}" data-cta="${escapeHtml(cta.id)}" data-focus-key="cta:${escapeHtml(cta.id)}">${escapeHtml(cta.label)}</a>`
+            : `<button class="${classes}" type="button" data-cta="${escapeHtml(cta.id)}" data-focus-key="cta:${escapeHtml(cta.id)}">${escapeHtml(cta.label)}</button>`;
         })
         .join('');
       return `<section class="stage"><div class="end-card"><span class="step-meta">${step.type === 'end' ? 'Complete' : 'Chapter'}</span><h2>${escapeHtml(step.title)}</h2>${step.instruction || step.caption ? `<p>${escapeHtml(step.instruction ?? step.caption ?? '')}</p>` : ''}${ctas ? `<div class="cta-list">${ctas}</div>` : ''}</div></section>`;
@@ -690,7 +925,13 @@ export class ScenebookPlayerElement extends HTMLElement {
         ? { x: mappedRect.x + mappedRect.width / 2, y: mappedRect.y + mappedRect.height / 2 }
         : mapPointToCrop(step.hotspot, crop);
       if (point) {
-        hotspot = `<button class="hotspot" type="button" data-hotspot-next aria-label="${escapeHtml(step.hotspot.label)}" style="left:${percent(point.x, 0.5)};top:${percent(point.y, 0.5)}"><span class="hotspot-label">${escapeHtml(step.hotspot.label)}</span></button>`;
+        const labelPosition = [
+          point.x <= 0.35 ? 'label-left' : point.x >= 0.65 ? 'label-right' : '',
+          point.y >= 0.65 ? 'label-above' : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+        hotspot = `<button class="hotspot${labelPosition ? ` ${labelPosition}` : ''}" type="button" data-hotspot-next data-focus-key="hotspot" aria-label="${escapeHtml(step.hotspot.label)}" style="left:${percent(point.x, 0.5)};top:${percent(point.y, 0.5)}"><span class="hotspot-label">${escapeHtml(step.hotspot.label)}</span></button>`;
       }
     }
     const cursorPoint = step.cursor?.visible ? mapPointToCrop(step.cursor, crop) : undefined;
@@ -742,13 +983,36 @@ export class ScenebookPlayerElement extends HTMLElement {
     element.animate(frames, { duration, easing: 'linear', fill: 'forwards' });
   }
 
+  #activeFocusKey(): string | null {
+    const active = this.#root.activeElement;
+    return active instanceof HTMLElement ? (active.dataset.focusKey ?? null) : null;
+  }
+
+  #restoreFocus(key: string): void {
+    const focusable = [...this.#root.querySelectorAll<HTMLElement>('[data-focus-key]')].filter(
+      (element) =>
+        !element.matches(':disabled') && element.getAttribute('aria-disabled') !== 'true',
+    );
+    const find = (candidate: string): HTMLElement | undefined =>
+      focusable.find((element) => element.dataset.focusKey === candidate);
+    const fallbackKeys =
+      key === 'previous'
+        ? ['next', `jump:${this.#index}`, 'transcript']
+        : ['previous', 'next', `jump:${this.#index}`, 'transcript'];
+    const target = find(key) ?? fallbackKeys.map(find).find(Boolean);
+    if (target) target.focus({ preventScroll: true });
+    else if (this.isConnected) this.focus({ preventScroll: true });
+  }
+
   #render(): void {
+    const focusKey = this.#activeFocusKey();
     try {
       this.#renderContent();
     } catch {
       this.#clearTimer();
       this.#root.innerHTML = `<style>${styles}</style><div class="empty" role="alert"><strong>This Scene cannot be played.</strong><br>Scene data is malformed.</div>`;
     }
+    if (focusKey) this.#restoreFocus(focusKey);
   }
 
   #renderContent(): void {
@@ -774,27 +1038,30 @@ export class ScenebookPlayerElement extends HTMLElement {
     const colors = accessibleTheme(theme);
     const transcriptOpen = this.#transcriptOpen || this.hasAttribute('transcript') ? 'open' : '';
     const verified =
-      scene.verified?.status === 'passed'
-        ? `<span class="verified"><span>Verified</span>${scene.verified.commit ? `<span class="verified-detail"> · ${escapeHtml(scene.verified.commit)}</span>` : ''}</span>`
-        : '';
+      scene.verified?.status === 'passed' ? '<span class="verified">Verified</span>' : '';
+    const provenance = scene.verified?.commit
+      ? `<details class="provenance"><summary data-focus-key="provenance">Provenance</summary><code>${escapeHtml(scene.verified.commit)}</code></details>`
+      : '';
+    const evidence =
+      verified || provenance ? `<div class="evidence">${verified}${provenance}</div>` : '';
     const transcript = scene.steps
       .map(
         (item, index) =>
-          `<li><button type="button" data-jump="${index}" ${index === state.index ? 'aria-current="step"' : ''}><span class="step-number">${String(index + 1).padStart(2, '0')}</span><span>${escapeHtml(item.title)}</span></button></li>`,
+          `<li><button type="button" data-jump="${index}" data-focus-key="jump:${index}" ${index === state.index ? 'aria-current="step"' : ''}><span class="step-number">${String(index + 1).padStart(2, '0')}</span><span>${escapeHtml(item.title)}</span></button></li>`,
       )
       .join('');
 
     this.#root.innerHTML = `<style>${styles}</style>
-      <article class="player" style="--sb-accent:${colors.accent};--sb-on-accent:${colors.onAccent};--sb-paper:${colors.paper};--sb-ink:${colors.ink};--sb-on-ink:${colors.onInk};--sb-radius:${safeRadius(theme.radius)}px">
-        <div class="topline"><span class="scene-name">${escapeHtml(scene.title)}</span>${verified}</div>
+      <article class="player" style="--sb-accent:${colors.accent};--sb-on-accent:${colors.onAccent};--sb-paper:${colors.paper};--sb-surface:${colors.surface};--sb-ink:${colors.ink};--sb-on-ink:${colors.onInk};--sb-muted:${colors.muted};--sb-line:${colors.line};--sb-focus:${colors.focus};--sb-focus-contrast:${colors.focusContrast};--sb-radius:${safeRadius(theme.radius)}px">
+        <div class="topline"><span class="scene-name">${escapeHtml(scene.title)}</span>${evidence}</div>
         ${this.#renderStage(step)}
         ${step.type === 'screen' || !step.type ? `<section class="copy"><span class="step-meta">Step ${state.index + 1} of ${state.total}</span><h2>${escapeHtml(step.title)}</h2>${step.instruction || step.caption ? `<p class="instruction">${escapeHtml(step.instruction ?? step.caption ?? '')}</p>` : ''}</section>` : ''}
-        <div class="controls" aria-label="Walkthrough controls">
-          <div class="nav"><button class="control" type="button" data-previous ${!state.canGoBack ? 'disabled' : ''} aria-label="Previous step">← <span class="label">Previous</span></button></div>
+        <div class="controls" role="group" aria-label="Walkthrough controls">
+          <div class="nav"><button class="control" type="button" data-previous data-focus-key="previous" ${!state.canGoBack ? 'disabled' : ''} aria-label="Previous step"><span class="directional-icon" aria-hidden="true">←</span> <span class="label">Previous</span></button><button class="control autoplay-control" type="button" data-autoplay data-focus-key="autoplay" aria-pressed="${this.#autoplayEnabled}" aria-label="Autoplay ${this.#autoplayState().toLowerCase()}. ${this.#autoplayEnabled ? 'Turn autoplay off' : 'Turn autoplay on'}"><span>Autoplay</span><span class="autoplay-state">${this.#autoplayState()}</span></button></div>
           <div class="progress" role="progressbar" aria-label="Walkthrough progress" aria-valuemin="1" aria-valuemax="${state.total}" aria-valuenow="${state.index + 1}"><span class="bar"><span style="--sb-progress:${state.progress}"></span></span><span class="progress-text">${state.index + 1} / ${state.total}</span></div>
-          <div class="nav">${step.type === 'end' ? '' : `<button class="control" type="button" data-next ${!state.canGoForward && !(state.index === state.total - 1 && step.type !== 'choice' && !step.practiceMode) ? 'disabled' : ''} aria-label="${state.index === state.total - 1 ? 'Finish walkthrough' : 'Next step'}">${state.index === state.total - 1 ? 'Finish' : '<span class="label">Next</span> →'}</button>`}</div>
+          <div class="nav">${step.type === 'end' ? '' : `<button class="control" type="button" data-next data-focus-key="next" ${!state.canGoForward && !(state.index === state.total - 1 && step.type !== 'choice' && !step.practiceMode) ? 'disabled' : ''} aria-label="${state.index === state.total - 1 ? 'Finish walkthrough' : 'Next step'}">${state.index === state.total - 1 ? 'Finish' : '<span class="label">Next</span> <span class="directional-icon" aria-hidden="true">→</span>'}</button>`}</div>
         </div>
-        <details class="transcript" ${transcriptOpen}><summary>Transcript · ${state.total} steps</summary><ol>${transcript}</ol></details>
+        <details class="transcript" ${transcriptOpen}><summary data-focus-key="transcript">Transcript · ${state.total} steps</summary><ol>${transcript}</ol></details>
         <p class="sr-only" aria-live="polite">Step ${state.index + 1} of ${state.total}: ${escapeHtml(step.title)}. ${escapeHtml(step.instruction ?? '')}</p>
       </article>`;
 
@@ -809,6 +1076,9 @@ export class ScenebookPlayerElement extends HTMLElement {
     this.#root
       .querySelector<HTMLElement>('[data-previous]')
       ?.addEventListener('click', () => this.previous());
+    this.#root
+      .querySelector<HTMLElement>('[data-autoplay]')
+      ?.addEventListener('click', () => this.#toggleAutoplay());
     this.#root
       .querySelectorAll<HTMLElement>('[data-jump]')
       .forEach((element) =>

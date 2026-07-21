@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { beforeNavigate } from '$app/navigation';
   import { onMount } from 'svelte';
   import { ProjectSchema, type Collection, type Project } from '@scenebook/schema';
 
@@ -17,6 +18,12 @@
   let saveState = $state<'idle' | 'saving' | 'saved'>('idle');
   let error = $state('');
   let dirty = $state(false);
+  let pendingDelete = $state(false);
+  let deletedCollection = $state<{
+    collection: Collection;
+    index: number;
+    channelLinks: Array<{ channelId: string; index: number }>;
+  } | null>(null);
 
   let selected = $derived(draft?.collections.find((collection) => collection.id === selectedId));
   let availableScenes = $derived(
@@ -24,6 +31,11 @@
   );
   let missingEntries = $derived(
     selected?.entries.filter((entry) => !scenes.some((scene) => scene.id === entry.sceneId)) ?? [],
+  );
+  let selectedChannelCount = $derived(
+    draft?.channels.filter((channel) =>
+      selected ? channel.collectionIds.includes(selected.id) : false,
+    ).length ?? 0,
   );
 
   async function loadCollections() {
@@ -42,6 +54,8 @@
       selectedId = next.collections[0]?.id ?? '';
       candidateSceneId = nextScenes[0]?.id ?? '';
       dirty = false;
+      pendingDelete = false;
+      deletedCollection = null;
       saveState = 'idle';
       loadState = 'ready';
     } catch (cause) {
@@ -72,17 +86,56 @@
     draft.collections.push(collection);
     selectedId = collection.id;
     candidateSceneId = availableScenes[0]?.id ?? '';
+    pendingDelete = false;
+    deletedCollection = null;
     markDirty();
   }
 
   function deleteCollection() {
     if (!draft || !selected) return;
     const removedId = selected.id;
+    const index = draft.collections.findIndex((collection) => collection.id === removedId);
+    const channelLinks = draft.channels.flatMap((channel) => {
+      const channelIndex = channel.collectionIds.indexOf(removedId);
+      return channelIndex >= 0 ? [{ channelId: channel.id, index: channelIndex }] : [];
+    });
+    deletedCollection = {
+      collection: $state.snapshot(selected),
+      index,
+      channelLinks,
+    };
     draft.collections = draft.collections.filter((collection) => collection.id !== removedId);
     for (const channel of draft.channels) {
       channel.collectionIds = channel.collectionIds.filter((id) => id !== removedId);
     }
     selectedId = draft.collections[0]?.id ?? '';
+    pendingDelete = false;
+    markDirty();
+  }
+
+  function undoCollectionDeletion() {
+    if (!draft || !deletedCollection) return;
+    const deletion = deletedCollection;
+    if (!draft.collections.some((collection) => collection.id === deletion.collection.id)) {
+      draft.collections.splice(
+        Math.min(deletion.index, draft.collections.length),
+        0,
+        deletion.collection,
+      );
+    }
+    for (const link of deletion.channelLinks) {
+      const channel = draft.channels.find((candidate) => candidate.id === link.channelId);
+      if (channel && !channel.collectionIds.includes(deletion.collection.id)) {
+        channel.collectionIds.splice(
+          Math.min(link.index, channel.collectionIds.length),
+          0,
+          deletion.collection.id,
+        );
+      }
+    }
+    selectedId = deletion.collection.id;
+    deletedCollection = null;
+    pendingDelete = false;
     markDirty();
   }
 
@@ -137,6 +190,8 @@
       ? selectedId
       : (draft.collections[0]?.id ?? '');
     dirty = false;
+    pendingDelete = false;
+    deletedCollection = null;
     error = '';
     saveState = 'idle';
   }
@@ -160,6 +215,8 @@
       saved = structuredClone(parsed.data);
       persisted = true;
       dirty = false;
+      pendingDelete = false;
+      deletedCollection = null;
       saveState = 'saved';
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Collections could not be saved.';
@@ -170,6 +227,16 @@
   function sceneFor(id: string) {
     return scenes.find((scene) => scene.id === id);
   }
+
+  beforeNavigate((navigation) => {
+    if (
+      dirty &&
+      !navigation.willUnload &&
+      !window.confirm('Leave Collections and discard your unsaved changes?')
+    ) {
+      navigation.cancel();
+    }
+  });
 
   onMount(() => void loadCollections());
 </script>
@@ -205,7 +272,7 @@
         >
         <button
           class="button"
-          class:primary={!dirty}
+          class:primary={!dirty && scenes.length > 0 && loadState === 'ready'}
           type="button"
           disabled={scenes.length === 0 || loadState !== 'ready'}
           onclick={createCollection}><Icon name="plus" size={15} />New collection</button
@@ -213,14 +280,14 @@
       </div>
     </header>
 
-    {#if error}<p class="surface-error" role="alert">{error}</p>{/if}
+    {#if error && loadState !== 'error'}<p class="surface-error" role="alert">{error}</p>{/if}
 
     {#if loadState === 'loading'}
       <div class="surface-state" aria-busy="true">
         <Icon name="clock" />
         <div>
-          <strong>Reading Collections…</strong><small
-            >Loading Project configuration and local Scene identities.</small
+          <strong>Reading collections…</strong><small
+            >Loading project configuration and local scene identities.</small
           >
         </div>
       </div>
@@ -234,16 +301,28 @@
       <div class="surface-state">
         <Icon name="collection" />
         <div>
-          <strong>A Collection needs at least one Scene</strong><small
-            >Create or import a Scene first; the canonical Project schema does not allow empty
-            Collection placeholders.</small
+          <strong>A collection needs at least one scene</strong><small
+            >Create or import a scene first, then return here to build an ordered path.</small
           >
         </div>
-        <a class="button primary" href="/catalog?action=create">New Scene</a>
+        <a class="button primary" href="/catalog?action=create">New scene</a>
       </div>
     {:else}
       <div class="curation-layout">
-        <aside class="collection-list surface-card" aria-label="Project Collections">
+        {#if deletedCollection}
+          <div class="undo-deletion curation-notice" role="status">
+            <span
+              ><strong>“{deletedCollection.collection.title}” removed</strong><small
+                >{deletedCollection.channelLinks.length} channel link{deletedCollection.channelLinks
+                  .length === 1
+                  ? ''
+                  : 's'} will also be removed when you save.</small
+              ></span
+            >
+            <button class="button" type="button" onclick={undoCollectionDeletion}>Undo</button>
+          </div>
+        {/if}
+        <aside class="collection-list surface-card" aria-label="Project collections">
           <div class="list-heading">
             <span>Collections</span><strong>{draft?.collections.length ?? 0}</strong>
           </div>
@@ -253,12 +332,15 @@
                 <button
                   class:active={selectedId === collection.id}
                   type="button"
-                  onclick={() => (selectedId = collection.id)}
+                  onclick={() => {
+                    selectedId = collection.id;
+                    pendingDelete = false;
+                  }}
                 >
                   <span class="collection-number">{String(index + 1).padStart(2, '0')}</span>
                   <span
                     ><strong>{collection.title}</strong><small
-                      >{collection.entries.length} Scene{collection.entries.length === 1 ? '' : 's'} ·
+                      >{collection.entries.length} scene{collection.entries.length === 1 ? '' : 's'} ·
                       /{collection.slug}</small
                     ></span
                   >
@@ -269,7 +351,7 @@
           {:else}
             <div class="list-empty">
               <Icon name="collection" />
-              <p>No Collections remain. Create one to curate your saved Scenes.</p>
+              <p>No collections remain. Create one to curate your saved scenes.</p>
             </div>
           {/if}
         </aside>
@@ -280,13 +362,31 @@
               <div>
                 <h2>{selected.title}</h2>
               </div>
-              <details class="collection-menu">
-                <summary class="button">More</summary>
-                <button class="button danger" type="button" onclick={deleteCollection}
-                  ><Icon name="trash" size={14} />Delete collection</button
-                >
-              </details>
+              <button
+                class="button danger"
+                type="button"
+                aria-expanded={pendingDelete}
+                onclick={() => (pendingDelete = !pendingDelete)}
+                ><Icon name="trash" size={14} />Delete collection…</button
+              >
             </header>
+            {#if pendingDelete}
+              <div class="delete-confirmation" role="alert">
+                <span
+                  ><strong>Delete “{selected.title}”?</strong><small
+                    >This removes it from {selectedChannelCount} channel{selectedChannelCount === 1
+                      ? ''
+                      : 's'}. Nothing is permanent until you save.</small
+                  ></span
+                >
+                <button class="button" type="button" onclick={() => (pendingDelete = false)}
+                  >Cancel</button
+                >
+                <button class="button danger" type="button" onclick={deleteCollection}
+                  >Delete collection</button
+                >
+              </div>
+            {/if}
             <div class="metadata-grid">
               <label class="field"
                 ><span class="field-label">Title</span><input
@@ -333,7 +433,7 @@
                 </div>
                 <div class="add-entry">
                   <select class="select" bind:value={candidateSceneId} aria-label="Scene to add"
-                    ><option value="">Choose a Scene…</option
+                    ><option value="">Choose a scene…</option
                     >{#each availableScenes as scene}<option value={scene.id}>{scene.title}</option
                       >{/each}</select
                   ><button
@@ -345,11 +445,10 @@
                 </div>
               </div>
               {#if missingEntries.length}<p class="missing-warning">
-                  <Icon name="warning" size={14} />{missingEntries.length} entry reference{missingEntries.length ===
-                  1
-                    ? 's'
-                    : ''} a Scene not stored in this browser. Keep it for a partial checkout, or remove
-                  it before publishing locally.
+                  <Icon name="warning" size={14} />{missingEntries.length}
+                  {missingEntries.length === 1 ? 'entry references' : 'entries reference'} a scene not
+                  stored in this browser. Keep it for a partial checkout, or remove it before publishing
+                  locally.
                 </p>{/if}
               <ol>
                 {#each selected.entries as entry, index (entry.id)}
@@ -360,7 +459,7 @@
                       ><strong>{entry.title ?? scene?.title ?? entry.sceneId}</strong><small
                         >{entry.description ??
                           scene?.description ??
-                          'Referenced Scene is not available locally.'}</small
+                          'Referenced scene is not available locally.'}</small
                       ></span
                     >
                     <span class="entry-status status-chip {scene?.runStatus ?? 'stale'}"
@@ -390,7 +489,7 @@
                         aria-label={`Remove ${entry.sceneId}`}
                         disabled={selected.entries.length <= 1}
                         title={selected.entries.length <= 1
-                          ? 'A Collection must retain at least one entry.'
+                          ? 'A collection must retain at least one entry.'
                           : undefined}
                         onclick={() => removeEntry(entry.id)}
                         ><Icon name="trash" size={14} /></button
@@ -405,12 +504,12 @@
           <section class="surface-state">
             <Icon name="collection" />
             <div>
-              <strong>No Collection selected</strong><small
-                >Create a Collection to begin curating an ordered path.</small
+              <strong>No collection selected</strong><small
+                >Create a collection to begin curating an ordered path.</small
               >
             </div>
             <button class="button primary" type="button" onclick={createCollection}
-              >New Collection</button
+              >New collection</button
             >
           </section>
         {/if}
@@ -456,6 +555,7 @@
     gap: 10px;
     grid-template-columns: auto 1fr auto;
     padding: 13px;
+    min-height: 48px;
     text-align: left;
   }
   .collection-list nav button:last-child {
@@ -471,23 +571,23 @@
   .collection-number {
     color: var(--faint);
     font-family: ui-monospace, monospace;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
   .collection-list nav strong,
   .collection-list nav small {
     display: block;
   }
   .collection-list nav strong {
-    font-size: 0.78rem;
+    font-size: 0.82rem;
   }
   .collection-list nav small {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     margin-top: 3px;
   }
   .list-empty {
     color: var(--muted);
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     padding: 24px;
     text-align: center;
   }
@@ -505,22 +605,46 @@
     font-size: 1.12rem;
     margin: 0;
   }
-  .collection-menu {
-    position: relative;
+  .delete-confirmation,
+  .undo-deletion {
+    align-items: center;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    gap: 8px;
+    padding: 12px 20px;
   }
-  .collection-menu summary {
-    list-style: none;
+  .delete-confirmation {
+    background: var(--broken-soft);
   }
-  .collection-menu summary::-webkit-details-marker {
-    display: none;
+  .undo-deletion {
+    background: var(--changed-soft);
   }
-  .collection-menu[open] > button {
-    background: var(--surface);
-    box-shadow: var(--shadow-sm);
-    position: absolute;
-    right: 0;
-    top: calc(100% + 6px);
-    z-index: 2;
+  .curation-notice {
+    border: 1px solid color-mix(in srgb, var(--changed) 25%, var(--line));
+    border-radius: var(--radius-sm);
+    grid-column: 1 / -1;
+  }
+  .delete-confirmation > span,
+  .undo-deletion > span {
+    flex: 1;
+    min-width: 0;
+  }
+  .delete-confirmation strong,
+  .delete-confirmation small,
+  .undo-deletion strong,
+  .undo-deletion small {
+    display: block;
+  }
+  .delete-confirmation strong,
+  .undo-deletion strong {
+    font-size: 0.82rem;
+  }
+  .delete-confirmation small,
+  .undo-deletion small {
+    color: var(--muted);
+    font-size: 0.78rem;
+    line-height: 1.45;
+    margin-top: 2px;
   }
   .metadata-grid {
     display: grid;
@@ -538,8 +662,9 @@
   .advanced-fields summary {
     color: var(--muted);
     cursor: pointer;
-    font-size: 0.76rem;
+    font-size: 0.8rem;
     font-weight: 650;
+    min-height: 40px;
   }
   .advanced-fields > div {
     display: grid;
@@ -594,7 +719,7 @@
   .drag-index {
     color: var(--faint);
     font-family: ui-monospace, monospace;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
   .entry-copy {
     min-width: 0;
@@ -604,11 +729,11 @@
     display: block;
   }
   .entry-copy strong {
-    font-size: 0.78rem;
+    font-size: 0.82rem;
   }
   .entry-copy small {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     margin-top: 2px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -626,7 +751,7 @@
     border-radius: 7px;
     color: var(--broken);
     display: flex;
-    font-size: 0.73rem;
+    font-size: 0.78rem;
     gap: 7px;
     margin: 0;
     padding: 9px;
@@ -662,6 +787,25 @@
     .entry-status,
     .entry-actions {
       grid-column: 2;
+    }
+    .delete-confirmation,
+    .undo-deletion {
+      align-items: stretch;
+      flex-wrap: wrap;
+      padding-inline: 14px;
+    }
+    .delete-confirmation > span,
+    .undo-deletion > span {
+      flex-basis: 100%;
+    }
+    .delete-confirmation .button,
+    .undo-deletion .button,
+    .advanced-fields summary {
+      min-height: 44px;
+    }
+    .entry-actions .icon-button {
+      min-height: 44px;
+      min-width: 44px;
     }
   }
 </style>

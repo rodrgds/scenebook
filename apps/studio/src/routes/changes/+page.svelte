@@ -6,7 +6,7 @@
   import { summarizeVersionChange, type VersionChange } from '$lib/project-surfaces';
   import { studioSceneLibrary } from '$lib/scene-library';
 
-  type Filter = 'all' | 'changed' | 'review' | 'evidence' | 'draft';
+  type Filter = 'all' | 'changed' | 'review' | 'draft';
 
   let changes = $state<VersionChange[]>([]);
   let loadState = $state<'loading' | 'ready' | 'error'>('loading');
@@ -18,7 +18,6 @@
       if (filter === 'changed') return item.changedFields.length > 0;
       if (filter === 'review')
         return item.scene.evidenceRuns.some((run) => (run.review?.changes.length ?? 0) > 0);
-      if (filter === 'evidence') return Boolean(item.scene.verification);
       if (filter === 'draft') return !item.scene.verification;
       return true;
     }),
@@ -67,14 +66,14 @@
 </script>
 
 <svelte:head>
-  <title>Changes · Scenebook</title>
+  <title>Review · Scenebook</title>
 </svelte:head>
 
 <AppShell active="changes">
   <div class="project-page changes-page">
     <header class="surface-header">
       <div>
-        <h1>Changes</h1>
+        <h1>Review</h1>
         <p>Review source edits and differences found in imported runs.</p>
       </div>
       <div class="surface-actions">
@@ -93,11 +92,12 @@
             {changes.length} scene{changes.length === 1 ? '' : 's'}
           </p>
         </div>
-        <div class="filters" aria-label="Filter changes">
-          {#each [['all', 'All'], ['changed', 'Source edits'], ['review', `Run changes (${reviewChanges})`], ['evidence', 'Has evidence'], ['draft', 'No evidence']] as option}
+        <div class="filters" role="group" aria-label="Filter the review queue">
+          {#each [['all', 'All'], ['changed', 'Source edits'], ['review', `Run changes (${reviewChanges})`], ['draft', 'Needs evidence']] as option}
             <button
               class:active={filter === option[0]}
               type="button"
+              aria-pressed={filter === option[0]}
               onclick={() => (filter = option[0] as Filter)}>{option[1]}</button
             >
           {/each}
@@ -109,14 +109,14 @@
           <Icon name="clock" />
           <div>
             <strong>Reading revision history…</strong><small
-              >Checking the two newest durable snapshots for every local Scene.</small
+              >Checking the two newest saved versions for every local scene.</small
             >
           </div>
         </div>
       {:else if loadState === 'error'}
         <div class="surface-state">
           <Icon name="warning" />
-          <div><strong>Changes are unavailable</strong><small>{error}</small></div>
+          <div><strong>Review is unavailable</strong><small>{error}</small></div>
           <button class="button" type="button" onclick={loadChanges}>Try again</button>
         </div>
       {:else if visible.length === 0}
@@ -126,7 +126,7 @@
             <strong>No matching changes</strong><small
               >{changes.length
                 ? 'Choose another filter to see the local review queue.'
-                : 'Create or import a Scene to begin retaining local revisions.'}</small
+                : 'Create or import a scene to begin retaining local revisions.'}</small
             >
           </div>
           <a class="button" href="/catalog">Open catalog</a>
@@ -159,8 +159,7 @@
                     <span
                       >{item.changedFields.length
                         ? item.changedFields.join(' · ')
-                        : 'No structural delta detected in summary fields'} since r{item.previous
-                        .revision}</span
+                        : 'No summary fields changed'} since r{item.previous.revision}</span
                     >
                   {:else}
                     <Icon name="history" size={14} /><span>First retained local revision</span>
@@ -172,7 +171,7 @@
                     open={item.scene.evidenceRuns[0].changeState !== 'passed'}
                   >
                     <summary>
-                      {item.scene.evidenceRuns[0].review.changes.length} exact Review change{item
+                      {item.scene.evidenceRuns[0].review.changes.length} exact review change{item
                         .scene.evidenceRuns[0].review.changes.length === 1
                         ? ''
                         : 's'}
@@ -229,7 +228,7 @@
                     </dl>
                   </details>
                   <a class="button" href={`/scenes/${encodeURIComponent(item.scene.id)}?tab=health`}
-                    >Review scene</a
+                    >Open scene</a
                   >
                 </div>
               </footer>
@@ -242,10 +241,6 @@
 </AppShell>
 
 <style>
-  .changes-page :global(.surface-header h1) {
-    font-size: 1.8rem;
-    letter-spacing: -0.035em;
-  }
   .review-section,
   .change-list {
     display: grid;
@@ -264,8 +259,10 @@
     border: 0;
     border-radius: 6px;
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     font-weight: 680;
+    min-height: 40px;
+    min-width: 44px;
     padding: 7px 10px;
   }
   .filters button.active {
@@ -279,7 +276,7 @@
   }
   .section-title > div > p {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     margin: 4px 0 0;
   }
   .change-main {
@@ -311,11 +308,11 @@
   .revision {
     color: var(--faint);
     font-family: ui-monospace, monospace;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .change-main > p {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     line-height: 1.45;
     margin: 7px 0 12px;
   }
@@ -323,7 +320,7 @@
     align-items: center;
     color: var(--info);
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     gap: 6px;
   }
   .review-deltas {
@@ -333,11 +330,14 @@
     overflow: hidden;
   }
   .review-deltas summary {
+    align-items: center;
     background: var(--paper-2);
     color: var(--muted);
     cursor: pointer;
-    font-size: 0.7rem;
+    display: flex;
+    font-size: 0.78rem;
     font-weight: 680;
+    min-height: 40px;
     padding: 8px 10px;
   }
   .review-deltas ul {
@@ -355,7 +355,7 @@
   }
   .change-dimension {
     color: var(--info);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 720;
     text-transform: capitalize;
   }
@@ -364,12 +364,12 @@
     display: block;
   }
   .review-deltas strong {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
   }
   .review-deltas small,
   .no-review {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     line-height: 1.4;
     margin: 2px 0 0;
   }
@@ -391,7 +391,7 @@
   }
   .change-footer > span {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   dl {
     background: var(--paper-2);
@@ -409,10 +409,10 @@
   }
   dt {
     color: var(--faint);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   dd {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin: 0;
     overflow-wrap: anywhere;
   }
@@ -428,9 +428,9 @@
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     font-weight: 650;
-    min-height: 38px;
+    min-height: 40px;
     padding: 9px 11px;
     text-align: center;
   }
@@ -455,6 +455,11 @@
     }
     .row-actions details {
       max-width: none;
+    }
+    .filters button,
+    .review-deltas summary,
+    .row-actions summary {
+      min-height: 44px;
     }
   }
 </style>

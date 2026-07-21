@@ -126,7 +126,7 @@ app.innerHTML = `
             <label class="search-field">
               <span class="sr-only">Search members</span>
               <span aria-hidden="true">⌕</span>
-              <input id="member-search" type="search" placeholder="Search by name, email, or role" autocomplete="off" />
+              <input id="member-search" type="search" placeholder="Search members" autocomplete="off" />
               <button id="clear-search" type="button" aria-label="Clear member search" hidden>Clear</button>
             </label>
           </div>
@@ -184,6 +184,13 @@ const inviteRole = app.querySelector<HTMLSelectElement>('#invite-role')!;
 const roleDescription = app.querySelector<HTMLElement>('#role-description')!;
 const toast = app.querySelector<HTMLElement>('#invite-toast')!;
 const toastDetail = app.querySelector<HTMLElement>('#toast-detail')!;
+const dialogFocusSelector = [
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
 
 function currentMembers(): readonly Member[] {
   return invitedMember ? [...members, invitedMember] : members;
@@ -252,6 +259,25 @@ app.querySelector('#invite')?.addEventListener('click', () => {
 
 app.querySelectorAll('[data-close-dialog]').forEach((button) => {
   button.addEventListener('click', () => dialog.close());
+});
+
+dialog.addEventListener('keydown', (event) => {
+  if (event.key !== 'Tab') return;
+  const targets = [...dialog.querySelectorAll<HTMLElement>(dialogFocusSelector)].filter(
+    (element) => element.getClientRects().length > 0,
+  );
+  const first = targets[0];
+  const last = targets.at(-1);
+  if (!first || !last) return;
+  const active = document.activeElement;
+  if (
+    event.shiftKey
+      ? active === first || !dialog.contains(active)
+      : active === last || !dialog.contains(active)
+  ) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus({ preventScroll: true });
+  }
 });
 
 inviteRole.addEventListener('change', () => {

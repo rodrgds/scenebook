@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
 
   import { studioSceneLibrary } from '../scene-library';
+  import { trapDialogFocus } from '../dialog-focus';
   import Icon from './Icon.svelte';
 
   let {
@@ -37,24 +38,29 @@
   }
 
   async function createScene() {
-    if (!title.trim()) {
-      error = 'Give the Scene a title.';
+    if (saving) return;
+    const nextTitle = title.trim();
+    const nextDescription = description.trim();
+    if (!nextTitle) {
+      error = 'Give the scene a title.';
       titleInput?.focus();
       return;
     }
     saving = true;
     error = '';
+    queueMicrotask(() => dialog?.focus({ preventScroll: true }));
     try {
-      const scene = await studioSceneLibrary.create(title.trim());
-      if (description.trim()) {
-        scene.description = description.trim();
+      const scene = await studioSceneLibrary.create(nextTitle);
+      if (nextDescription) {
+        scene.description = nextDescription;
         await studioSceneLibrary.save(scene);
       }
+      saving = false;
       oncreated?.(scene.id);
       dialog?.close();
       await goto(`/scenes/${encodeURIComponent(scene.id)}`);
     } catch (candidate) {
-      error = candidate instanceof Error ? candidate.message : 'The Scene could not be created.';
+      error = candidate instanceof Error ? candidate.message : 'The scene could not be created.';
     } finally {
       saving = false;
     }
@@ -63,7 +69,10 @@
 
 <dialog
   bind:this={dialog}
+  tabindex="-1"
   aria-labelledby="create-scene-title"
+  aria-busy={saving}
+  onkeydown={(event) => trapDialogFocus(event, dialog)}
   onclose={handleClose}
   oncancel={(event) => {
     if (saving) event.preventDefault();
@@ -98,6 +107,7 @@
         class="input"
         maxlength="500"
         autocomplete="off"
+        disabled={saving}
         placeholder="Invite a teammate"
       />
     </label>
@@ -107,6 +117,7 @@
         bind:value={description}
         class="textarea"
         maxlength="10000"
+        disabled={saving}
         placeholder="What will someone learn or accomplish?"></textarea>
     </label>
     {#if error}<div class="dialog-error" role="alert">{error}</div>{/if}
@@ -133,7 +144,7 @@
     width: 100%;
   }
   dialog::backdrop {
-    background: rgba(25, 24, 22, 0.46);
+    background: var(--backdrop);
   }
   .dialog-head {
     align-items: start;
@@ -147,7 +158,7 @@
   }
   form > p {
     color: var(--muted);
-    font-size: 0.76rem;
+    font-size: 0.84rem;
     line-height: 1.55;
     margin: 12px 0 18px;
   }
@@ -164,7 +175,7 @@
     border: 1px solid color-mix(in srgb, var(--broken) 32%, transparent);
     border-radius: 8px;
     color: var(--broken);
-    font-size: 0.7rem;
+    font-size: 0.82rem;
     margin-top: 12px;
     padding: 9px 10px;
   }

@@ -16,8 +16,10 @@
 }
 body {
   margin: 0;
-  width: 360px;
+  width: min(360px, 100vw);
+  max-width: 100vw;
   min-height: 470px;
+  overflow-x: hidden;
 }
 main {
   min-height: 470px;
@@ -49,7 +51,7 @@ main {
 }
 .brand span {
   color: #6e675e;
-  font-size: 11px;
+  font-size: 12px;
 }
 .panel {
   flex: 1;
@@ -129,6 +131,13 @@ button:focus-visible {
   outline: 2px solid #b33b24;
   outline-offset: 2px;
 }
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+button:disabled {
+  cursor: progress;
+  opacity: 0.58;
+}
 .primary {
   width: 100%;
   margin-top: 11px;
@@ -190,6 +199,15 @@ button:focus-visible {
   color: #a73221;
   font-size: 12px;
 }
+#status[data-kind='info'] {
+  color: #655e55;
+}
+#status[data-kind='success'] {
+  color: #3f6b4d;
+}
+#status[data-kind='error'] {
+  color: #a73221;
+}
 footer {
   align-items: center;
   display: flex;
@@ -210,6 +228,14 @@ footer > span {
 }
 [hidden] {
   display: none !important;
+}
+@media (max-width: 340px) {
+  main {
+    padding-inline: 14px;
+  }
+  .actions {
+    grid-template-columns: 1fr;
+  }
 }
 @media (prefers-reduced-motion: no-preference) {
   .pulse {

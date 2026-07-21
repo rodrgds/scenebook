@@ -96,15 +96,105 @@ function browserErrorCopy(status: number): {
   };
 }
 
+const STATUS_PAGE_STYLES = `
+  :root {
+    color-scheme: light dark;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f4f2ed;
+    color: #25231f;
+    --muted: #68645d;
+    --accent: #a6402d;
+    --accent-hover: #843322;
+    --focus: #2459d1;
+  }
+  * { box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    margin: 0;
+    display: grid;
+    place-items: center;
+    padding: clamp(20px, 5vw, 64px);
+    background: #f4f2ed;
+    color: #25231f;
+  }
+  main { width: min(100%, 38rem); padding-block: clamp(24px, 6vw, 56px); }
+  h1 {
+    max-width: 20ch;
+    margin: 0;
+    font-size: clamp(2rem, 8vw, 3.25rem);
+    font-weight: 720;
+    line-height: 1.05;
+    letter-spacing: -.035em;
+  }
+  p { max-width: 52ch; margin: 18px 0 0; color: var(--muted); font-size: 1.0625rem; line-height: 1.6; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+  .action {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: #fff;
+    background: var(--accent);
+    font: inherit;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .action:hover { background: var(--accent-hover); }
+  .action:disabled { cursor: not-allowed; opacity: .6; }
+  .action:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+  .recovery { font-size: .9375rem; }
+  [hidden] { display: none !important; }
+  noscript p { color: #942b20; }
+  @media (max-width: 360px) {
+    body { place-items: start; }
+    main { padding-top: 32px; }
+    .actions, .action { width: 100%; }
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { background: #191815; color: #f4f2ed; --muted: #c2bdb3; --accent: #cf5a43; --accent-hover: #e06d56; --focus: #8eb7ff; }
+    body { background: #191815; color: #f4f2ed; }
+    .action { color: #191815; }
+    noscript p { color: #ff9c90; }
+  }
+  @media (forced-colors: active) {
+    .action { border-color: ButtonText; background: ButtonFace; color: ButtonText; }
+    .action:focus-visible { outline-color: Highlight; }
+  }
+`;
+
 function browserErrorPage(status: number): string {
   const copy = browserErrorCopy(status);
   const action = copy.action
-    ? `<a class="action" href="${copy.action.href}">${copy.action.label}</a>`
+    ? `<div class="actions"><a class="action" href="${copy.action.href}">${copy.action.label}</a></div>`
     : '';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${copy.title}</title><style>:root{color-scheme:light dark;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f5f6;color:#1c1d1f}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#f4f5f6;color:#1c1d1f}main{width:min(100%,40rem);padding:clamp(28px,6vw,56px);background:#fff;border:1px solid #dfe2e5;border-radius:20px}h1{max-width:18ch;margin:0;font-family:ui-serif,Charter,Georgia,serif;font-size:clamp(2rem,7vw,3.5rem);line-height:1;letter-spacing:-.03em}p{max-width:52ch;margin:20px 0 0;color:#5f646b;font-size:1.0625rem;line-height:1.65}.action{display:inline-flex;min-height:44px;align-items:center;justify-content:center;margin-top:28px;padding:10px 16px;border-radius:10px;background:#1c1d1f;color:#fff;font-weight:700;text-decoration:none}.action:focus-visible{outline:3px solid #2459d1;outline-offset:3px}@media(prefers-color-scheme:dark){:root,body{background:#161719;color:#f4f5f6}main{background:#202225;border-color:#36393d}p{color:#b8bdc3}.action{background:#f4f5f6;color:#1c1d1f}}</style></head><body><main><h1>${copy.heading}</h1><p>${copy.detail}</p>${action}</main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${copy.title}</title><style>${STATUS_PAGE_STYLES}</style></head><body><main><h1>${copy.heading}</h1><p>${copy.detail}</p>${action}</main></body></html>`;
 }
 
-const PRIVATE_ACCESS_STYLES = `:root{color-scheme:light dark;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f5f6;color:#1c1d1f}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#f4f5f6;color:#1c1d1f}main{width:min(100%,40rem);padding:clamp(28px,6vw,56px);background:#fff;border:1px solid #dfe2e5;border-radius:20px}h1{max-width:18ch;margin:0;font-family:ui-serif,Charter,Georgia,serif;font-size:clamp(2rem,7vw,3.5rem);line-height:1;letter-spacing:-.03em}p{max-width:52ch;margin:20px 0 0;color:#5f646b;font-size:1.0625rem;line-height:1.65}.recovery{font-size:.9375rem}noscript p{color:#9e2d2d}@media(prefers-color-scheme:dark){:root,body{background:#161719;color:#f4f5f6}main{background:#202225;border-color:#36393d}p{color:#b8bdc3}noscript p{color:#ff9c9c}}`;
+type PrivateAccessPageOptions = {
+  readonly credentialField: 'credential' | 'token';
+  readonly endpoint: string;
+  readonly heading: string;
+  readonly progress: string;
+  readonly failureHeading: string;
+  readonly incomplete: string;
+  readonly invalid: string;
+  readonly noScript: string;
+};
+
+function privateAccessPage(nonce: string, options: PrivateAccessPageOptions): string {
+  const credentialField = JSON.stringify(options.credentialField);
+  const endpoint = JSON.stringify(options.endpoint);
+  const heading = JSON.stringify(options.heading);
+  const progress = JSON.stringify(options.progress);
+  const failureHeading = JSON.stringify(options.failureHeading);
+  const incomplete = JSON.stringify(options.incomplete);
+  const invalid = JSON.stringify(options.invalid);
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Open private publication</title><style>${STATUS_PAGE_STYLES}</style></head><body><main id="access" aria-busy="true"><h1 id="heading" tabindex="-1">${options.heading}</h1><p id="status" role="status" aria-live="polite">${options.progress}</p><p id="recovery" class="recovery" hidden>Open the most recent invitation, or ask the sender for a new link.</p><div class="actions"><button id="retry" class="action" type="button" hidden>Try again</button></div><noscript><p>${options.noScript}</p></noscript></main><script nonce="${nonce}">(()=>{const main=document.getElementById('access');const headingElement=document.getElementById('heading');const status=document.getElementById('status');const recovery=document.getElementById('recovery');const retry=document.getElementById('retry');const credentialField=${credentialField};const credential=new URLSearchParams(location.hash.slice(1)).get(credentialField);const initialHeading=${heading};const progress=${progress};const failureHeading=${failureHeading};const incomplete=${incomplete};const invalid=${invalid};let pending=false;history.replaceState(null,'',location.pathname);const fail=(message,retryable,recoverable)=>{main.setAttribute('aria-busy','false');headingElement.textContent=failureHeading;status.setAttribute('role','alert');status.setAttribute('aria-live','assertive');status.textContent=message;recovery.hidden=!recoverable;retry.hidden=!retryable;retry.disabled=false;headingElement.focus({preventScroll:true})};const exchange=async()=>{if(pending)return;if(!credential){fail(incomplete,false,true);return}pending=true;main.setAttribute('aria-busy','true');headingElement.textContent=initialHeading;status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.textContent=progress;recovery.hidden=true;retry.hidden=true;retry.disabled=true;const controller=new AbortController();const timeout=window.setTimeout(()=>controller.abort(),12000);try{const response=await fetch(${endpoint},{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json'},body:JSON.stringify({[credentialField]:credential}),signal:controller.signal});if(!response.ok){if(response.status===429){fail('Too many attempts were made. Wait a moment, then try again.',true,false)}else if(response.status>=400&&response.status<500){fail(invalid,false,true)}else{fail('The publication service is temporarily unavailable.',true,false)}return}let payload;try{payload=await response.json()}catch{fail('The publication service returned an unreadable response.',true,false);return}if(!payload||typeof payload.location!=='string'||!payload.location.startsWith('/')){fail('The publication service returned an incomplete response.',true,false);return}window.location.replace(payload.location)}catch(error){fail(error instanceof DOMException&&error.name==='AbortError'?'The request took too long. Check your connection and try again.':'Scenebook could not be reached. Check your connection and try again.',true,false)}finally{window.clearTimeout(timeout);pending=false;if(!retry.hidden)retry.disabled=false}};retry.addEventListener('click',exchange);void exchange()})();</script></body></html>`;
+}
 
 export interface PublicationGatewayDependencies {
   readonly repository: ControlPlaneRepository;
@@ -773,7 +863,17 @@ export function createPublicationGatewayApp(dependencies: PublicationGatewayDepe
       `default-src 'none'; script-src 'nonce-${nonce}'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`,
     );
     return context.html(
-      `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Open private publication</title><style>${PRIVATE_ACCESS_STYLES}</style></head><body><main id="access" aria-busy="true"><h1 id="heading">Opening private publication</h1><p id="status" role="status" aria-live="polite">Checking this link…</p><p id="recovery" class="recovery" hidden>Open the most recent invitation, or ask the sender for a new link.</p><noscript><p>JavaScript is required to open this private publication. Enable it and reopen the link, or ask the sender for help.</p></noscript></main><script nonce="${nonce}">(()=>{const main=document.getElementById('access');const heading=document.getElementById('heading');const status=document.getElementById('status');const recovery=document.getElementById('recovery');const fail=message=>{main.setAttribute('aria-busy','false');heading.textContent='This link cannot open the publication';status.setAttribute('role','alert');status.textContent=message;recovery.hidden=false};const token=new URLSearchParams(location.hash.slice(1)).get('token');history.replaceState(null,'',location.pathname);if(!token){fail('The link is incomplete.');return}fetch('/_scenebook/auth/share',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json'},body:JSON.stringify({token})}).then(async response=>{if(!response.ok)throw new Error('This link is invalid, expired, or revoked.');return response.json()}).then(payload=>window.location.replace(payload.location)).catch(error=>fail(error instanceof Error?error.message:'This link could not be opened.'))})();</script></body></html>`,
+      privateAccessPage(nonce, {
+        credentialField: 'token',
+        endpoint: '/_scenebook/auth/share',
+        heading: 'Opening private publication',
+        progress: 'Checking this link…',
+        failureHeading: 'This link cannot open the publication',
+        incomplete: 'The link is incomplete.',
+        invalid: 'This link is invalid, expired, or revoked.',
+        noScript:
+          'JavaScript is required to open this private publication. Enable it and reopen the link, or ask the sender for help.',
+      }),
     );
   });
 
@@ -791,7 +891,17 @@ export function createPublicationGatewayApp(dependencies: PublicationGatewayDepe
       `default-src 'none'; script-src 'nonce-${nonce}'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`,
     );
     return context.html(
-      `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Open private publication</title><style>${PRIVATE_ACCESS_STYLES}</style></head><body><main id="access" aria-busy="true"><h1 id="heading">Opening private publication</h1><p id="status" role="status" aria-live="polite">Finishing secure sign-in…</p><p id="recovery" class="recovery" hidden>Open the most recent invitation, or ask the sender for a new link.</p><noscript><p>JavaScript is required to finish sign-in. Enable it and reopen the invitation, or ask the sender for help.</p></noscript></main><script nonce="${nonce}">(()=>{const main=document.getElementById('access');const heading=document.getElementById('heading');const status=document.getElementById('status');const recovery=document.getElementById('recovery');const fail=message=>{main.setAttribute('aria-busy','false');heading.textContent='Sign-in link unavailable';status.setAttribute('role','alert');status.textContent=message;recovery.hidden=false};const credential=new URLSearchParams(location.hash.slice(1)).get('credential');history.replaceState(null,'',location.pathname);if(!credential){fail('The invitation is incomplete.');return}fetch('/_scenebook/auth/bootstrap',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json'},body:JSON.stringify({credential})}).then(async response=>{if(!response.ok)throw new Error('This invitation is invalid, expired, revoked, or already used.');return response.json()}).then(payload=>window.location.replace(payload.location)).catch(error=>fail(error instanceof Error?error.message:'Sign-in could not be completed.'))})();</script></body></html>`,
+      privateAccessPage(nonce, {
+        credentialField: 'credential',
+        endpoint: '/_scenebook/auth/bootstrap',
+        heading: 'Opening private publication',
+        progress: 'Finishing secure sign-in…',
+        failureHeading: 'Sign-in link unavailable',
+        incomplete: 'The invitation is incomplete.',
+        invalid: 'This invitation is invalid, expired, revoked, or already used.',
+        noScript:
+          'JavaScript is required to finish sign-in. Enable it and reopen the invitation, or ask the sender for help.',
+      }),
     );
   });
 

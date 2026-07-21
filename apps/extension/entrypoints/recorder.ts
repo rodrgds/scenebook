@@ -99,6 +99,15 @@ function escapeText(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll("'", "\\'").trim();
 }
 
+function escapeMarkup(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 function accessibleName(element: HTMLElement): string {
   const labelledBy = element.getAttribute('aria-labelledby');
   const label = labelledBy
@@ -359,7 +368,23 @@ class RecorderHud {
   private checkNext = false;
   private toolsOpen = false;
   private capturing = false;
+  private pending = false;
+  private message = '';
+  private messageKind: 'error' | 'info' | 'success' = 'info';
   private customMasked = new Set<HTMLElement>();
+  private readonly handleOutsidePointerDown = (event: PointerEvent): void => {
+    if (!this.toolsOpen || event.composedPath().includes(this.host)) return;
+    this.toolsOpen = false;
+    this.render(null);
+  };
+  private readonly handleWindowKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape' || (!this.toolsOpen && !this.maskNext && !this.checkNext)) return;
+    event.preventDefault();
+    this.toolsOpen = false;
+    this.maskNext = false;
+    this.checkNext = false;
+    this.setMessage('Tool cancelled.', 'info', null);
+  };
 
   constructor() {
     this.host.setAttribute(EXCLUDE_ATTRIBUTE, 'hud');
@@ -370,12 +395,14 @@ class RecorderHud {
       bottom: '20px',
       transform: 'translateX(-50%)',
     });
-    this.render();
+    this.render(null);
     document.documentElement.append(this.host);
+    window.addEventListener('pointerdown', this.handleOutsidePointerDown, true);
+    window.addEventListener('keydown', this.handleWindowKeyDown, true);
   }
 
   get isPaused(): boolean {
-    return this.paused || this.capturing;
+    return this.paused || this.capturing || this.pending;
   }
 
   get isUserPaused(): boolean {
@@ -391,18 +418,13 @@ class RecorderHud {
       element.setAttribute(REDACT_ATTRIBUTE, 'author');
       this.customMasked.add(element);
       this.maskNext = false;
-      this.render();
+      this.setMessage('Private area masked.', 'success', 'tools');
       return true;
     }
     if (this.checkNext) {
       this.checkNext = false;
       const target = targetSnapshot(element);
-      void chrome.runtime.sendMessage({
-        type: 'add-check',
-        label: `Confirm ${target.accessibleName || 'the selected element'} is visible`,
-        target,
-      } satisfies RecorderMessage);
-      this.render('Check added');
+      void this.addCheck(target);
       return true;
     }
     return false;
@@ -416,8 +438,8 @@ class RecorderHud {
     this.capturing = false;
   }
 
-  showStatus(message: string): void {
-    this.render(message);
+  showStatus(message: string, kind: 'error' | 'info' | 'success' = 'error'): void {
+    this.setMessage(message, kind, null);
   }
 
   setHidden(hidden: boolean): void {
@@ -425,70 +447,211 @@ class RecorderHud {
   }
 
   dispose(): void {
+    window.removeEventListener('pointerdown', this.handleOutsidePointerDown, true);
+    window.removeEventListener('keydown', this.handleWindowKeyDown, true);
     this.customMasked.forEach((element) => element.removeAttribute(REDACT_ATTRIBUTE));
     this.host.remove();
   }
 
-  private render(message = ''): void {
+  private setMessage(
+    message: string,
+    kind: 'error' | 'info' | 'success',
+    focusAction: string | null = null,
+  ): void {
+    this.message = message;
+    this.messageKind = kind;
+    this.render(focusAction);
+  }
+
+  private render(focusAction?: string | null): void {
+    const activeAction =
+      focusAction === undefined && this.shadow.activeElement instanceof HTMLElement
+        ? this.shadow.activeElement.dataset.action
+        : focusAction;
+    const disabled = this.pending ? ' disabled' : '';
     this.shadow.innerHTML = `
       <style>
         * { box-sizing: border-box; }
-        .bar { display:flex; align-items:center; gap:4px; max-width:calc(100vw - 24px); padding:6px; color:#f8f4ec; background:#181613; border:1px solid #3b3731; border-radius:12px; box-shadow:0 8px 24px #0004; font:600 12px/1.2 ui-sans-serif,system-ui,sans-serif; }
-        .brand { display:flex; align-items:center; gap:8px; padding:0 8px 0 5px; }
+        .bar { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:4px; width:max-content; max-width:calc(100vw - 16px); padding:6px; color:#f8f4ec; background:#181613; border:1px solid #3b3731; border-radius:12px; box-shadow:0 8px 24px #0004; font:600 12px/1.2 ui-sans-serif,system-ui,sans-serif; }
+        .brand { display:flex; align-items:center; gap:8px; min-height:40px; padding:0 8px 0 5px; }
         .dot { width:8px; height:8px; border-radius:50%; background:${this.paused ? '#d8a73a' : '#e5482c'}; box-shadow:0 0 0 3px #e5482c25; }
         button { min-height:40px; border:0; border-radius:8px; padding:0 10px; color:inherit; background:transparent; cursor:pointer; font:inherit; white-space:nowrap; }
         button:hover { background:#302c27; }
         button:focus-visible { background:#302c27; outline:2px solid #f05a3c; outline-offset:1px; }
         button[data-active=true] { background:#f8f4ec; color:#181613; }
+        button:disabled { cursor:not-allowed; opacity:.55; }
         .tools { position:relative; }
-        .tools-menu { position:absolute; bottom:calc(100% + 8px); left:50%; display:grid; gap:3px; min-width:130px; padding:5px; transform:translateX(-50%); color:#f8f4ec; background:#181613; border:1px solid #3b3731; border-radius:10px; box-shadow:0 8px 24px #0004; }
+        .tools-menu { position:absolute; bottom:calc(100% + 8px); left:50%; z-index:1; display:grid; gap:3px; min-width:152px; padding:5px; transform:translateX(-50%); color:#f8f4ec; background:#181613; border:1px solid #3b3731; border-radius:10px; box-shadow:0 8px 24px #0004; }
         .finish { background:#b33b24; margin-left:4px; }
         .finish:hover, .finish:focus-visible { background:#922f1d; }
-        .message { color:#b8d8a7; max-width:110px; overflow:hidden; white-space:nowrap; }
-        @media (max-width:620px) { .brand { font-size:0; padding-right:3px; } .message { display:none; } button { min-height:44px; padding-inline:8px; } }
+        .message { max-width:13rem; padding:0 6px; overflow:hidden; color:#d7d2ca; text-overflow:ellipsis; white-space:nowrap; }
+        .message[data-kind=success] { color:#b8d8a7; }
+        .message[data-kind=error] { color:#ffaaa0; }
+        @media (max-width:420px) {
+          .bar { width:calc(100vw - 16px); }
+          .brand { padding-inline:5px; }
+          .brand-name { display:none; }
+          .message { order:3; flex:1 0 100%; max-width:none; min-height:20px; padding-block:3px; text-align:center; white-space:normal; }
+          button { padding-inline:8px; }
+        }
+        @media (pointer:coarse) { .brand, button { min-height:44px; } }
+        @media (forced-colors:active) {
+          .bar, .tools-menu { border:1px solid CanvasText; background:Canvas; color:CanvasText; box-shadow:none; }
+          button[data-active=true], .finish { background:Highlight; color:HighlightText; }
+          button:focus-visible { outline:2px solid Highlight; }
+          .message { color:CanvasText; }
+        }
       </style>
-      <div class="bar" role="toolbar" aria-label="Scenebook recorder">
-        <span class="brand"><span class="dot"></span>Scenebook</span>
-        ${message ? `<span class="message" role="status">${message}</span>` : ''}
-        <button data-action="pause">${this.paused ? 'Resume' : 'Pause'}</button>
-        <button data-action="step">Capture state</button>
+      <div class="bar" role="toolbar" aria-label="Scenebook recorder" aria-busy="${this.pending}">
+        <span class="brand"><span class="dot" aria-hidden="true"></span><span class="brand-name">Scenebook</span></span>
+        ${this.message ? `<span class="message" data-kind="${this.messageKind}" role="${this.messageKind === 'error' ? 'alert' : 'status'}" aria-live="${this.messageKind === 'error' ? 'assertive' : 'polite'}">${escapeMarkup(this.message)}</span>` : ''}
+        <button type="button" data-action="pause" aria-pressed="${this.paused}"${disabled}>${this.paused ? 'Resume' : 'Pause'}</button>
+        <button type="button" data-action="step"${disabled}>Capture state</button>
         <span class="tools">
-          <button data-action="tools" data-active="${this.checkNext || this.maskNext}" aria-expanded="${this.toolsOpen}">Tools</button>
-          ${this.toolsOpen ? `<span class="tools-menu"><button data-action="check" data-active="${this.checkNext}">Add check</button><button data-action="mask" data-active="${this.maskNext}">Mask private data</button></span>` : ''}
+          <button type="button" data-action="tools" data-active="${this.checkNext || this.maskNext}" aria-haspopup="menu" aria-controls="scenebook-tools-menu" aria-expanded="${this.toolsOpen}"${disabled}>Tools</button>
+          ${this.toolsOpen ? `<span class="tools-menu" id="scenebook-tools-menu" role="menu" aria-label="Recorder tools"><button type="button" data-action="check" role="menuitemcheckbox" aria-checked="${this.checkNext}" data-active="${this.checkNext}"${disabled}>Add check</button><button type="button" data-action="mask" role="menuitemcheckbox" aria-checked="${this.maskNext}" data-active="${this.maskNext}"${disabled}>Mask private data</button></span>` : ''}
         </span>
-        <button data-action="undo">Undo</button>
-        <button data-action="finish" class="finish">Finish</button>
+        <button type="button" data-action="undo"${disabled}>Undo</button>
+        <button type="button" data-action="finish" class="finish"${disabled}>Finish</button>
       </div>`;
     this.shadow.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
       button.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
         const action = button.dataset.action;
-        if (action === 'pause') this.paused = !this.paused;
-        if (action === 'tools') this.toolsOpen = !this.toolsOpen;
+        if (this.pending) return;
+        if (action === 'pause') {
+          this.paused = !this.paused;
+          this.setMessage(
+            this.paused ? 'Recording paused.' : 'Recording resumed.',
+            'info',
+            'pause',
+          );
+          return;
+        }
+        if (action === 'tools') {
+          this.toolsOpen = !this.toolsOpen;
+          this.render('tools');
+          return;
+        }
         if (action === 'mask') {
           this.maskNext = !this.maskNext;
           this.checkNext = false;
           this.toolsOpen = false;
+          this.setMessage(
+            this.maskNext ? 'Choose the private area to mask.' : 'Mask tool cancelled.',
+            'info',
+            'tools',
+          );
+          return;
         }
         if (action === 'check') {
           this.checkNext = !this.checkNext;
           this.maskNext = false;
           this.toolsOpen = false;
+          this.setMessage(
+            this.checkNext ? 'Choose the element to check.' : 'Check tool cancelled.',
+            'info',
+            'tools',
+          );
+          return;
         }
         if (action === 'undo')
-          void chrome.runtime.sendMessage({ type: 'undo' } satisfies RecorderMessage);
-        if (action === 'finish')
-          void chrome.runtime.sendMessage({ type: 'stop' } satisfies RecorderMessage);
+          void this.sendCommand('undo', 'Removing the last step…', 'Last step removed.');
+        if (action === 'finish') void this.sendCommand('stop', 'Finishing the recording…');
         if (action === 'step') void this.captureCurrentState();
-        this.render();
       });
+      button.addEventListener('keydown', (event) => this.handleKeyDown(event, button));
     });
+    if (activeAction) {
+      queueMicrotask(() =>
+        this.shadow
+          .querySelector<HTMLButtonElement>(`button[data-action="${activeAction}"]`)
+          ?.focus(),
+      );
+    }
+  }
+
+  private handleKeyDown(event: KeyboardEvent, button: HTMLButtonElement): void {
+    const action = button.dataset.action;
+    if (event.key === 'Escape' && (this.toolsOpen || this.maskNext || this.checkNext)) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.toolsOpen = false;
+      this.maskNext = false;
+      this.checkNext = false;
+      this.setMessage('Tool cancelled.', 'info', 'tools');
+      return;
+    }
+    if (action === 'tools' && event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.toolsOpen = true;
+      this.render('check');
+      return;
+    }
+    if ((action === 'check' || action === 'mask') && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+      event.preventDefault();
+      this.shadow
+        .querySelector<HTMLButtonElement>(
+          `button[data-action="${event.key === 'ArrowDown' ? (action === 'check' ? 'mask' : 'check') : action === 'mask' ? 'check' : 'mask'}"]`,
+        )
+        ?.focus();
+    }
+  }
+
+  private async addCheck(target: TargetSnapshot): Promise<void> {
+    if (this.pending) return;
+    this.pending = true;
+    this.setMessage('Adding the check…', 'info', null);
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'add-check',
+        label: `Confirm ${target.accessibleName || 'the selected element'} is visible`,
+        target,
+      } satisfies RecorderMessage);
+      if (response?.ok !== true) throw new Error('The check could not be added.');
+      this.message = 'Check added.';
+      this.messageKind = 'success';
+    } catch {
+      this.message = 'The check could not be added. Try again.';
+      this.messageKind = 'error';
+    } finally {
+      this.pending = false;
+      this.render('tools');
+    }
+  }
+
+  private async sendCommand(
+    type: 'stop' | 'undo',
+    progress: string,
+    success?: string,
+  ): Promise<void> {
+    if (this.pending) return;
+    this.pending = true;
+    this.setMessage(progress, 'info', type === 'stop' ? 'finish' : 'undo');
+    try {
+      const response = await chrome.runtime.sendMessage({ type } satisfies RecorderMessage);
+      if (response?.ok !== true) throw new Error('Recorder command failed');
+      if (success) {
+        this.message = success;
+        this.messageKind = 'success';
+      }
+    } catch {
+      this.message =
+        type === 'stop' ? 'Recording could not be finished.' : 'The last step remains.';
+      this.messageKind = 'error';
+    } finally {
+      this.pending = false;
+      this.render(type === 'stop' ? 'finish' : 'undo');
+    }
   }
 
   private async captureCurrentState(): Promise<void> {
+    if (this.pending) return;
     const title = window.prompt('Name this step', 'Show the current state')?.trim();
     if (!title) return;
+    this.pending = true;
+    this.setMessage('Capturing the current state…', 'info', 'step');
     this.beginCapture();
     const privacy = applyPrivacyOverlays();
     this.setHidden(true);
@@ -502,11 +665,18 @@ class RecorderHud {
         viewport: { width: innerWidth, height: innerHeight, devicePixelRatio },
       } satisfies RecorderMessage);
       checkpointAvailable = response?.ok === true;
-      if (!checkpointAvailable) this.render('Capture failed');
+      this.message = checkpointAvailable ? 'State captured.' : 'State could not be captured.';
+      this.messageKind = checkpointAvailable ? 'success' : 'error';
+    } catch {
+      checkpointAvailable = false;
+      this.message = 'State could not be captured. Try again.';
+      this.messageKind = 'error';
     } finally {
       privacy.remove();
       this.setHidden(false);
       this.captureComplete();
+      this.pending = false;
+      this.render('step');
     }
   }
 }
@@ -658,6 +828,19 @@ export default defineUnlistedScript(() => {
     };
   };
 
+  const replayKeyboardActivation =
+    (element: HTMLElement): (() => void) =>
+    () => {
+      if (!element.isConnected) return;
+      replayingActivation = true;
+      try {
+        element.focus({ preventScroll: true });
+        element.click();
+      } finally {
+        replayingActivation = false;
+      }
+    };
+
   const recordAction = async (
     target: TargetSnapshot,
     afterActivation: Promise<void>,
@@ -689,6 +872,7 @@ export default defineUnlistedScript(() => {
       replay?.();
       activeHud.showStatus('Step not recorded');
       restoreHud();
+      checkpointPromise = refreshCheckpoint();
     }
   };
 
@@ -766,6 +950,41 @@ export default defineUnlistedScript(() => {
 
       const activation = waitForPointerActivation(event.pointerId);
       void recordAction(target, activation);
+    },
+    true,
+  );
+
+  window.addEventListener(
+    'click',
+    (event) => {
+      if (event.detail !== 0 || !event.isTrusted || replayingActivation) return;
+      const origin = event.target instanceof Element ? event.target : null;
+      const element = origin?.closest<HTMLElement>(
+        'button,a,input,select,textarea,[role="button"],[role="link"],[role="checkbox"],[role="radio"]',
+      );
+      if (!element || element.closest(`[${EXCLUDE_ATTRIBUTE}]`) || !hud || hud.isUserPaused) return;
+      if (hud.intercept(element)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        checkpointPromise = refreshCheckpoint();
+        return;
+      }
+
+      const target = targetSnapshot(element);
+      const replay = replayKeyboardActivation(element);
+      const pendingCheckpoint =
+        checkpointAvailable && !hud.isCapturing ? Promise.resolve(true) : checkpointPromise;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void pendingCheckpoint.then((ready) => {
+        if (!element.isConnected) return;
+        if (!ready) {
+          replay();
+          checkpointPromise = refreshCheckpoint();
+          return;
+        }
+        return recordAction(target, Promise.resolve(), replay);
+      });
     },
     true,
   );

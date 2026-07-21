@@ -267,7 +267,7 @@ async function waitForOffscreenDownload(archiveKey: string, filename: string): P
       archiveKey,
       filename,
     })) as { ok: boolean; url?: string; error?: string };
-    if (!response.ok) throw new Error(response.error ?? 'Could not download portable Scene');
+    if (!response.ok) throw new Error(response.error ?? 'Could not download portable scene');
     if (!response.url?.startsWith(`blob:${chrome.runtime.getURL('/')}`)) {
       throw new Error('The local download service returned an invalid archive URL.');
     }
@@ -278,7 +278,7 @@ async function waitForOffscreenDownload(archiveKey: string, filename: string): P
       created,
       new Promise<never>((_resolve, reject) =>
         setTimeout(
-          () => reject(new Error('The browser did not start the Scene download.')),
+          () => reject(new Error('The browser did not start the scene download.')),
           10_000,
         ),
       ),
@@ -310,7 +310,7 @@ async function ensureOffscreenDocument(): Promise<void> {
       .createDocument({
         url: offscreenUrl,
         reasons: [chrome.offscreen.Reason.BLOBS],
-        justification: 'Create a local portable Scene download without uploading its contents.',
+        justification: 'Create a local portable scene download without uploading its contents.',
       })
       .finally(() => {
         creatingOffscreenDocument = undefined;

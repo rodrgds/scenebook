@@ -29,6 +29,7 @@
     'select' | 'hotspot' | 'callout' | 'spotlight' | 'arrow' | 'mask' | 'blur' | 'cursor';
   type Aspect = '16:9' | '4:3' | '1:1' | '9:16';
   type CursorStyle = NonNullable<EditorStep['cursor']['style']>;
+  type MobilePane = 'steps' | 'canvas' | 'inspector';
   type OverlaySelection = { kind: 'annotation' | 'mask'; id: string };
   type DragOperation = {
     selection: OverlaySelection;
@@ -53,6 +54,7 @@
   let history = $state<EditorScene[]>([]);
   let future = $state<EditorScene[]>([]);
   let activeTool = $state<CanvasTool>('select');
+  let mobilePane = $state<MobilePane>('canvas');
   let aspect = $state<Aspect>('16:9');
   let dragIndex = $state<number | null>(null);
   let saveState = $state<'saved' | 'saving' | 'unsaved' | 'error'>('saved');
@@ -376,6 +378,7 @@
       draft.steps.splice(selectedIndex + 1, 0, step);
     });
     selectedIndex += 1;
+    mobilePane = 'inspector';
   }
 
   function copySelected() {
@@ -392,6 +395,7 @@
       }
     });
     selectedIndex += 1;
+    mobilePane = 'inspector';
   }
 
   function deleteSelected() {
@@ -587,6 +591,38 @@
     });
   }
 
+  function handleMobilePaneKeydown(event: KeyboardEvent, current: MobilePane) {
+    const panes: MobilePane[] = ['steps', 'canvas', 'inspector'];
+    const currentIndex = panes.indexOf(current);
+    let nextIndex = currentIndex;
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % panes.length;
+    else if (event.key === 'ArrowLeft')
+      nextIndex = (currentIndex - 1 + panes.length) % panes.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = panes.length - 1;
+    else return;
+    event.preventDefault();
+    mobilePane = panes[nextIndex]!;
+    queueMicrotask(() => document.getElementById(`mobile-editor-${mobilePane}`)?.focus());
+  }
+
+  function chooseMenuTool(event: MouseEvent, tool: CanvasTool) {
+    activeTool = tool;
+    const menu = (event.currentTarget as HTMLElement | null)?.closest<HTMLDetailsElement>(
+      'details',
+    );
+    menu?.removeAttribute('open');
+    menu?.querySelector<HTMLElement>('summary')?.focus();
+  }
+
+  function selectStep(index: number) {
+    selectedIndex = index;
+    mobilePane = 'canvas';
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches) {
+      queueMicrotask(() => document.getElementById('mobile-editor-canvas')?.focus());
+    }
+  }
+
   function handleEditorKeydown(event: KeyboardEvent) {
     if (event.defaultPrevented || document.querySelector('dialog[open]')) return;
     const target = event.target;
@@ -595,7 +631,12 @@
         target.matches('input, textarea, select, [contenteditable="true"]')) ||
       (!event.metaKey && !event.ctrlKey)
     ) {
-      if (event.key === 'Escape') activeTool = 'select';
+      if (event.key === 'Escape') {
+        activeTool = 'select';
+        document
+          .querySelectorAll<HTMLDetailsElement>('.tool-menu[open]')
+          .forEach((menu) => menu.removeAttribute('open'));
+      }
       return;
     }
     const key = event.key.toLowerCase();
@@ -978,7 +1019,7 @@
 
 <section class="editor" aria-label="Scene editor">
   <div class="editor-toolbar">
-    <div class="history-controls" aria-label="Editing history">
+    <div class="history-controls" role="group" aria-label="Editing history">
       <button
         class="icon-button"
         type="button"
@@ -1024,6 +1065,15 @@
                 : 'Save failed · Retry'
               : 'Unsaved changes'}
       </button>
+      <span class="sr-only" role="status" aria-live="polite">
+        {saveState === 'saved'
+          ? 'Saved locally'
+          : saveState === 'saving'
+            ? 'Saving changes'
+            : saveState === 'error'
+              ? saveError
+              : 'Unsaved changes'}
+      </span>
     </div>
     <div class="canvas-tools" role="toolbar" aria-label="Canvas tools">
       <button
@@ -1043,7 +1093,10 @@
         ><Icon name="hotspot" size={15} /><span>Hotspot</span></button
       >
       <details class="tool-menu">
-        <summary class:active={['callout', 'spotlight', 'arrow'].includes(activeTool)}>
+        <summary
+          aria-label="Annotate tools"
+          class:active={['callout', 'spotlight', 'arrow'].includes(activeTool)}
+        >
           <Icon name="annotation" size={15} /><span>Annotate</span>
         </summary>
         <div class="tool-menu-popover">
@@ -1051,27 +1104,27 @@
             class:active={activeTool === 'callout'}
             type="button"
             aria-pressed={activeTool === 'callout'}
-            onclick={() => (activeTool = 'callout')}
+            onclick={(event) => chooseMenuTool(event, 'callout')}
             ><Icon name="annotation" size={15} /><span>Callout</span></button
           >
           <button
             class:active={activeTool === 'spotlight'}
             type="button"
             aria-pressed={activeTool === 'spotlight'}
-            onclick={() => (activeTool = 'spotlight')}
+            onclick={(event) => chooseMenuTool(event, 'spotlight')}
             ><Icon name="annotation" size={15} /><span>Spotlight</span></button
           >
           <button
             class:active={activeTool === 'arrow'}
             type="button"
             aria-pressed={activeTool === 'arrow'}
-            onclick={() => (activeTool = 'arrow')}
+            onclick={(event) => chooseMenuTool(event, 'arrow')}
             ><Icon name="annotation" size={15} /><span>Arrow</span></button
           >
         </div>
       </details>
       <details class="tool-menu">
-        <summary class:active={['mask', 'blur'].includes(activeTool)}>
+        <summary aria-label="Privacy tools" class:active={['mask', 'blur'].includes(activeTool)}>
           <Icon name="mask" size={15} /><span>Privacy</span>
         </summary>
         <div class="tool-menu-popover">
@@ -1079,7 +1132,7 @@
             class:active={activeTool === 'mask'}
             type="button"
             aria-pressed={activeTool === 'mask'}
-            onclick={() => (activeTool = 'mask')}
+            onclick={(event) => chooseMenuTool(event, 'mask')}
             title="Place an opaque privacy mask"
             ><Icon name="mask" size={15} /><span>Mask</span></button
           >
@@ -1087,7 +1140,7 @@
             class:active={activeTool === 'blur'}
             type="button"
             aria-pressed={activeTool === 'blur'}
-            onclick={() => (activeTool = 'blur')}
+            onclick={(event) => chooseMenuTool(event, 'blur')}
             title="Place a presentation blur"
             ><Icon name="mask" size={15} /><span>Blur</span></button
           >
@@ -1115,8 +1168,50 @@
     </div>
   </div>
 
+  <div class="mobile-pane-switch" role="tablist" aria-label="Editor view">
+    <button
+      id="mobile-editor-steps"
+      role="tab"
+      type="button"
+      aria-controls="editor-steps"
+      aria-selected={mobilePane === 'steps'}
+      tabindex={mobilePane === 'steps' ? 0 : -1}
+      class:active={mobilePane === 'steps'}
+      onkeydown={(event) => handleMobilePaneKeydown(event, 'steps')}
+      onclick={() => (mobilePane = 'steps')}>Steps</button
+    >
+    <button
+      id="mobile-editor-canvas"
+      role="tab"
+      type="button"
+      aria-controls="editor-canvas"
+      aria-selected={mobilePane === 'canvas'}
+      tabindex={mobilePane === 'canvas' ? 0 : -1}
+      class:active={mobilePane === 'canvas'}
+      onkeydown={(event) => handleMobilePaneKeydown(event, 'canvas')}
+      onclick={() => (mobilePane = 'canvas')}>Canvas</button
+    >
+    <button
+      id="mobile-editor-inspector"
+      role="tab"
+      type="button"
+      aria-controls="editor-inspector"
+      aria-selected={mobilePane === 'inspector'}
+      tabindex={mobilePane === 'inspector' ? 0 : -1}
+      class:active={mobilePane === 'inspector'}
+      onkeydown={(event) => handleMobilePaneKeydown(event, 'inspector')}
+      onclick={() => (mobilePane = 'inspector')}>Inspector</button
+    >
+  </div>
+
   <div class="editor-grid">
-    <aside class="step-panel" aria-label="Ordered scene steps">
+    <aside
+      id="editor-steps"
+      class="step-panel"
+      class:mobile-active={mobilePane === 'steps'}
+      aria-label="Ordered scene steps"
+      aria-labelledby="mobile-editor-steps"
+    >
       <div class="panel-heading">
         <span><strong>Steps</strong><small>{scene.steps.length} total</small></span>
         <div class="add-menu">
@@ -1124,7 +1219,7 @@
             class="icon-button"
             type="button"
             aria-label="Add screen step"
-            title="Add screen Step"
+            title="Add screen step"
             onclick={() => addStep('screen')}><Icon name="plus" size={16} /></button
           >
         </div>
@@ -1146,7 +1241,7 @@
               class="step-select"
               type="button"
               aria-current={selectedIndex === index ? 'step' : undefined}
-              onclick={() => (selectedIndex = index)}
+              onclick={() => selectStep(index)}
             >
               <span class="step-number mono">{String(index + 1).padStart(2, '0')}</span>
               <span class="thumbnail">
@@ -1178,7 +1273,7 @@
                 ></span
               >
             </button>
-            <div class="reorder-actions" aria-label={`Reorder ${step.title}`}>
+            <div class="reorder-actions" role="group" aria-label={`Reorder ${step.title}`}>
               <button
                 type="button"
                 title="Move up"
@@ -1197,26 +1292,32 @@
           </li>
         {/each}
       </ol>
-      <div class="add-types">
-        <button type="button" onclick={() => addStep('screen')}
-          ><Icon name="plus" size={14} />Screen</button
-        >
-        <button type="button" onclick={() => addStep('intro')}
-          ><Icon name="file" size={14} />Intro</button
-        >
-        <button type="button" onclick={() => addStep('separator')}
-          ><Icon name="file" size={14} />Section</button
-        >
-        <button type="button" onclick={() => addStep('choice')}
-          ><Icon name="branch" size={14} />Choice</button
-        >
-        <button type="button" onclick={() => addStep('end')}
-          ><Icon name="publish" size={14} />End</button
-        >
-      </div>
+      <details class="add-types">
+        <summary><Icon name="plus" size={14} />Add another step type</summary>
+        <div>
+          <button type="button" onclick={() => addStep('intro')}
+            ><Icon name="file" size={14} />Intro</button
+          >
+          <button type="button" onclick={() => addStep('separator')}
+            ><Icon name="file" size={14} />Section</button
+          >
+          <button type="button" onclick={() => addStep('choice')}
+            ><Icon name="branch" size={14} />Choice</button
+          >
+          <button type="button" onclick={() => addStep('end')}
+            ><Icon name="publish" size={14} />End</button
+          >
+        </div>
+      </details>
     </aside>
 
-    <div class="stage-column">
+    <div
+      id="editor-canvas"
+      class="stage-column"
+      class:mobile-active={mobilePane === 'canvas'}
+      aria-label="Scene canvas"
+      aria-labelledby="mobile-editor-canvas"
+    >
       <div class="stage-meta">
         <span class="mono">{selectedStep.id}</span>
         {#if activeTool !== 'select'}<span class="tool-hint"
@@ -1499,22 +1600,31 @@
           </div>
         </div>
       </div>
-      <div class="developer-drawer">
-        <span
-          ><Icon name="code" size={14} /><strong>Source</strong><code
-            >{scene.portableSource ? 'Imported canonical Scene' : 'Local Studio draft'}</code
-          ></span
-        >
-        <span
-          ><Icon name="check" size={14} /><strong>Checks</strong>{importedCheckCount
-            ? `${importedCheckCount} imported`
-            : 'None attached'}</span
-        >
-        <span class="mono">{scene.id}.scene.yaml</span>
-      </div>
+      <details class="developer-drawer">
+        <summary><Icon name="code" size={14} />Source details</summary>
+        <div>
+          <span
+            ><strong>Source</strong><code
+              >{scene.portableSource ? 'Imported canonical scene' : 'Local Studio draft'}</code
+            ></span
+          >
+          <span
+            ><strong>Checks</strong>{importedCheckCount
+              ? `${importedCheckCount} imported`
+              : 'None attached'}</span
+          >
+          <span class="mono">{scene.id}.scene.yaml</span>
+        </div>
+      </details>
     </div>
 
-    <aside class="inspector" aria-label="Step inspector">
+    <aside
+      id="editor-inspector"
+      class="inspector"
+      class:mobile-active={mobilePane === 'inspector'}
+      aria-label="Step inspector"
+      aria-labelledby="mobile-editor-inspector"
+    >
       <div class="panel-heading inspector-heading">
         <span><strong>Inspector</strong><small>Step {selectedIndex + 1}</small></span>
       </div>
@@ -1549,35 +1659,6 @@
               oninput={(event) =>
                 updateStep((step) => (step.instruction = event.currentTarget.value))}></textarea>
           </div>
-          <div class="field">
-            <label for="step-caption">Caption</label><textarea
-              id="step-caption"
-              class="textarea small"
-              placeholder="Optional copy shown with guides and motion outputs"
-              value={selectedStep.caption}
-              oninput={(event) => updateStep((step) => (step.caption = event.currentTarget.value))}
-            ></textarea>
-          </div>
-          <div class="field">
-            <label for="step-notes">Creator notes</label><textarea
-              id="step-notes"
-              class="textarea small"
-              placeholder="Private authoring context retained in portable source"
-              value={selectedStep.notes}
-              oninput={(event) => updateStep((step) => (step.notes = event.currentTarget.value))}
-            ></textarea>
-          </div>
-          <div class="field">
-            <label for="step-alt">Alt text</label><textarea
-              id="step-alt"
-              class="textarea small"
-              placeholder="Describe the meaningful visual state"
-              value={selectedStep.alt}
-              oninput={(event) => updateStep((step) => (step.alt = event.currentTarget.value))}
-            ></textarea><small class="field-help"
-              >Used by guides and screen readers. Decorative screenshots can be empty.</small
-            >
-          </div>
           {#if selectedStep.type === 'screen'}
             <input
               class="sr-only"
@@ -1594,6 +1675,38 @@
             <small class="field-help">PNG, JPEG, WebP, GIF, or AVIF · 25 MB maximum.</small>
             {#if imageError}<p class="inline-error" role="alert">{imageError}</p>{/if}
           {/if}
+          <details class="content-details">
+            <summary>More content</summary>
+            <div class="field">
+              <label for="step-caption">Caption</label><textarea
+                id="step-caption"
+                class="textarea small"
+                placeholder="Optional copy shown with guides and motion outputs"
+                value={selectedStep.caption}
+                oninput={(event) =>
+                  updateStep((step) => (step.caption = event.currentTarget.value))}></textarea>
+            </div>
+            <div class="field">
+              <label for="step-notes">Creator notes</label><textarea
+                id="step-notes"
+                class="textarea small"
+                placeholder="Private authoring context retained in portable source"
+                value={selectedStep.notes}
+                oninput={(event) => updateStep((step) => (step.notes = event.currentTarget.value))}
+              ></textarea>
+            </div>
+            <div class="field">
+              <label for="step-alt">Alt text</label><textarea
+                id="step-alt"
+                class="textarea small"
+                placeholder="Describe the meaningful visual state"
+                value={selectedStep.alt}
+                oninput={(event) => updateStep((step) => (step.alt = event.currentTarget.value))}
+              ></textarea><small class="field-help"
+                >Used by guides and screen readers. Decorative screenshots can be empty.</small
+              >
+            </div>
+          </details>
         </section>
 
         <section class="inspector-section inspector-disclosure-shell">
@@ -1625,7 +1738,7 @@
                   }
                 }}
               /><button class="button" type="button" onclick={addLocale}
-                ><Icon name="plus" size={13} />Add</button
+                ><Icon name="plus" size={13} />Add language</button
               >
             </div>
             {#if translationError}<p class="inline-error" role="alert">{translationError}</p>{/if}
@@ -1688,7 +1801,7 @@
         </section>
 
         {#if selectedStep.type === 'screen'}
-          <details class="inspector-section inspector-disclosure" open>
+          <details class="inspector-section inspector-disclosure">
             <summary
               ><span>Interaction</span><small
                 >{selectedStep.hotspot ? 'Hotspot configured' : 'No hotspot'}</small
@@ -2656,7 +2769,7 @@
                 class="button"
                 type="button"
                 disabled={!selectedSavedTheme}
-                onclick={applySavedTheme}>Apply</button
+                onclick={applySavedTheme}>Apply theme</button
               ><button class="button" type="button" onclick={saveCurrentTheme}
                 ><Icon name="save" size={13} />Save current</button
               ><button
@@ -2664,7 +2777,7 @@
                 type="button"
                 aria-label="Delete saved theme"
                 disabled={!selectedSavedTheme}
-                onclick={deleteSavedTheme}>Delete</button
+                onclick={deleteSavedTheme}>Delete theme</button
               >
             </div>
             {#if themeLibraryError}<p class="theme-library-message error" role="alert">
@@ -2767,7 +2880,7 @@
           title={canSplitSelected
             ? 'Split the instruction into two consecutive screen Steps'
             : 'A screen instruction needs two meaningful clauses before it can be split'}
-          onclick={splitSelected}>Split</button
+          onclick={splitSelected}>Split step</button
         >
         <button
           class="button"
@@ -2775,16 +2888,16 @@
           disabled={selectedIndex === 0 ||
             selectedStep.type !== 'screen' ||
             scene.steps[selectedIndex - 1]?.type !== 'screen'}
-          onclick={mergeWithPrevious}>Merge</button
+          onclick={mergeWithPrevious}>Merge previous</button
         >
         <button class="button" type="button" onclick={copySelected}
-          ><Icon name="copy" size={14} />Duplicate</button
+          ><Icon name="copy" size={14} />Duplicate step</button
         >
         <button
           class="button danger"
           type="button"
           disabled={scene.steps.length <= 1}
-          onclick={deleteSelected}><Icon name="trash" size={14} />Delete</button
+          onclick={deleteSelected}><Icon name="trash" size={14} />Delete step</button
         >
       </div>
     </aside>
@@ -2795,7 +2908,7 @@
   .editor {
     background: var(--paper-2);
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
     height: max(500px, calc(100dvh - 193px));
     min-height: 0;
     overflow: hidden;
@@ -2832,9 +2945,10 @@
     border: 0;
     color: var(--pass);
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     gap: 5px;
-    padding: 5px;
+    min-height: 40px;
+    padding: 7px;
   }
   .save-state.saving {
     color: var(--changed);
@@ -2859,9 +2973,9 @@
     border-radius: 5px;
     color: var(--muted);
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     gap: 5px;
-    height: 36px;
+    height: 40px;
     padding: 0 9px;
   }
   .canvas-tools button:hover,
@@ -2905,8 +3019,11 @@
     background: transparent;
     border: 0;
     color: var(--muted);
-    font-size: 0.7rem;
-    height: 34px;
+    font-size: 0.78rem;
+    height: 40px;
+  }
+  .mobile-pane-switch {
+    display: none;
   }
   .editor-grid {
     display: grid;
@@ -2945,7 +3062,7 @@
   }
   .panel-heading small {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     margin-top: 1px;
   }
   .step-list {
@@ -2985,7 +3102,7 @@
   }
   .step-number {
     color: var(--faint);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
   .thumbnail {
     background: #282521;
@@ -3027,20 +3144,29 @@
     white-space: nowrap;
   }
   .step-copy strong {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 650;
   }
   .step-copy small {
     color: var(--faint);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     margin-top: 3px;
     text-transform: capitalize;
   }
   .reorder-actions {
-    align-content: center;
-    display: grid;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+    display: flex;
     opacity: 0;
-    padding-right: 3px;
+    padding: 2px;
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
   }
   li:hover .reorder-actions,
   li:focus-within .reorder-actions {
@@ -3050,20 +3176,34 @@
     background: transparent;
     border: 0;
     color: var(--muted);
-    height: 24px;
+    height: 40px;
     padding: 0;
-    width: 24px;
+    width: 40px;
   }
   .reorder-actions button:disabled {
     opacity: 0.25;
   }
   .add-types {
     border-top: 1px solid var(--line);
-    display: grid;
-    gap: 3px;
-    grid-template-columns: repeat(3, 1fr);
     margin-top: auto;
     padding: 8px;
+  }
+  .add-types > summary {
+    align-items: center;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    font-size: 0.78rem;
+    font-weight: 650;
+    gap: 7px;
+    min-height: 40px;
+    padding: 6px;
+  }
+  .add-types > div {
+    display: grid;
+    gap: 4px;
+    grid-template-columns: repeat(2, 1fr);
+    padding-top: 6px;
   }
   .add-types button {
     align-items: center;
@@ -3073,7 +3213,7 @@
     color: var(--muted);
     display: flex;
     flex-direction: column;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     gap: 3px;
     justify-content: center;
     min-height: 44px;
@@ -3086,7 +3226,7 @@
   }
   .stage-column {
     display: grid;
-    grid-template-rows: 33px minmax(0, 1fr) 37px;
+    grid-template-rows: 33px minmax(0, 1fr) auto;
     min-height: 0;
     min-width: 0;
     overflow: hidden;
@@ -3095,7 +3235,7 @@
     align-items: center;
     color: var(--faint);
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     gap: 10px;
     justify-content: space-between;
     padding: 0 13px;
@@ -3122,10 +3262,10 @@
     width: min(45%, 460px);
   }
   .browser-frame {
-    background: #24211e;
-    border: 1px solid #48433d;
+    background: var(--preview-surface);
+    border: 1px solid var(--preview-line);
     border-radius: 10px;
-    box-shadow: 0 18px 54px rgba(31, 27, 23, 0.18);
+    box-shadow: var(--shadow-sm);
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -3386,7 +3526,7 @@
     font-size: 0.75rem;
   }
   .canvas-empty span {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
   .canvas-empty .button {
     margin-top: 5px;
@@ -3445,26 +3585,38 @@
     text-align: center;
   }
   .developer-drawer {
-    align-items: center;
     background: var(--surface);
     border-top: 1px solid var(--line);
     color: var(--muted);
+    font-size: 0.78rem;
+  }
+  .developer-drawer summary {
+    align-items: center;
+    cursor: pointer;
     display: flex;
-    font-size: 0.7rem;
-    gap: 18px;
-    justify-content: space-between;
-    padding: 0 12px;
+    font-weight: 650;
+    gap: 7px;
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+  .developer-drawer > div {
+    border-top: 1px solid var(--line);
+    display: grid;
+    gap: 8px;
+    padding: 10px 12px;
   }
   .developer-drawer span {
-    align-items: center;
+    align-items: baseline;
     display: flex;
-    gap: 5px;
+    gap: 7px;
+    justify-content: space-between;
   }
   .developer-drawer strong {
     color: var(--ink);
   }
   .developer-drawer code {
     color: var(--muted);
+    overflow-wrap: anywhere;
   }
   .inspector-scroll {
     flex: 1;
@@ -3475,6 +3627,7 @@
     border-bottom: 1px solid var(--line);
     display: grid;
     gap: 10px;
+    min-width: 0;
     padding: 13px;
   }
   .inspector-section h3 {
@@ -3528,19 +3681,34 @@
   }
   .inspector-disclosure > summary small {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
+  }
+  .content-details {
+    border-top: 1px solid var(--line);
+    display: grid;
+    gap: 10px;
+    margin-top: 2px;
+    padding-top: 2px;
+  }
+  .content-details summary {
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 650;
+    min-height: 40px;
+    padding-block: 9px;
   }
   .field {
     gap: 5px;
   }
   .field > label {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
   }
   .input,
   .select,
   .textarea {
-    font-size: 0.72rem;
-    min-height: 38px;
+    font-size: 0.82rem;
+    min-height: 40px;
     padding: 7px 8px;
   }
   .textarea {
@@ -3551,7 +3719,7 @@
   }
   .field-help {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     line-height: 1.4;
   }
   .full-width {
@@ -3560,7 +3728,7 @@
   }
   .inline-error {
     color: var(--broken);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     line-height: 1.4;
     margin: 0;
   }
@@ -3585,11 +3753,11 @@
     display: block;
   }
   .toggle-row strong {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .toggle-row small {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     margin-top: 2px;
   }
   input[type='checkbox'] {
@@ -3603,7 +3771,7 @@
   }
   .range-field > span {
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     justify-content: space-between;
   }
   .range-field output {
@@ -3616,7 +3784,7 @@
   }
   .section-empty {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     line-height: 1.45;
     margin: 0;
   }
@@ -3654,7 +3822,7 @@
   }
   .object-select strong {
     color: var(--ink);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     text-transform: capitalize;
   }
   .object-select small {
@@ -3678,7 +3846,7 @@
   }
   .mask-metadata > div {
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     justify-content: space-between;
   }
   .mask-metadata dt {
@@ -3694,14 +3862,14 @@
     border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
     border-radius: 6px;
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     line-height: 1.45;
     margin: 0;
     padding: 7px 8px;
   }
   .cursor-path-editor > span {
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     justify-content: space-between;
   }
   .cursor-path-editor > span small {
@@ -3716,7 +3884,7 @@
   .cursor-keyframe label {
     color: var(--muted);
     display: grid;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     gap: 2px;
   }
   .cursor-keyframe .input {
@@ -3755,7 +3923,7 @@
     gap: 8px;
   }
   .form-fields > strong {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
   .form-field {
     background: var(--surface);
@@ -3774,7 +3942,7 @@
   .field-options label {
     align-items: center;
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     gap: 4px;
   }
   .field-options button {
@@ -3783,7 +3951,7 @@
     border: 0;
     color: var(--broken);
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     gap: 3px;
     margin-left: auto;
   }
@@ -3793,16 +3961,17 @@
     border: 0;
     color: var(--broken);
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     gap: 4px;
     justify-self: end;
   }
   .theme-row {
     align-items: center;
     display: grid;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     gap: 8px;
     grid-template-columns: 1fr auto auto;
+    min-width: 0;
   }
   .theme-library {
     background: var(--paper);
@@ -3810,22 +3979,28 @@
     border-radius: 7px;
     display: grid;
     gap: 8px;
+    min-width: 0;
     padding: 9px;
   }
   .theme-library-actions {
     display: grid;
     gap: 5px;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .theme-library-actions .button {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     justify-content: center;
-    min-height: 34px;
+    min-width: 0;
+    min-height: 40px;
     padding: 5px;
+    white-space: normal;
+  }
+  .theme-library-actions .danger {
+    grid-column: 1 / -1;
   }
   .theme-library-message {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     line-height: 1.4;
     margin: 0;
   }
@@ -3841,12 +4016,13 @@
   }
   .theme-row code {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
   }
   .output-check {
     align-items: center;
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     gap: 8px;
     text-transform: capitalize;
   }
@@ -3860,7 +4036,7 @@
   }
   .inspector-actions .button {
     flex: 1;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     min-height: 40px;
     padding: 6px;
   }
@@ -3890,9 +4066,46 @@
       grid-row: 2;
       justify-self: center;
     }
+    .mobile-pane-switch {
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      padding: 6px;
+      position: sticky;
+      top: var(--topbar-height, 56px);
+      z-index: 20;
+    }
+    .mobile-pane-switch button {
+      background: transparent;
+      border: 0;
+      border-radius: var(--radius-sm);
+      color: var(--muted);
+      font-size: 0.82rem;
+      min-height: 44px;
+    }
+    .mobile-pane-switch button.active {
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 700;
+    }
     .editor-grid {
       grid-template-columns: 1fr;
       overflow: visible;
+    }
+    .step-panel,
+    .stage-column,
+    .inspector {
+      display: none;
+    }
+    .step-panel.mobile-active {
+      display: flex;
+    }
+    .stage-column.mobile-active {
+      display: grid;
+    }
+    .inspector.mobile-active {
+      display: flex;
     }
     .step-panel {
       border-bottom: 1px solid var(--line);
@@ -3913,9 +4126,7 @@
       flex: 0 0 188px;
     }
     .add-types {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(62px, 1fr));
-      overflow-x: auto;
+      overflow: visible;
     }
     .stage-column {
       min-height: 520px;
@@ -3931,15 +4142,14 @@
     }
     .inspector-scroll {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: 1fr;
       overflow: visible;
     }
     .inspector-section {
       align-content: start;
     }
     .inspector-actions {
-      position: sticky;
-      bottom: 0;
+      position: static;
     }
   }
   @media (pointer: coarse) {
@@ -3972,7 +4182,13 @@
     }
     .aspect-controls .button {
       font-size: 0;
+      min-height: 44px;
+      min-width: 44px;
       padding: 7px;
+    }
+    .aspect-controls select,
+    .developer-drawer summary {
+      min-height: 44px;
     }
     .stage-column {
       min-height: 430px;

@@ -584,6 +584,10 @@ describe('compileScenes', () => {
     expect(await readFile(join(output, 'standalone/invite-member.html'), 'utf8')).toContain(
       'application/json',
     );
+    const guideHtml = await readFile(join(output, 'scenes/invite-member/guide.html'), 'utf8');
+    expect(guideHtml).toMatch(
+      /<img src="[^"]+" alt="Workspace members page with Invite member highlighted" width="320" height="180" loading="lazy">/u,
+    );
     expect(
       (await readFile(join(output, 'exports/invite-member.pdf'))).subarray(0, 4).toString(),
     ).toBe('%PDF');
@@ -599,6 +603,99 @@ describe('compileScenes', () => {
     });
     expect(await readFile(join(output, 'manifest.json'), 'utf8')).toBe(firstManifest);
     await expect(readFile(join(output, 'stale.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('keeps a transcript and guide path available when JavaScript is unavailable or fails', async () => {
+    const { scene, output } = await fixture();
+    await compileScenes({
+      scenes: [scene],
+      outputDirectory: output,
+      formats: ['standalone-html', 'html-guide'],
+      privacyGate: passedPrivacy,
+    });
+
+    const html = await readFile(join(output, 'standalone/invite-member.html'), 'utf8');
+    expect(html).toContain('<noscript>');
+    expect(html).toContain('Interactive controls require JavaScript');
+    expect(html).toContain('Walkthrough transcript');
+    expect(html).toContain('Step 1: Open the invitation form');
+    expect(html).toContain('href="../scenes/invite-member/guide.html"');
+    expect(html).toContain('Downloads reflect the assets and settings in this publication.');
+    expect(html).not.toContain('reviewed assets');
+    expect(html).toMatch(/document\.getElementById\(["']scenebook-runtime-fallback["']\)/u);
+  });
+
+  it('labels authored automation as configuration instead of current verification evidence', async () => {
+    const { scene, output } = await fixture();
+    const manifestPath = join(scene, 'scene.yaml');
+    const document = parseYaml(await readFile(manifestPath, 'utf8')) as Record<string, unknown>;
+    document.capability = 'verified';
+    document.automation = {
+      level: 'verified',
+      framework: 'playwright',
+      replayPath: 'automation/replay.ts',
+    };
+    await mkdir(join(scene, 'automation'), { recursive: true });
+    await writeFile(join(scene, 'automation/replay.ts'), 'export {};\n');
+    await writeFile(manifestPath, stringifyYaml(document));
+
+    await compileScenes({
+      scenes: [scene],
+      outputDirectory: output,
+      formats: ['catalog'],
+      privacyGate: passedPrivacy,
+    });
+
+    for (const path of ['index.html', 'scenes/invite-member/index.html']) {
+      const html = await readFile(join(output, path), 'utf8');
+      expect(html).toContain('Automated checks configured');
+      expect(html).not.toContain('class="status verified"');
+    }
+  });
+
+  it('emits locale-derived direction and logical RTL layout behavior', async () => {
+    const { scene, output } = await fixture();
+    const manifestPath = join(scene, 'scene.yaml');
+    const document = parseYaml(await readFile(manifestPath, 'utf8')) as Record<string, unknown>;
+    document.defaultLocale = 'ar';
+    await writeFile(manifestPath, stringifyYaml(document));
+
+    await compileScenes({
+      scenes: [scene],
+      outputDirectory: output,
+      formats: ['standalone-html', 'html-guide', 'iframe'],
+      privacyGate: passedPrivacy,
+    });
+
+    for (const path of [
+      'standalone/invite-member.html',
+      'scenes/invite-member/guide.html',
+      'embeds/invite-member.iframe.html',
+    ]) {
+      const html = await readFile(join(output, path), 'utf8');
+      expect(html).toContain('<html lang="ar" dir="rtl">');
+    }
+    const standalone = await readFile(join(output, 'standalone/invite-member.html'), 'utf8');
+    expect(standalone).toContain('margin-inline-start:auto');
+    expect(standalone).toContain('text-align:start');
+  });
+
+  it('derives RTL direction for a locale whose likely script is Syriac', async () => {
+    const { scene, output } = await fixture();
+    const manifestPath = join(scene, 'scene.yaml');
+    const document = parseYaml(await readFile(manifestPath, 'utf8')) as Record<string, unknown>;
+    document.defaultLocale = 'syr';
+    await writeFile(manifestPath, stringifyYaml(document));
+
+    await compileScenes({
+      scenes: [scene],
+      outputDirectory: output,
+      formats: ['standalone-html'],
+      privacyGate: passedPrivacy,
+    });
+
+    const html = await readFile(join(output, 'standalone/invite-member.html'), 'utf8');
+    expect(html).toContain('<html lang="syr" dir="rtl">');
   });
 
   it('fails closed for unknown screenshot privacy and records an explicit local override', async () => {

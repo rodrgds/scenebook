@@ -34,6 +34,39 @@ const IDENTITY_PUBLIC_KEY = identityKeyPair.publicKey
   .toString('base64');
 const roots: string[] = [];
 
+class PrivateAccessElement {
+  readonly attributes = new Map<string, string>();
+  readonly listeners = new Map<string, () => unknown>();
+  textContent = '';
+  hidden = false;
+  disabled = false;
+  focused = false;
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+
+  addEventListener(name: string, listener: () => unknown): void {
+    this.listeners.set(name, listener);
+  }
+
+  focus(): void {
+    this.focused = true;
+  }
+
+  async dispatch(name: string): Promise<void> {
+    await this.listeners.get(name)?.();
+  }
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (predicate()) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error('Timed out waiting for generated client behavior');
+}
+
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
@@ -330,9 +363,119 @@ describe('publication gateway', () => {
       expect(html).toContain('role="status"');
       expect(html).toContain('aria-live="polite"');
       expect(html).toContain('Open the most recent invitation');
+      expect(html).toContain('id="retry"');
+      expect(html).toContain('new AbortController()');
+      expect(html).toContain('12000');
+      expect(html).toContain('Scenebook could not be reached');
+      expect(html).toContain('const credential=new URLSearchParams');
+      expect(html.indexOf('const credential=')).toBeLessThan(html.indexOf('history.replaceState'));
+      expect(html).not.toContain('error instanceof Error?error.message');
       expect(html).toContain('<noscript>');
       expect(response.headers.get('x-frame-options')).toBe('DENY');
     }
+  });
+
+  it('retries private access with the captured credential without double-submitting', async () => {
+    const { app } = await fixture('private-portal');
+    const response = await app.request('http://publish.example/login', {
+      headers: { host: 'publish.example' },
+    });
+    const html = await response.text();
+    const script = /<script nonce="[^"]+">([\s\S]*?)<\/script>/u.exec(html)?.[1];
+    expect(script).toBeTruthy();
+
+    const elements = new Map(
+      ['access', 'heading', 'status', 'recovery', 'retry'].map((id) => [
+        id,
+        new PrivateAccessElement(),
+      ]),
+    );
+    elements.get('recovery')!.hidden = true;
+    elements.get('retry')!.hidden = true;
+    const location = {
+      hash: '#credential=invite-secret',
+      pathname: '/login',
+      replacedWith: '',
+      replace(value: string) {
+        this.replacedWith = value;
+      },
+    };
+    let completeFirst!: (response: {
+      ok: boolean;
+      status: number;
+      json(): Promise<unknown>;
+    }) => void;
+    const firstResponse = new Promise<{
+      ok: boolean;
+      status: number;
+      json(): Promise<unknown>;
+    }>((resolve) => {
+      completeFirst = resolve;
+    });
+    const requests: RequestInit[] = [];
+    const fetch = async (_input: unknown, init?: RequestInit) => {
+      requests.push(init ?? {});
+      if (requests.length === 1) return firstResponse;
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { location: '/s/acme/product/private/' };
+        },
+      };
+    };
+    const document = {
+      getElementById(id: string) {
+        return elements.get(id);
+      },
+    };
+    const history = {
+      replaceState() {
+        location.hash = '';
+      },
+    };
+    const browserWindow = {
+      location,
+      setTimeout,
+      clearTimeout,
+    };
+
+    const run = new Function(
+      'document',
+      'location',
+      'history',
+      'window',
+      'fetch',
+      'AbortController',
+      'DOMException',
+      script!,
+    );
+    run(document, location, history, browserWindow, fetch, AbortController, DOMException);
+
+    expect(location.hash).toBe('');
+    expect(requests).toHaveLength(1);
+    await elements.get('retry')!.dispatch('click');
+    expect(requests).toHaveLength(1);
+
+    completeFirst({
+      ok: false,
+      status: 503,
+      async json() {
+        return {};
+      },
+    });
+    await waitFor(() => elements.get('retry')!.hidden === false);
+    expect(elements.get('status')!.textContent).toBe(
+      'The publication service is temporarily unavailable.',
+    );
+
+    await elements.get('retry')!.dispatch('click');
+    expect(requests).toHaveLength(2);
+    expect(requests.map((request) => request.body)).toEqual([
+      JSON.stringify({ credential: 'invite-secret' }),
+      JSON.stringify({ credential: 'invite-secret' }),
+    ]);
+    expect(location.replacedWith).toBe('/s/acme/product/private/');
   });
 
   it('rejects declared and chunked JSON bodies at the incremental byte limit', async () => {

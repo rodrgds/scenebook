@@ -61,13 +61,13 @@
         <div>
           <strong
             >{scenes.length
-              ? `${scenes.length} local Scene${scenes.length === 1 ? '' : 's'}`
+              ? `${scenes.length} local scene${scenes.length === 1 ? '' : 's'}`
               : 'Empty local workspace'}</strong
           >
           <span
             >{scenes.length
               ? `Last saved ${new Date(scenes[0]!.savedAt).toLocaleString()}`
-              : 'Create a Scene or import portable source to begin.'}</span
+              : 'Create a scene or import portable source to begin.'}</span
           >
         </div>
         {#if scenes.length}
@@ -232,7 +232,7 @@
   }
   .workspace-summary > div > span {
     color: var(--muted);
-    font-size: 0.73rem;
+    font-size: 0.75rem;
     line-height: 1.4;
     margin-top: 2px;
   }
@@ -261,7 +261,7 @@
   }
   .summary-counts dt {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .summary-counts dd {
     font-size: 0.9rem;
@@ -336,7 +336,7 @@
     align-items: center;
     display: flex;
     flex-direction: column;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     gap: 5px;
   }
   .recent-copy {
@@ -365,7 +365,7 @@
   }
   .recent-copy small {
     color: var(--faint);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
   .open-scene {
     align-items: center;
@@ -413,7 +413,7 @@
     font-size: 0.8rem;
   }
   .work-state small {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin-top: 3px;
   }
   @media (max-width: 800px) {

@@ -50,8 +50,8 @@
           id: 'member-path',
           type: 'end',
           title: 'Member access path selected',
-          instruction: 'This choice opens a separate linear, independently verified Scene.',
-          ctas: [{ id: 'restart', label: 'Return to the main Scene', event: 'restart' }],
+          instruction: 'This choice opens a separate linear, independently verified scene.',
+          ctas: [{ id: 'restart', label: 'Return to the main scene', event: 'restart' }],
         },
       ],
     },
@@ -64,8 +64,8 @@
           id: 'admin-path',
           type: 'end',
           title: 'Administrator path selected',
-          instruction: 'This choice opens a separate linear, independently verified Scene.',
-          ctas: [{ id: 'restart', label: 'Return to the main Scene', event: 'restart' }],
+          instruction: 'This choice opens a separate linear, independently verified scene.',
+          ctas: [{ id: 'restart', label: 'Return to the main scene', event: 'restart' }],
         },
       ],
     },
@@ -91,7 +91,7 @@
   );
   let verifiedLabel = $derived(
     scene.sample
-      ? 'Synthetic sample · no Run evidence'
+      ? 'Synthetic sample · no run evidence'
       : scene.verified
         ? scene.verified.at
           ? `Verified ${new Date(scene.verified.at).toLocaleString()}`
@@ -137,6 +137,21 @@
     scheduleMotion();
   }
 
+  function handleModeKeydown(event: KeyboardEvent, current: PreviewMode) {
+    const modes: PreviewMode[] = ['walkthrough', 'guide', 'motion', 'social'];
+    const currentIndex = modes.indexOf(current);
+    let nextIndex = currentIndex;
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % modes.length;
+    else if (event.key === 'ArrowLeft')
+      nextIndex = (currentIndex - 1 + modes.length) % modes.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = modes.length - 1;
+    else return;
+    event.preventDefault();
+    mode = modes[nextIndex]!;
+    queueMicrotask(() => document.getElementById(`preview-tab-${mode}`)?.focus());
+  }
+
   async function exportPortableScene() {
     exportState = 'exporting';
     exportError = '';
@@ -145,7 +160,7 @@
       exportState = 'idle';
     } catch (error) {
       exportState = 'error';
-      exportError = error instanceof Error ? error.message : 'The Scene could not be exported.';
+      exportError = error instanceof Error ? error.message : 'The scene could not be exported.';
     }
   }
 </script>
@@ -154,36 +169,52 @@
   <div class="preview-toolbar">
     <div class="mode-switch" role="tablist" aria-label="Output preview">
       <button
+        id="preview-tab-walkthrough"
         role="tab"
+        aria-controls="preview-panel"
         aria-selected={mode === 'walkthrough'}
+        tabindex={mode === 'walkthrough' ? 0 : -1}
         class:active={mode === 'walkthrough'}
         type="button"
+        onkeydown={(event) => handleModeKeydown(event, 'walkthrough')}
         onclick={() => (mode = 'walkthrough')}><Icon name="play" size={15} />Walkthrough</button
       >
       <button
+        id="preview-tab-guide"
         role="tab"
+        aria-controls="preview-panel"
         aria-selected={mode === 'guide'}
+        tabindex={mode === 'guide' ? 0 : -1}
         class:active={mode === 'guide'}
         type="button"
+        onkeydown={(event) => handleModeKeydown(event, 'guide')}
         onclick={() => (mode = 'guide')}><Icon name="guide" size={15} />Guide</button
       >
       <button
+        id="preview-tab-motion"
         role="tab"
+        aria-controls="preview-panel"
         aria-selected={mode === 'motion'}
+        tabindex={mode === 'motion' ? 0 : -1}
         class:active={mode === 'motion'}
         type="button"
+        onkeydown={(event) => handleModeKeydown(event, 'motion')}
         onclick={() => (mode = 'motion')}><Icon name="video" size={15} />Motion</button
       >
       <button
+        id="preview-tab-social"
         role="tab"
+        aria-controls="preview-panel"
         aria-selected={mode === 'social'}
+        tabindex={mode === 'social' ? 0 : -1}
         class:active={mode === 'social'}
         type="button"
+        onkeydown={(event) => handleModeKeydown(event, 'social')}
         onclick={() => (mode = 'social')}><Icon name="globe" size={15} />Launch media</button
       >
     </div>
     {#if mode === 'walkthrough'}
-      <div class="viewport-switch" aria-label="Preview viewport">
+      <div class="viewport-switch" role="group" aria-label="Preview viewport">
         <button
           class:active={viewport === 'desktop'}
           type="button"
@@ -212,13 +243,20 @@
         onclick={exportPortableScene}
         ><Icon name="download" size={14} />{exportState === 'exporting'
           ? 'Preparing…'
-          : 'Download Scene ZIP'}</button
+          : 'Download scene ZIP'}</button
       >
     </div>
   </div>
   {#if exportError}<p class="preview-error" role="alert">{exportError}</p>{/if}
 
-  <div class="preview-stage" class:guide={mode === 'guide'}>
+  <div
+    id="preview-panel"
+    class="preview-stage"
+    class:guide={mode === 'guide'}
+    role="tabpanel"
+    tabindex="0"
+    aria-labelledby={`preview-tab-${mode}`}
+  >
     {#if mode === 'walkthrough'}
       <div
         class="device-preview"
@@ -253,10 +291,10 @@
                     : 'Local authoring preview'}</strong
               ><small
                 >{scene.sample
-                  ? 'No product Run, commit, environment, or publication is attached.'
+                  ? 'No product run, commit, environment, or publication is attached.'
                   : scene.verified
                     ? `${scene.verified.environment} · ${scene.verified.commit}`
-                    : 'No executable run evidence is attached to this Scene.'}</small
+                    : 'No executable run evidence is attached to this scene.'}</small
               ></span
             >
           </div>
@@ -289,8 +327,8 @@
       <div class="motion-preview">
         <div class="motion-frame">
           {#if motionSteps.length === 0}<div class="preview-empty">
-              <Icon name="video" size={22} /><strong>No motion-visible Steps</strong><span
-                >Enable Motion in a Step’s output visibility.</span
+              <Icon name="video" size={22} /><strong>No motion-visible steps</strong><span
+                >Enable Motion in a step’s output visibility.</span
               >
             </div>{:else if motionSteps[currentMotion]}
             <PresentationPreview step={motionSteps[currentMotion]!} aspect="wide" />
@@ -354,7 +392,7 @@
             </div>
             <div>
               <dt>Export</dt>
-              <dd>Portable Scene ZIP</dd>
+              <dd>Portable scene ZIP</dd>
             </div>
             <div>
               <dt>Duration</dt>
@@ -382,7 +420,7 @@
         <article class="readme-card">
           <div>
             <h2>{scene.title}</h2>
-            <p>{scene.steps.length} Steps · {verifiedLabel}</p>
+            <p>{scene.steps.length} steps · {verifiedLabel}</p>
           </div>
           <span class="play-mark"><Icon name="play" size={22} /></span>
         </article>
@@ -395,8 +433,8 @@
               <p>{socialSteps[0]?.instruction}</p>
             </div>
           {:else}<div class="preview-empty">
-              <Icon name="globe" size={22} /><strong>No launch-visible Steps</strong><span
-                >Enable Launch media in a Step’s output visibility.</span
+              <Icon name="globe" size={22} /><strong>No launch-visible steps</strong><span
+                >Enable Launch media in a step’s output visibility.</span
               >
             </div>{/if}
         </article>
@@ -407,7 +445,7 @@
             rasterization remain an honest layout preview until the bitmap compiler runs.
           </p>
           <button class="button" type="button" onclick={exportPortableScene}
-            ><Icon name="download" size={15} />Download Scene ZIP</button
+            ><Icon name="download" size={15} />Download scene ZIP</button
           >
         </aside>
       </div>
@@ -472,14 +510,14 @@
   .preview-context {
     align-self: center;
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     justify-self: center;
   }
   .preview-error {
     background: var(--broken-soft);
     border-bottom: 1px solid color-mix(in srgb, var(--broken) 24%, transparent);
     color: var(--broken);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     margin: 0;
     padding: 8px 13px;
     text-align: center;
@@ -490,10 +528,10 @@
     padding: clamp(18px, 3.5vw, 46px);
   }
   .device-preview {
-    background: var(--ink);
-    border: 1px solid #49443e;
+    background: var(--preview-surface);
+    border: 1px solid var(--preview-line);
     border-radius: 11px;
-    box-shadow: 0 25px 75px rgba(31, 27, 23, 0.16);
+    box-shadow: var(--shadow-sm);
     margin: 0 auto;
     max-width: 1120px;
     overflow: hidden;
@@ -513,7 +551,7 @@
     position: relative;
   }
   .address-bar span {
-    background: #817a72;
+    background: var(--preview-muted);
     border-radius: 50%;
     height: 6px;
     width: 6px;
@@ -522,7 +560,7 @@
     background: #c85d49;
   }
   .address-bar i {
-    background: #35312d;
+    background: var(--preview-chrome);
     border-radius: 5px;
     color: #9f978f;
     font-size: 8px;
@@ -541,7 +579,7 @@
     align-items: center;
     color: var(--muted);
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     gap: 9px;
     height: 500px;
     justify-content: center;
@@ -561,7 +599,7 @@
   .guide-page {
     background: white;
     border: 1px solid var(--line);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-sm);
     margin: 0 auto;
     max-width: 860px;
     padding: clamp(28px, 6vw, 76px);
@@ -574,7 +612,7 @@
   .guide-brand {
     align-items: center;
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 690;
     gap: 7px;
   }
@@ -584,7 +622,7 @@
     border-radius: 5px;
     color: white;
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-style: normal;
     height: 22px;
     justify-content: center;
@@ -592,7 +630,7 @@
   }
   .guide-version {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     position: absolute;
     right: 0;
     top: 4px;
@@ -630,10 +668,10 @@
     color: var(--changed);
   }
   .guide-proof strong {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
   .guide-proof small {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     opacity: 0.78;
   }
   .guide-page ol {
@@ -650,7 +688,7 @@
   }
   .guide-step-number {
     color: var(--accent);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     padding-top: 4px;
   }
   .guide-copy h2 {
@@ -673,7 +711,7 @@
   }
   .guide-caption {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     margin-top: 8px;
   }
   .guide-choice {
@@ -682,7 +720,7 @@
     border: 1px solid var(--line);
     border-radius: 8px;
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     gap: 8px;
     grid-column: 2;
     padding: 10px;
@@ -721,7 +759,7 @@
     font-size: 0.78rem;
   }
   .preview-empty span {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
   .motion-caption {
     background: rgba(25, 24, 22, 0.9);
@@ -734,7 +772,7 @@
   }
   .motion-caption .mono {
     color: #e58c78;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
   .motion-caption strong {
     display: block;
@@ -743,7 +781,7 @@
   }
   .motion-caption p {
     color: #cbc5bd;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     margin: 4px 0 0;
   }
   .motion-controls {
@@ -763,7 +801,7 @@
     border-radius: 7px;
     color: white;
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     gap: 6px;
     height: 35px;
     padding: 0 12px;
@@ -804,7 +842,7 @@
   }
   .motion-settings > p {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     line-height: 1.55;
   }
   .motion-settings dl {
@@ -818,12 +856,12 @@
   }
   dt {
     color: var(--faint);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     margin-bottom: 3px;
     text-transform: uppercase;
   }
   dd {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     margin: 0;
   }
   .social-grid {
@@ -851,14 +889,14 @@
   }
   .og-card > p {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin: 0;
     max-width: 60%;
   }
   .og-card footer {
     align-items: end;
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     justify-content: space-between;
   }
   .og-card footer span {
@@ -910,7 +948,7 @@
   }
   .readme-card p {
     color: #c5beb5;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     margin: 0;
   }
   .play-mark {
@@ -946,7 +984,7 @@
   }
   .social-square .mono {
     color: #ef9d8a;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
   .social-square h2 {
     font-size: 1.6rem;
@@ -954,7 +992,7 @@
   }
   .social-square p {
     color: #d2ccc3;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     margin: 0;
   }
   .social-grid aside {
@@ -970,7 +1008,7 @@
   }
   .social-grid aside p {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     line-height: 1.55;
     margin: 0 0 14px;
   }
@@ -1020,23 +1058,27 @@
   }
   @media (max-width: 660px) {
     .preview-toolbar {
-      grid-template-columns: 1fr;
-      overflow-x: auto;
+      grid-template-columns: minmax(0, 1fr);
     }
     .mode-switch {
-      width: max-content;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      justify-self: stretch;
+      min-width: 0;
+      width: 100%;
     }
     .mode-switch button {
-      font-size: 0;
-      padding: 0 10px;
-    }
-    .mode-switch button :global(svg) {
-      margin: 0;
+      font-size: 0.78rem;
+      justify-content: center;
+      min-width: 0;
+      padding: 0 6px;
     }
     .preview-actions {
-      position: absolute;
-      right: 7px;
-      top: 7px;
+      justify-self: stretch;
+      position: static;
+    }
+    .preview-actions .button {
+      width: 100%;
     }
     .preview-stage {
       padding: 12px;

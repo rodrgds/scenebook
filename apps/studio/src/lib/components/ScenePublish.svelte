@@ -123,6 +123,14 @@
     return scene.steps.filter((step) => step.outputVisibility[output]).length;
   }
 
+  function compilerGroup(format: (typeof compilerOutputs)[number]['format']): string {
+    if (['catalog', 'standalone-html', 'web-component', 'iframe'].includes(format)) return 'Web';
+    if (['markdown', 'mdx', 'html-guide', 'pdf'].includes(format)) return 'Guides';
+    if (['mp4', 'webm', 'gif'].includes(format)) return 'Motion';
+    if (format === 'remix-source') return 'Source';
+    return 'Launch media';
+  }
+
   async function exportScene(format: 'yaml' | 'zip') {
     exporting = format;
     error = '';
@@ -146,15 +154,15 @@
         if (copiedKey === key) copiedKey = '';
       }, 1_500);
     } catch {
-      error = 'Clipboard access was denied. Select the command or Scene ID to copy it manually.';
+      error = 'Clipboard access was denied. Select the command or scene ID to copy it manually.';
     }
   }
 </script>
 
-<section class="publish-view" aria-label="Export Scene">
+<section class="publish-view" aria-label="Export scene">
   <header>
     <div>
-      <h2>Export this Scene</h2>
+      <h2>Export this scene</h2>
       <p>
         Download portable source here. Use the CLI for privacy-gated production formats and
         deployment; Studio never uploads or deploys on your behalf.
@@ -170,7 +178,7 @@
         <div class="section-heading">
           <span>
             <strong id="release-contents">Portable release contents</strong>
-            <small>Computed from the current saved Scene</small>
+            <small>Computed from the current saved scene</small>
           </span>
           <span class="draft-badge">Local only</span>
         </div>
@@ -300,25 +308,36 @@
             </span>
             <span class="format-count">{compilerOutputs.length} formats</span>
           </summary>
-          <div class="compiler-grid">
-            {#each compilerOutputs as output (output.format)}
-              <article>
-                <span class="output-icon"><Icon name={output.icon} size={15} /></span>
-                <span
-                  ><strong>{output.label}</strong><small
-                    ><code>{output.format}</code> · {output.detail}</small
-                  ></span
-                >
-              </article>
-            {/each}
+          <div class="compiler-table-wrap">
+            <table class="compiler-table">
+              <thead>
+                <tr>
+                  <th scope="col">Format</th>
+                  <th scope="col">Use</th>
+                  <th scope="col">Group</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each compilerOutputs as output (output.format)}
+                  <tr>
+                    <th scope="row">
+                      <span class="output-icon"><Icon name={output.icon} size={15} /></span>
+                      <span><strong>{output.label}</strong><code>{output.format}</code></span>
+                    </th>
+                    <td>{output.detail}</td>
+                    <td>{compilerGroup(output.format)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
           </div>
-          <div class="recipe-strip" aria-label="Current Step visibility recipes">
+          <div class="recipe-strip" role="group" aria-label="Current step visibility recipes">
             {#each recipeOutputs as output (output.id)}
               <span>
                 <Icon name={output.icon} size={14} />
                 <strong>{output.label}</strong>
                 <small
-                  >{visibleCount(output.id)} / {scene.steps.length} Steps · {output.detail}</small
+                  >{visibleCount(output.id)} / {scene.steps.length} steps · {output.detail}</small
                 >
               </span>
             {/each}
@@ -385,7 +404,7 @@
           onclick={() => exportScene('yaml')}
         >
           <Icon name="download" size={14} />
-          {exporting === 'yaml' ? 'Preparing YAML…' : 'Download Scene YAML'}
+          {exporting === 'yaml' ? 'Preparing YAML…' : 'Download scene YAML'}
         </button>
       </section>
 
@@ -410,7 +429,7 @@
           onclick={() => exportScene('zip')}
         >
           <Icon name="download" size={14} />
-          {exporting === 'zip' ? 'Preparing ZIP…' : 'Download Scene ZIP'}
+          {exporting === 'zip' ? 'Preparing ZIP…' : 'Download scene ZIP'}
         </button>
       </section>
 
@@ -469,7 +488,7 @@
   }
   .publish-view > header p {
     color: var(--muted);
-    font-size: 0.75rem;
+    font-size: 0.84rem;
     line-height: 1.55;
     margin: 0;
     max-width: 82ch;
@@ -478,8 +497,8 @@
   .section-heading small,
   .release-summary strong,
   .release-summary small,
-  .compiler-grid strong,
-  .compiler-grid small,
+  .compiler-table strong,
+  .compiler-table code,
   .recipe-strip strong,
   .recipe-strip small,
   .command-copy strong,
@@ -488,7 +507,7 @@
   }
   .section-heading small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin-top: 2px;
   }
   .error-banner {
@@ -496,7 +515,7 @@
     border: 1px solid color-mix(in srgb, var(--broken) 25%, transparent);
     border-radius: 8px;
     color: var(--broken);
-    font-size: 0.72rem;
+    font-size: 0.82rem;
     margin: 0;
     padding: 10px 12px;
   }
@@ -543,13 +562,13 @@
     content: '−';
   }
   .section-heading strong {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
   }
   .draft-badge,
   .format-count,
   .policy-status {
     border-radius: 999px;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     padding: 4px 8px;
   }
   .draft-badge,
@@ -581,14 +600,13 @@
     justify-content: center;
   }
   .release-summary strong,
-  .compiler-grid strong {
-    font-size: 0.72rem;
+  .compiler-table strong {
+    font-size: 0.78rem;
   }
   .release-summary small,
-  .compiler-grid small,
   .recipe-strip small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     line-height: 1.4;
     margin-top: 2px;
   }
@@ -608,12 +626,12 @@
   }
   .release-metadata dt {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .release-metadata dd {
     align-items: center;
     display: flex;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     gap: 7px;
     justify-content: space-between;
     margin: 0;
@@ -629,8 +647,8 @@
     border: 0;
     color: var(--accent);
     cursor: pointer;
-    font-size: 0.7rem;
-    min-height: 36px;
+    font-size: 0.75rem;
+    min-height: 40px;
   }
   .policy-grid {
     display: grid;
@@ -643,12 +661,12 @@
   }
   .policy-grid article > strong {
     display: block;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin-top: 9px;
   }
   .policy-grid p {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     line-height: 1.5;
     margin: 5px 0 0;
   }
@@ -672,38 +690,61 @@
     display: block;
   }
   .config-sample strong {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .config-sample small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     line-height: 1.45;
     margin-top: 4px;
   }
   .config-sample pre {
     background: var(--paper-2);
     border-radius: 8px;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     line-height: 1.55;
     margin: 0;
     overflow: auto;
     padding: 11px;
   }
-  .compiler-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+  .compiler-table-wrap {
+    overflow-x: auto;
   }
-  .compiler-grid article {
-    align-items: center;
+  .compiler-table {
+    border-collapse: collapse;
+    min-width: 560px;
+    width: 100%;
+  }
+  .compiler-table th,
+  .compiler-table td {
     border-bottom: 1px solid var(--line);
-    border-right: 1px solid var(--line);
-    display: flex;
-    gap: 9px;
-    min-width: 0;
-    padding: 11px 12px;
+    font-size: 0.78rem;
+    padding: 10px 12px;
+    text-align: left;
   }
-  .compiler-grid code {
+  .compiler-table thead th {
+    background: var(--paper-2);
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 650;
+  }
+  .compiler-table tbody th {
+    align-items: center;
+    display: grid;
+    gap: 9px;
+    grid-template-columns: auto 1fr;
+    min-width: 210px;
+  }
+  .compiler-table tbody tr:last-child > * {
+    border-bottom: 0;
+  }
+  .compiler-table td {
+    color: var(--muted);
+  }
+  .compiler-table code {
     color: var(--accent);
+    font-size: 0.75rem;
+    margin-top: 2px;
   }
   .recipe-strip {
     display: grid;
@@ -719,7 +760,7 @@
     color: var(--accent);
   }
   .recipe-strip strong {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .command-list {
     list-style: none;
@@ -739,7 +780,7 @@
     background: var(--paper-2);
     border-radius: 50%;
     display: flex;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     height: 28px;
     justify-content: center;
   }
@@ -747,11 +788,11 @@
     min-width: 0;
   }
   .command-copy strong {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
   .command-copy code {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin-top: 4px;
     overflow: auto;
     padding: 2px 0;
@@ -766,7 +807,7 @@
     align-items: flex-start;
     color: var(--muted);
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     gap: 8px;
     line-height: 1.5;
     margin: 0;
@@ -782,7 +823,7 @@
   }
   .artifact-card > p {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     line-height: 1.55;
     margin: 0;
     padding: 13px;
@@ -798,7 +839,7 @@
     align-items: center;
     color: var(--muted);
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     gap: 6px;
   }
   .artifact-card li :global(svg) {
@@ -820,19 +861,14 @@
     padding: 11px 13px;
   }
   .deploy-card dt {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 650;
   }
   .deploy-card dd {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     line-height: 1.45;
     margin: 3px 0 0;
-  }
-  @media (max-width: 1100px) {
-    .compiler-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
   }
   @media (pointer: coarse) {
     .publish-view .button,
@@ -863,7 +899,6 @@
     .release-summary,
     .release-metadata,
     .policy-grid,
-    .compiler-grid,
     .recipe-strip,
     .publish-layout aside,
     .config-sample {
@@ -887,7 +922,6 @@
       grid-column: 2;
       justify-self: start;
     }
-    .compiler-grid article,
     .policy-grid article,
     .recipe-strip > span,
     .release-summary > div {

@@ -14,8 +14,9 @@
           BlinkMacSystemFont,
           'Segoe UI',
           sans-serif;
-        background: #f4f5f6;
-        color: #1c1d1f;
+        background: #f4f2ed;
+        color: #25231f;
+        --muted: #68645d;
       }
       * {
         box-sizing: border-box;
@@ -25,43 +26,46 @@
         margin: 0;
         display: grid;
         place-items: center;
-        padding: 24px;
-        background: #f4f5f6;
+        padding: clamp(20px, 5vw, 64px);
+        background: #f4f2ed;
+        color: #25231f;
       }
       main {
-        width: min(100%, 40rem);
-        padding: clamp(28px, 6vw, 56px);
-        border: 1px solid #dfe2e5;
-        border-radius: 20px;
-        background: #fff;
+        width: min(100%, 38rem);
+        padding-block: clamp(24px, 6vw, 56px);
       }
       h1 {
-        max-width: 18ch;
+        max-width: 20ch;
         margin: 0;
-        font-family: ui-serif, Charter, Georgia, serif;
-        font-size: clamp(2rem, 7vw, 3.5rem);
-        line-height: 1;
-        letter-spacing: -0.03em;
+        font-size: clamp(2rem, 8vw, 3.25rem);
+        font-weight: 720;
+        line-height: 1.05;
+        letter-spacing: -0.035em;
       }
       p {
         max-width: 52ch;
-        margin: 20px 0 0;
-        color: #5f646b;
+        margin: 18px 0 0;
+        color: var(--muted);
         font-size: 1.0625rem;
-        line-height: 1.65;
+        line-height: 1.6;
       }
-      @media (prefers-color-scheme: dark) {
-        :root,
+      @media (max-width: 360px) {
         body {
-          background: #161719;
-          color: #f4f5f6;
+          place-items: start;
         }
         main {
-          border-color: #36393d;
-          background: #202225;
+          padding-top: 32px;
         }
-        p {
-          color: #b8bdc3;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          background: #191815;
+          color: #f4f2ed;
+          --muted: #c2bdb3;
+        }
+        body {
+          background: #191815;
+          color: #f4f2ed;
         }
       }
     </style>
@@ -69,7 +73,7 @@
   <body>
     <main>
       <h1>No publication is available</h1>
-      <p>This site has not published a walkthrough yet. Try again later.</p>
+      <p>No walkthrough has been published here yet. Check the address or try again later.</p>
     </main>
   </body>
 </html>

@@ -195,7 +195,7 @@ describe('project publication selection', () => {
       }),
     ]);
     const html = await readFile(join(root, 'scenebook-dist/index.html'), 'utf8');
-    expect(html).toContain('<html lang="pt-PT">');
+    expect(html).toContain('<html lang="pt-PT" dir="ltr">');
     expect(html).toContain('The complete project catalog.');
     expect(html).toContain('Beta entry title');
     expect(html).toContain('Curated Beta description.');

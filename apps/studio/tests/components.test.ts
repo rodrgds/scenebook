@@ -3,23 +3,32 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/sve
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { demoScene } from '../src/lib/demo';
+import * as evidenceModule from '../src/lib/evidence';
+import type { EvidenceImportInspection } from '../src/lib/evidence';
 import { createLocalMediaUrl, getLocalMediaBlob } from '../src/lib/local-media';
 import { cloneScene } from '../src/lib/model';
-import { defaultProject } from '../src/lib/portable';
+import * as portableModule from '../src/lib/portable';
+import { defaultProject, exportSceneYaml } from '../src/lib/portable';
+import type { PortableImportResult } from '../src/lib/portable';
 import {
   releaseLocalMediaUrls,
   STUDIO_PROJECT_CHANGED_EVENT,
   studioSceneLibrary,
+  type ImportRunEvidenceResult,
+  type ImportScenesResult,
 } from '../src/lib/scene-library';
 import { studioThemeLibrary } from '../src/lib/theme-library';
 import AppShell from '../src/lib/components/AppShell.svelte';
 import CatalogView from '../src/lib/components/CatalogView.svelte';
 import EvidenceImportDialog from '../src/lib/components/EvidenceImportDialog.svelte';
+import SceneCreateDialog from '../src/lib/components/SceneCreateDialog.svelte';
 import SceneEditor from '../src/lib/components/SceneEditor.svelte';
+import SceneHealth from '../src/lib/components/SceneHealth.svelte';
 import SceneImportDialog from '../src/lib/components/SceneImportDialog.svelte';
 import ScenePreview from '../src/lib/components/ScenePreview.svelte';
 import ScenePublish from '../src/lib/components/ScenePublish.svelte';
 import SceneVersions from '../src/lib/components/SceneVersions.svelte';
+import ScenePage from '../src/routes/scenes/[id]/+page.svelte';
 
 const navigation = vi.hoisted(() => ({ goto: vi.fn(async () => undefined) }));
 const appPage = vi.hoisted(() => ({
@@ -43,10 +52,25 @@ function matchMedia(matches: boolean): typeof window.matchMedia {
   }));
 }
 
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('Studio component workflows', () => {
   beforeEach(() => {
     navigation.goto.mockClear();
     appPage.url = new URL('http://scenebook.test/');
+    appPage.params = {};
     window.matchMedia = matchMedia(false);
   });
 
@@ -132,9 +156,78 @@ describe('Studio component workflows', () => {
         children: createRawSnippet(() => ({ render: () => '<p>Workbench</p>' })),
       },
     });
-    await fireEvent.click(screen.getByRole('button', { name: 'New Scene' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'New scene' }));
     expect(await screen.findByRole('heading', { name: 'Create a scene' })).toBeTruthy();
     expect(screen.getByLabelText('Scene name')).toBe(document.activeElement);
+  });
+
+  it('keeps keyboard focus cycling inside an open create dialog', async () => {
+    render(SceneCreateDialog, { props: { visible: true, onclose: vi.fn() } });
+    await tick();
+
+    const first = screen.getByRole('button', { name: 'Close' });
+    const last = screen.getByRole('button', { name: 'Create scene' });
+    const dialog = document.querySelector<HTMLDialogElement>('dialog[open]')!;
+    dialog.focus();
+    await fireEvent.keyDown(dialog, { key: 'Tab' });
+    expect(document.activeElement).toBe(first);
+
+    last.focus();
+    await fireEvent.keyDown(last, { key: 'Tab' });
+    expect(document.activeElement).toBe(first);
+
+    first.focus();
+    await fireEvent.keyDown(first, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(last);
+  });
+
+  it('closes a completed create dialog before navigation without reopening it', async () => {
+    const created = cloneScene(demoScene);
+    created.id = 'created-scene';
+    created.title = 'Created scene';
+    const create = vi.spyOn(studioSceneLibrary, 'create').mockResolvedValue(created);
+    const onclose = vi.fn();
+    render(SceneCreateDialog, { props: { visible: true, onclose } });
+
+    await fireEvent.input(screen.getByLabelText('Scene name'), {
+      target: { value: 'Created scene' },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Create scene' }));
+
+    await waitFor(() => expect(onclose).toHaveBeenCalledOnce());
+    expect(navigation.goto).toHaveBeenCalledWith('/scenes/created-scene');
+    expect(document.querySelector('dialog[open]')).toBeNull();
+    create.mockRestore();
+  });
+
+  it('keeps scene creation single-flight while the durable write is pending', async () => {
+    const write = deferred<ReturnType<typeof cloneScene>>();
+    const create = vi.spyOn(studioSceneLibrary, 'create').mockReturnValue(write.promise);
+    try {
+      render(SceneCreateDialog, { props: { visible: true, onclose: vi.fn() } });
+      const title = screen.getByLabelText('Scene name') as HTMLInputElement;
+      await fireEvent.input(title, { target: { value: 'Pending scene' } });
+      await fireEvent.click(screen.getByRole('button', { name: 'Create scene' }));
+      const dialog = document.querySelector<HTMLDialogElement>('dialog[open]')!;
+
+      await waitFor(() => expect(dialog.getAttribute('aria-busy')).toBe('true'));
+      expect(document.activeElement).toBe(dialog);
+      expect(title.disabled).toBe(true);
+      expect((screen.getByLabelText(/Description/u) as HTMLTextAreaElement).disabled).toBe(true);
+      await fireEvent.submit(dialog.querySelector('form')!);
+      expect(create).toHaveBeenCalledOnce();
+      const cancel = new Event('cancel', { cancelable: true });
+      dialog.dispatchEvent(cancel);
+      expect(cancel.defaultPrevented).toBe(true);
+      expect(dialog.open).toBe(true);
+
+      const created = cloneScene(demoScene);
+      created.id = 'pending-scene';
+      write.resolve(created);
+      await waitFor(() => expect(dialog.open).toBe(false));
+    } finally {
+      create.mockRestore();
+    }
   });
 
   it('shows actionable invalid-file UX before an import can mutate the catalog', async () => {
@@ -143,7 +236,12 @@ describe('Studio component workflows', () => {
     const file = new File(['not a Scene'], 'notes.txt', { type: 'text/plain' });
     await fireEvent.change(input, { target: { files: [file] } });
     expect(await screen.findByText('Choose a .yaml, .yml, or .zip Scenebook file.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Choose another file' })).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Choose another file' }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        document.querySelector<HTMLInputElement>('input[type="file"]'),
+      ),
+    );
   });
 
   it('uses a dedicated fail-closed Run evidence importer', async () => {
@@ -164,6 +262,214 @@ describe('Studio component workflows', () => {
       await screen.findByText('Evidence JSON is invalid or contains duplicate keys.'),
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Attach verified evidence' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Choose another file set' }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        document.querySelector<HTMLInputElement>('input[type="file"]'),
+      ),
+    );
+  });
+
+  it('does not race a second scene file inspection against the first', async () => {
+    const reading = deferred<PortableImportResult>();
+    const inspect = vi
+      .spyOn(portableModule, 'importPortableBytes')
+      .mockReturnValue(reading.promise);
+    try {
+      render(SceneImportDialog, { props: { visible: true, onclose: vi.fn() } });
+      const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+      await fireEvent.change(input, {
+        target: { files: [new File(['first'], 'first.yaml', { type: 'application/yaml' })] },
+      });
+
+      expect(input.disabled).toBe(true);
+      expect(document.activeElement).toBe(input.closest('dialog'));
+      await fireEvent.change(input, {
+        target: { files: [new File(['second'], 'second.yaml', { type: 'application/yaml' })] },
+      });
+      expect(inspect).toHaveBeenCalledOnce();
+
+      reading.resolve({ kind: 'scene', scenes: [cloneScene(demoScene)], warnings: [] });
+      expect(await screen.findByText('first.yaml')).toBeTruthy();
+    } finally {
+      inspect.mockRestore();
+    }
+  });
+
+  it('does not race a second evidence inspection against the first', async () => {
+    const reading = deferred<EvidenceImportInspection>();
+    const inspect = vi
+      .spyOn(evidenceModule, 'inspectEvidenceFiles')
+      .mockReturnValue(reading.promise);
+    try {
+      render(EvidenceImportDialog, { props: { visible: true, onclose: vi.fn() } });
+      const input = document.querySelector<HTMLInputElement>(
+        'input[type="file"][accept*="application/json"]',
+      )!;
+      await fireEvent.change(input, {
+        target: { files: [new File(['first'], 'first.json', { type: 'application/json' })] },
+      });
+
+      expect(input.disabled).toBe(true);
+      expect(document.activeElement).toBe(input.closest('dialog'));
+      await fireEvent.change(input, {
+        target: { files: [new File(['second'], 'second.json', { type: 'application/json' })] },
+      });
+      expect(inspect).toHaveBeenCalledOnce();
+
+      reading.resolve({ candidates: [], warnings: [], ignoredFiles: [], buildCount: 0 });
+      expect(await screen.findByText(/0 exact run artifacts/u)).toBeTruthy();
+    } finally {
+      inspect.mockRestore();
+    }
+  });
+
+  it('keeps scene import controls locked while the atomic write is pending', async () => {
+    const source = cloneScene(demoScene);
+    for (const step of source.steps) {
+      if (step.image) {
+        step.image =
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+      }
+    }
+    const exported = await exportSceneYaml(source);
+    const write = deferred<ImportScenesResult>();
+    const importScenes = vi
+      .spyOn(studioSceneLibrary, 'importScenes')
+      .mockReturnValue(write.promise);
+    try {
+      render(SceneImportDialog, { props: { visible: true, onclose: vi.fn() } });
+      const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+      await fireEvent.change(input, {
+        target: {
+          files: [
+            new File([exported.bytes.slice().buffer], exported.filename, {
+              type: exported.mediaType,
+            }),
+          ],
+        },
+      });
+
+      const submit = await screen.findByRole('button', { name: 'Import source' });
+      await fireEvent.click(submit);
+      const dialog = document.querySelector<HTMLDialogElement>('dialog[open]')!;
+      await waitFor(() => expect(dialog.getAttribute('aria-busy')).toBe('true'));
+
+      expect(document.activeElement).toBe(dialog);
+      expect(
+        (screen.getByRole('button', { name: 'Choose another' }) as HTMLButtonElement).disabled,
+      ).toBe(true);
+      expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(
+        true,
+      );
+      const cancel = new Event('cancel', { cancelable: true });
+      dialog.dispatchEvent(cancel);
+      expect(cancel.defaultPrevented).toBe(true);
+      expect(dialog.open).toBe(true);
+
+      write.resolve({ imported: [cloneScene(demoScene)], skipped: [], renamed: [] });
+      await waitFor(() => expect(dialog.open).toBe(false));
+    } finally {
+      importScenes.mockRestore();
+    }
+  });
+
+  it('keeps evidence import controls locked while the atomic write is pending', async () => {
+    const inspection = {
+      candidates: [
+        {
+          sceneId: demoScene.id,
+          evidence: {
+            runRevision: 'a'.repeat(64),
+            run: {
+              id: 'run-1',
+              sceneId: demoScene.id,
+              runTargetId: 'desktop',
+              durationMs: 20,
+              status: 'passed',
+              changeState: 'passed',
+            },
+            verifiedAssetHashes: [],
+            missingAssetHashes: [],
+          },
+          assets: [],
+        },
+      ],
+      warnings: [],
+      ignoredFiles: [],
+      buildCount: 0,
+    } as unknown as EvidenceImportInspection;
+    const inspect = vi.spyOn(evidenceModule, 'inspectEvidenceFiles').mockResolvedValue(inspection);
+    const write = deferred<ImportRunEvidenceResult>();
+    const importEvidence = vi
+      .spyOn(studioSceneLibrary, 'importRunEvidence')
+      .mockReturnValue(write.promise);
+    try {
+      render(EvidenceImportDialog, { props: { visible: true, onclose: vi.fn() } });
+      const input = document.querySelector<HTMLInputElement>(
+        'input[type="file"][accept*="application/json"]',
+      )!;
+      await fireEvent.change(input, {
+        target: { files: [new File(['{}'], 'run.json', { type: 'application/json' })] },
+      });
+
+      const submit = await screen.findByRole('button', { name: 'Attach verified evidence' });
+      await fireEvent.click(submit);
+      const dialog = document.querySelector<HTMLDialogElement>('dialog[open]')!;
+      await waitFor(() => expect(dialog.getAttribute('aria-busy')).toBe('true'));
+
+      expect(document.activeElement).toBe(dialog);
+      expect(
+        (screen.getByRole('button', { name: 'Choose another' }) as HTMLButtonElement).disabled,
+      ).toBe(true);
+      expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(
+        true,
+      );
+      const cancel = new Event('cancel', { cancelable: true });
+      dialog.dispatchEvent(cancel);
+      expect(cancel.defaultPrevented).toBe(true);
+      expect(dialog.open).toBe(true);
+
+      write.resolve({ scenes: [], runCount: 1 });
+      await waitFor(() => expect(dialog.open).toBe(false));
+    } finally {
+      importEvidence.mockRestore();
+      inspect.mockRestore();
+    }
+  });
+
+  it('keeps duplicate-scene failures inside the modal when Escape is pressed while pending', async () => {
+    appPage.url = new URL(`http://scenebook.test/scenes/${demoScene.id}?tab=health`);
+    appPage.params = { id: demoScene.id };
+    const load = vi.spyOn(studioSceneLibrary, 'load').mockResolvedValue({
+      scene: cloneScene(demoScene),
+      saved: null,
+      recovery: null,
+      migratedLegacy: false,
+    });
+    const duplicateResult = deferred<ReturnType<typeof cloneScene>>();
+    const duplicate = vi
+      .spyOn(studioSceneLibrary, 'duplicate')
+      .mockReturnValue(duplicateResult.promise);
+    try {
+      render(ScenePage);
+      await fireEvent.click(await screen.findByRole('button', { name: 'More scene actions' }));
+      await fireEvent.click(screen.getByRole('button', { name: /Duplicate scene/u }));
+      const dialog = screen.getByRole('dialog', { name: 'Scene actions' }) as HTMLDialogElement;
+      const cancel = new Event('cancel', { cancelable: true });
+      dialog.dispatchEvent(cancel);
+
+      expect(cancel.defaultPrevented).toBe(true);
+      expect(dialog.open).toBe(true);
+      duplicateResult.reject(new Error('The duplicate write failed.'));
+      expect((await within(dialog).findByRole('alert')).textContent).toContain(
+        'The duplicate write failed.',
+      );
+      expect(dialog.open).toBe(true);
+    } finally {
+      duplicate.mockRestore();
+      load.mockRestore();
+    }
   });
 
   it('keeps core editor controls functional without a browser automation backend', async () => {
@@ -172,14 +478,56 @@ describe('Studio component workflows', () => {
     const initialCount = demoScene.steps.length;
     expect(screen.getByText(`${initialCount} total`)).toBeTruthy();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Duplicate step' }));
     expect(screen.getByText(`${initialCount + 1} total`)).toBeTruthy();
     await fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(preview).toHaveBeenCalledOnce();
 
     await waitFor(() => {
-      expect(screen.getByText(/Unsaved changes|Saving…|Saved locally/u)).toBeTruthy();
+      expect(
+        screen.getByText(/Unsaved changes|Saving…|Saved locally|Save failed · Retry/u),
+      ).toBeTruthy();
     });
+  });
+
+  it('keeps the mobile editor to one navigable pane and collapses advanced authoring controls', async () => {
+    window.matchMedia = matchMedia(true);
+    render(SceneEditor, { props: { scene: cloneScene(demoScene) } });
+    const paneTabs = screen.getByRole('tablist', { name: 'Editor view' });
+    const canvasTab = within(paneTabs).getByRole('tab', { name: 'Canvas' });
+    expect(canvasTab.getAttribute('aria-selected')).toBe('true');
+
+    await fireEvent.keyDown(canvasTab, { key: 'ArrowRight' });
+    const inspectorTab = within(paneTabs).getByRole('tab', { name: 'Inspector' });
+    expect(inspectorTab.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(inspectorTab);
+    expect(document.querySelector('.content-details')?.hasAttribute('open')).toBe(false);
+    expect(screen.getByText('Interaction').closest('details')?.hasAttribute('open')).toBe(false);
+
+    await fireEvent.click(within(paneTabs).getByRole('tab', { name: 'Steps' }));
+    const firstStep = document.querySelector<HTMLButtonElement>('.step-select')!;
+    firstStep.focus();
+    await fireEvent.click(firstStep);
+    await waitFor(() => {
+      expect(canvasTab.getAttribute('aria-selected')).toBe('true');
+      expect(document.activeElement).toBe(canvasTab);
+    });
+  });
+
+  it('keeps responsive tool menus named and restores focus after choosing a tool', async () => {
+    render(SceneEditor, { props: { scene: cloneScene(demoScene) } });
+    const annotateSummary = screen.getByLabelText('Annotate tools');
+    const annotateMenu = annotateSummary.closest('details')!;
+    expect(annotateSummary.getAttribute('aria-label')).toBe('Annotate tools');
+    expect(screen.getByLabelText('Privacy tools')).toBeTruthy();
+
+    await fireEvent.click(annotateSummary);
+    const callout = within(annotateMenu).getByRole('button', { name: 'Callout' });
+    callout.focus();
+    await fireEvent.click(callout);
+
+    expect(annotateMenu.hasAttribute('open')).toBe(false);
+    expect(document.activeElement).toBe(annotateSummary);
   });
 
   it('authors and keyboard-edits callouts, spotlights, arrows, and masks on the canvas', async () => {
@@ -285,7 +633,7 @@ describe('Studio component workflows', () => {
         'release-night',
       );
     });
-    await fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Apply theme' }));
     expect((screen.getByLabelText('Accent') as HTMLInputElement).value).toBe('#336699');
     expect((screen.getByLabelText('Corner radius') as HTMLInputElement).value).toBe('22');
 
@@ -333,11 +681,11 @@ describe('Studio component workflows', () => {
     render(SceneEditor, { props: { scene } });
     const initialCount = scene.steps.length;
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Split' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Split step' }));
     expect(screen.getByText(`${initialCount + 1} total`)).toBeTruthy();
     expect(screen.getByDisplayValue('Then choose Invite member to continue.')).toBeTruthy();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Merge' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Merge previous' }));
     expect(screen.getByText(`${initialCount} total`)).toBeTruthy();
     expect(
       screen.getByDisplayValue('Open the member directory. Then choose Invite member to continue.'),
@@ -354,7 +702,7 @@ describe('Studio component workflows', () => {
     await fireEvent.input(within(translations).getByLabelText('New language tag'), {
       target: { value: 'pt-PT' },
     });
-    await fireEvent.click(within(translations).getByRole('button', { name: 'Add' }));
+    await fireEvent.click(within(translations).getByRole('button', { name: 'Add language' }));
     const translatedTitle = within(translations).getByLabelText('Translated Step title');
     await fireEvent.input(translatedTitle, { target: { value: 'Abrir o convite' } });
     expect((translatedTitle as HTMLInputElement).value).toBe('Abrir o convite');
@@ -424,7 +772,7 @@ describe('Studio component workflows', () => {
       revision: 2,
     }));
     const rendered = render(SceneEditor, { props: { scene: cloneScene(demoScene) } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Duplicate step' }));
     rendered.unmount();
 
     await waitFor(() => expect(save).toHaveBeenCalledOnce());
@@ -450,7 +798,7 @@ describe('Studio component workflows', () => {
       revision: 2,
     }));
     const rendered = render(SceneEditor, { props: { scene } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Duplicate step' }));
     rendered.unmount();
     await waitFor(() => expect(save).toHaveBeenCalledOnce());
     await Promise.resolve();
@@ -682,6 +1030,62 @@ describe('Studio component workflows', () => {
     }
   });
 
+  it('provides roving keyboard tabs for output previews without hiding mobile labels', async () => {
+    render(ScenePreview, { props: { scene: cloneScene(demoScene) } });
+    const previewTabs = screen.getByRole('tablist', { name: 'Output preview' });
+    expect(
+      within(previewTabs)
+        .getAllByRole('tab')
+        .map((tab) => tab.textContent?.trim()),
+    ).toEqual(['Walkthrough', 'Guide', 'Motion', 'Launch media']);
+    const walkthrough = screen.getByRole('tab', { name: 'Walkthrough' });
+    const guide = screen.getByRole('tab', { name: 'Guide' });
+    expect(walkthrough.getAttribute('tabindex')).toBe('0');
+    expect(guide.getAttribute('tabindex')).toBe('-1');
+
+    await fireEvent.keyDown(walkthrough, { key: 'ArrowRight' });
+    expect(guide.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(guide);
+    expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe('preview-tab-guide');
+  });
+
+  it('separates irreversible privacy masks from reversible presentation blurs', async () => {
+    const scene = cloneScene(demoScene);
+    for (const step of scene.steps) step.masks = [];
+    scene.steps[0]!.masks = [
+      {
+        id: 'opaque-mask',
+        mode: 'opaque',
+        source: 'manual',
+        scope: 'both',
+        classification: 'custom',
+        x: 0.1,
+        y: 0.1,
+        width: 0.2,
+        height: 0.1,
+      },
+      {
+        id: 'presentation-blur',
+        mode: 'blur',
+        source: 'manual',
+        scope: 'both',
+        classification: 'custom',
+        x: 0.4,
+        y: 0.4,
+        width: 0.2,
+        height: 0.1,
+      },
+    ];
+    render(SceneHealth, { props: { scene } });
+    await fireEvent.click(screen.getByText('Redactions').closest('summary')!);
+
+    expect(within(screen.getByText('Opaque masks').closest('div')!).getByText('1')).toBeTruthy();
+    expect(
+      within(screen.getByText('Presentation blurs').closest('div')!).getByText('1'),
+    ).toBeTruthy();
+    expect(screen.getByText(/Presentation blurs are reversible/iu)).toBeTruthy();
+  });
+
   it('edits form and cross-Scene CTA configuration without placeholder controls', async () => {
     render(SceneEditor, { props: { scene: cloneScene(demoScene) } });
     await fireEvent.click(screen.getByText('Your teammate is invited').closest('button')!);
@@ -733,13 +1137,13 @@ describe('Studio component workflows', () => {
 
     expect(
       screen.getByRole('heading', {
-        name: 'Export this Scene',
+        name: 'Export this scene',
       }),
     ).toBeTruthy();
     expect(screen.getByText(/\d+ opaque masks/u)).toBeTruthy();
     expect(screen.getByText(/\d+ manual blurs/u)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Download Scene YAML' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Download Scene ZIP' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Download scene YAML' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Download scene ZIP' })).toBeTruthy();
 
     for (const disclosure of [
       'Safe public-distribution contract',

@@ -22,8 +22,8 @@ import type {
 
 const BASE_STYLES = `
 :root{color-scheme:light;--paper:#f4f5f6;--ink:#1c1d1f;--muted:#5f646b;--accent:#a93621;--line:#d7dade;--card:#fff;--ok:#246a4b;--info:#315f9d;--radius:14px;font-family:var(--font-family,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif)}
-*{box-sizing:border-box}html{background:var(--paper);color:var(--ink)}body{margin:0}a{color:inherit}a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 35%,transparent);outline-offset:3px}h1,h2,h3{font-family:var(--heading-font-family,inherit);text-wrap:balance}.shell{width:min(1120px,calc(100% - 32px));margin:0 auto;padding:40px 0 64px}.context,.step-meta{color:var(--muted);font-size:13px;font-weight:650;margin:0 0 8px}h1{font-size:clamp(32px,5vw,52px);line-height:1.06;letter-spacing:-.03em;margin:.2em 0}p{line-height:1.6;text-wrap:pretty}.muted{color:var(--muted);max-width:72ch}.status{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;padding:7px 11px;font-size:13px;font-weight:650}.status:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--muted)}.status.monitored:before{background:var(--info)}.status.verified:before{background:var(--ok)}.stage{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:var(--radius);background:#111;isolation:isolate}.stage img{width:100%;height:auto;display:block}.comparison{display:grid;grid-template-columns:1fr 1fr;gap:2px}.comparison img{height:100%;object-fit:contain}.hotspot{position:absolute;min-width:44px;min-height:44px;border:3px solid white;border-radius:999px;background:var(--accent);box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 35%,transparent);transform:translate(-50%,-50%);cursor:pointer}.controls,.choices,.cta{display:flex;align-items:center;gap:10px;margin:16px 0;flex-wrap:wrap}.controls button,.choices a,.cta a,.cta button{align-items:center;border:1px solid var(--ink);background:var(--ink);color:white;border-radius:10px;display:inline-flex;min-height:44px;padding:10px 16px;font:inherit;font-weight:650;cursor:pointer;text-decoration:none}.controls button.secondary,.choices a{background:transparent;color:var(--ink)}button:disabled{opacity:.42;cursor:not-allowed}.progress{margin-left:auto;font:500 13px/1 ui-monospace,monospace}.instruction{font-size:18px}.practice{background:color-mix(in srgb,var(--accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));border-radius:10px;padding:12px}.transcript{border-top:1px solid var(--line);margin-top:28px;padding-top:18px}.transcript button{width:100%;min-height:44px;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;color:inherit;padding:12px 4px;font:inherit;cursor:pointer}.transcript button[aria-current="step"]{color:var(--accent);font-weight:700}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:18px;margin-top:22px}.catalog-group{margin-top:40px}.catalog-group h2{font-size:30px;letter-spacing:-.02em;margin:.2em 0}.catalog-group .cards{margin-top:18px}.card{border:1px solid var(--line);border-radius:var(--radius);background:var(--card);overflow:hidden}.card img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:#161513}.card-copy{padding:18px}.card h2{margin:10px 0 6px;font-size:20px}.card small{color:var(--muted)}.card-link{display:block;text-decoration:none}.card-link:hover h2{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}.search-wrap{display:grid;gap:7px;margin-top:28px;max-width:520px}.search-wrap label{font-size:13px;font-weight:700}.search{width:100%;border:1px solid var(--line);border-radius:10px;background:var(--card);color:inherit;min-height:44px;padding:10px 13px;font:inherit}.empty-search{border:1px dashed var(--line);border-radius:var(--radius);color:var(--muted);margin-top:28px;padding:24px}.guide-step{margin:36px 0 52px}.guide-step img{max-width:100%;height:auto;border:1px solid var(--line);border-radius:var(--radius)}.guide-step .comparison img{width:100%}.guide-links{display:flex;flex-wrap:wrap;gap:8px;padding:0;list-style:none}.guide-links a{align-items:center;border:1px solid var(--line);border-radius:10px;display:inline-flex;min-height:44px;padding:9px 12px;text-decoration:none}.guide-links a:hover{text-decoration:underline}@media(max-width:600px){.shell{width:min(100% - 20px,1120px);padding-top:24px}.progress{width:100%;margin-left:0}.comparison{grid-template-columns:1fr}.attribution{align-items:flex-start;flex-direction:column;gap:4px}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
-.cta form{display:grid;gap:12px;width:min(100%,34rem)}.cta label{display:grid;gap:6px;width:100%;font-weight:600}.cta input:not([type=checkbox]){width:100%;min-height:44px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);padding:10px 12px;font:inherit}.cta-result{color:var(--muted);font-size:14px;margin:0}.cta-result[data-state=error]{color:#92291c}.cta-result[data-state=success]{color:var(--ok)}
+*{box-sizing:border-box}html{background:var(--paper);color:var(--ink)}body{margin:0}a{color:inherit}a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:3px}a:active,button:active:not(:disabled),summary:active{filter:brightness(.84)}h1,h2,h3{font-family:var(--heading-font-family,inherit);text-wrap:balance}.shell{width:min(1120px,calc(100% - 32px));margin:0 auto;padding:40px 0 64px}.context,.step-meta{color:var(--muted);font-size:13px;font-weight:650;margin:0 0 8px}h1{font-size:clamp(32px,5vw,52px);line-height:1.06;letter-spacing:-.03em;margin:.2em 0}p{line-height:1.6;text-wrap:pretty}.muted{color:var(--muted);max-width:72ch}.status{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;padding:7px 11px;font-size:13px;font-weight:650}.status:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--muted)}.status.automated:before,.status.configured:before{background:var(--info)}.stage{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:var(--radius);background:#111;isolation:isolate}.stage img{width:100%;height:auto;display:block}.comparison{display:grid;grid-template-columns:1fr 1fr;gap:2px}.comparison img{height:100%;object-fit:contain}.hotspot{position:absolute;min-width:44px;min-height:44px;border:3px solid white;border-radius:999px;background:var(--accent);box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 35%,transparent);transform:translate(-50%,-50%);cursor:pointer}.controls,.choices,.cta{display:flex;align-items:center;gap:10px;margin:16px 0;flex-wrap:wrap}.controls button,.choices a,.cta a,.cta button{align-items:center;border:1px solid var(--ink);background:var(--ink);color:white;border-radius:10px;display:inline-flex;min-height:44px;padding:10px 16px;font:inherit;font-weight:650;cursor:pointer;text-decoration:none}.controls button.secondary,.choices a{background:transparent;color:var(--ink)}button:disabled{opacity:.42;cursor:not-allowed}.progress{margin-inline-start:auto;font:500 13px/1 ui-monospace,monospace}.instruction{font-size:18px}.practice{background:color-mix(in srgb,var(--accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));border-radius:10px;padding:12px}.transcript{border-top:1px solid var(--line);margin-top:28px;padding-top:18px}.transcript button{width:100%;min-height:44px;text-align:start;border:0;border-bottom:1px solid var(--line);background:transparent;color:inherit;padding:12px 4px;font:inherit;cursor:pointer}.transcript button[aria-current="step"]{color:var(--accent);font-weight:700}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:18px;margin-top:22px}.catalog-group{margin-top:40px}.catalog-group h2{font-size:30px;letter-spacing:-.02em;margin:.2em 0}.catalog-group .cards{margin-top:18px}.card{border:1px solid var(--line);border-radius:var(--radius);background:var(--card);overflow:hidden}.card img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:#161513}.card-copy{padding:18px}.card h2{margin:10px 0 6px;font-size:20px}.card small{color:var(--muted)}.card-link{display:block;text-decoration:none}.card-link:hover h2{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}.search-wrap{display:grid;gap:7px;margin-top:28px;max-width:520px}.search-wrap label{font-size:13px;font-weight:700}.search{width:100%;border:1px solid var(--line);border-radius:10px;background:var(--card);color:inherit;min-height:44px;padding:10px 13px;font:inherit}.empty-search{border:1px dashed var(--line);border-radius:var(--radius);color:var(--muted);margin-top:28px;padding:24px}.guide-step{margin:36px 0 52px}.guide-step img{max-width:100%;height:auto;border:1px solid var(--line);border-radius:var(--radius)}.guide-step .comparison img{width:100%}.guide-links{display:flex;flex-wrap:wrap;gap:8px;padding:0;list-style:none}.guide-links a{align-items:center;border:1px solid var(--line);border-radius:10px;display:inline-flex;min-height:44px;padding:9px 12px;text-decoration:none}.guide-links a:hover{text-decoration:underline}.runtime-fallback{border:1px solid var(--line);border-radius:var(--radius);margin-top:28px;padding:20px}.runtime-fallback h2{margin-top:0}.runtime-fallback li+li{margin-top:14px}.runtime-fallback a{align-items:center;display:inline-flex;min-height:44px}@media(max-width:600px){.shell{width:min(100% - 20px,1120px);padding-top:24px}.progress{width:100%;margin-inline-start:0}.comparison{grid-template-columns:1fr}.attribution{align-items:flex-start;flex-direction:column;gap:4px}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+.cta form{display:grid;gap:12px;width:min(100%,34rem)}.cta label{display:grid;gap:6px;min-height:44px;width:100%;font-weight:600}.cta input:not([type=checkbox]){width:100%;min-height:44px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);padding:10px 12px;font:inherit}.cta-result{color:var(--muted);font-size:14px;margin:0}.cta-result[data-state=error]{color:#92291c}.cta-result[data-state=success]{color:var(--ok)}
 .share-panel{border-top:1px solid var(--line);margin-top:36px;padding-top:18px}.share-panel summary{cursor:pointer;font-size:15px;font-weight:700;min-height:44px;padding:10px 0}.share-panel p{margin:4px 0 0}.share-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.share-links a,.remix-link{border:1px solid var(--line);border-radius:10px;display:inline-flex;min-height:44px;align-items:center;padding:9px 12px;text-decoration:none;font-size:13px;font-weight:650}.share-links a:hover,.remix-link:hover{text-decoration:underline}.share-links a.primary,.remix-link{background:var(--ink);border-color:var(--ink);color:white}.attribution{align-items:center;border-top:1px solid var(--line);color:var(--muted);display:flex;font-size:12px;justify-content:space-between;margin-top:42px;padding-top:18px}.card-actions{align-items:center;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;padding:12px 18px}.card-actions a{font-size:13px;font-weight:650}.catalog-footer{margin-top:54px}.sr-only{clip:rect(0,0,0,0);clip-path:inset(50%);height:1px;overflow:hidden;position:absolute;white-space:nowrap;width:1px}
 .empty-search[hidden]{display:none}.empty-search p{margin-top:0}.empty-search button{background:transparent;border:1px solid var(--line);border-radius:10px;color:var(--ink);cursor:pointer;font:inherit;font-weight:650;min-height:44px;padding:9px 12px}
 `;
@@ -38,6 +38,47 @@ function safeHref(value?: string): string | undefined {
   if (/^(?:https?:|mailto:)/iu.test(value)) return value;
   if (value.startsWith('/') && !value.startsWith('//')) return value;
   return undefined;
+}
+
+const RTL_LANGUAGES = new Set([
+  'ar',
+  'ckb',
+  'dv',
+  'fa',
+  'he',
+  'iw',
+  'nqo',
+  'ps',
+  'sd',
+  'ug',
+  'ur',
+  'yi',
+]);
+const RTL_SCRIPTS = new Set([
+  'adlm',
+  'arab',
+  'hebr',
+  'mand',
+  'nkoo',
+  'rohg',
+  'samr',
+  'syrc',
+  'thaa',
+]);
+
+function localeDirection(locale: string): 'ltr' | 'rtl' {
+  const parts = locale.toLowerCase().split('-');
+  const explicitScript = parts.find((part) => /^[a-z]{4}$/u.test(part));
+  let script = explicitScript;
+  if (!script) {
+    try {
+      script = new Intl.Locale(locale).maximize().script?.toLowerCase();
+    } catch {
+      // Validated locales reach this path, but keep the static language fallback fail-safe.
+    }
+  }
+  if (script) return RTL_SCRIPTS.has(script) ? 'rtl' : 'ltr';
+  return RTL_LANGUAGES.has(parts[0] ?? '') ? 'rtl' : 'ltr';
 }
 
 function hasFormat(
@@ -83,9 +124,11 @@ function capabilityPresentation(capability: string): {
   readonly className: string;
   readonly label: string;
 } {
-  if (capability === 'verified') return { className: 'verified', label: 'Verified' };
-  if (capability === 'monitored') return { className: 'monitored', label: 'Monitored' };
-  return { className: 'captured', label: 'Captured' };
+  if (capability === 'verified')
+    return { className: 'automated', label: 'Automated checks configured' };
+  if (capability === 'monitored')
+    return { className: 'configured', label: 'Monitoring configured' };
+  return { className: 'configured', label: 'Capture configured' };
 }
 
 function sceneMetadata(
@@ -165,7 +208,7 @@ function sceneSharePanel(context: SceneAdapterContext, pagePath: string): string
       : [];
   });
   return links.length
-    ? `<details class="share-panel"><summary>Download or reuse</summary><p class="muted">Downloads contain only the reviewed assets shown here.</p><nav class="share-links" aria-label="Walkthrough downloads">${links.join('')}</nav></details>`
+    ? `<details class="share-panel"><summary>Download or reuse</summary><p class="muted">Downloads reflect the assets and settings in this publication.</p><nav class="share-links" aria-label="Walkthrough downloads">${links.join('')}</nav></details>`
     : '';
 }
 
@@ -426,9 +469,25 @@ if(ctaRuntime)player.ctaSubmitter=async submission=>{
   if(!response.ok)throw new Error('submission rejected');
 };
 player.scene=payload.scene;
+document.getElementById('scenebook-runtime-fallback')?.remove();
 window.addEventListener('hashchange',()=>{const step=new URLSearchParams(location.hash.slice(1)).get('step');if(step)player.setAttribute('step',step)});
 `;
   return (await bundleViewerRuntime(source, 'iife')).replaceAll('</script', '<\\/script');
+}
+
+function interactiveRuntimeFallback(context: SceneAdapterContext, pagePath: string): string {
+  const transcript = context.scene.steps
+    .filter((step) => !step.hidden && step.visibility.interactive)
+    .map((step, index) => {
+      const prose = step.instruction ?? step.caption;
+      return `<li><strong>Step ${index + 1}: ${escapeHtml(step.title)}</strong>${prose ? `<p>${escapeHtml(prose)}</p>` : ''}</li>`;
+    })
+    .join('');
+  const guidePath = sceneOutputPath(context, 'html-guide');
+  const guide = guidePath
+    ? `<p><a href="${escapeHtml(relativeAsset(pagePath, guidePath))}">Open the step-by-step guide</a></p>`
+    : '';
+  return `<section class="runtime-fallback" id="scenebook-runtime-fallback" aria-labelledby="scenebook-runtime-fallback-title"><noscript><p>Interactive controls require JavaScript. The transcript remains available below.</p></noscript><h2 id="scenebook-runtime-fallback-title">Walkthrough transcript</h2><ol>${transcript}</ol>${guide}</section>`;
 }
 
 async function interactiveDocument(
@@ -452,25 +511,51 @@ async function interactiveDocument(
   };
   const runtime = await standaloneViewerRuntime(payload);
   const capability = capabilityPresentation(context.scene.capability);
-  return `<!doctype html><html lang="${escapeHtml(context.scene.locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${escapeHtml(`${context.scene.title} · ${context.publication.title}`)}</title>${sceneMetadata(context, pagePath, { canonicalPath })}<style>:root{${themeDeclarations(context.scene)}}${BASE_STYLES}scenebook-player{display:block;margin-top:28px}</style></head><body><main class="shell"><p class="context">Interactive walkthrough</p><h1>${escapeHtml(context.scene.title)}</h1>${context.scene.description ? `<p class="muted">${escapeHtml(context.scene.description)}</p>` : ''}<span class="status ${capability.className}">${capability.label}</span><section aria-label="Walkthrough"><scenebook-player id="scenebook-player" compact></scenebook-player></section>${sceneSharePanel(context, pagePath)}${attribution(context)}</main><script>${runtime}</script></body></html>`;
+  return `<!doctype html><html lang="${escapeHtml(context.scene.locale)}" dir="${localeDirection(context.scene.locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${escapeHtml(`${context.scene.title} · ${context.publication.title}`)}</title>${sceneMetadata(context, pagePath, { canonicalPath })}<style>:root{${themeDeclarations(context.scene)}}${BASE_STYLES}scenebook-player{display:block;margin-top:28px}</style></head><body><main class="shell"><p class="context">Interactive walkthrough</p><h1>${escapeHtml(context.scene.title)}</h1>${context.scene.description ? `<p class="muted">${escapeHtml(context.scene.description)}</p>` : ''}<span class="status ${capability.className}">${capability.label}</span><section aria-label="Walkthrough"><scenebook-player id="scenebook-player" compact></scenebook-player>${interactiveRuntimeFallback(context, pagePath)}</section>${sceneSharePanel(context, pagePath)}${attribution(context)}</main><script>${runtime}</script></body></html>`;
+}
+
+interface GuideAsset {
+  readonly primary: string;
+  readonly primaryWidth: number;
+  readonly primaryHeight: number;
+  readonly secondary?: string;
+  readonly secondaryWidth?: number;
+  readonly secondaryHeight?: number;
 }
 
 async function guideAssets(
   context: SceneAdapterContext,
   outputPath: string,
-): Promise<Map<string, { primary: string; secondary?: string }>> {
-  const assets = new Map<string, { primary: string; secondary?: string }>();
+): Promise<Map<string, GuideAsset>> {
+  const assets = new Map<string, GuideAsset>();
   for (const step of context.scene.steps.filter(
     (candidate) => !candidate.hidden && candidate.visibility.guide,
   )) {
-    const primary = relativeAsset(outputPath, await presentationAsset(context, step, 'guide'));
-    const secondary = step.secondaryImageReference
-      ? relativeAsset(
-          outputPath,
-          await presentationAsset(context, step, 'guide', { secondary: true }),
-        )
-      : undefined;
-    assets.set(step.id, { primary, ...(secondary ? { secondary } : {}) });
+    const [primaryPath, primaryPresentation] = await Promise.all([
+      presentationAsset(context, step, 'guide'),
+      renderPresentation(context, step, 'guide'),
+    ]);
+    const primary = relativeAsset(outputPath, primaryPath);
+    if (step.secondaryImageReference) {
+      const [secondaryPath, secondaryPresentation] = await Promise.all([
+        presentationAsset(context, step, 'guide', { secondary: true }),
+        renderPresentation(context, step, 'guide', { secondary: true }),
+      ]);
+      assets.set(step.id, {
+        primary,
+        primaryWidth: primaryPresentation.width,
+        primaryHeight: primaryPresentation.height,
+        secondary: relativeAsset(outputPath, secondaryPath),
+        secondaryWidth: secondaryPresentation.width,
+        secondaryHeight: secondaryPresentation.height,
+      });
+      continue;
+    }
+    assets.set(step.id, {
+      primary,
+      primaryWidth: primaryPresentation.width,
+      primaryHeight: primaryPresentation.height,
+    });
   }
   return assets;
 }
@@ -523,7 +608,7 @@ async function guideDocument(context: SceneAdapterContext): Promise<string> {
     .map((step, index) => {
       const stepAssets = assets.get(step.id);
       const media = stepAssets
-        ? `<div class="${stepAssets.secondary ? 'comparison' : ''}"><img src="${escapeHtml(stepAssets.primary)}" alt="${escapeHtml(step.altText ?? step.title)}" loading="lazy">${stepAssets.secondary ? `<img src="${escapeHtml(stepAssets.secondary)}" alt="${escapeHtml(`${step.altText ?? step.title} after`)}" loading="lazy">` : ''}</div>`
+        ? `<div class="${stepAssets.secondary ? 'comparison' : ''}"><img src="${escapeHtml(stepAssets.primary)}" alt="${escapeHtml(step.altText ?? step.title)}" width="${stepAssets.primaryWidth}" height="${stepAssets.primaryHeight}" loading="lazy">${stepAssets.secondary ? `<img src="${escapeHtml(stepAssets.secondary)}" alt="${escapeHtml(`${step.altText ?? step.title} after`)}" width="${stepAssets.secondaryWidth}" height="${stepAssets.secondaryHeight}" loading="lazy">` : ''}</div>`
         : '';
       const choices = step.choices.length
         ? `<ul class="guide-links">${step.choices.map((choice) => `<li><a href="${escapeHtml(branchHref(context, choice, 'catalog'))}">${escapeHtml(choice.label)}</a></li>`).join('')}</ul>`
@@ -544,7 +629,7 @@ async function guideDocument(context: SceneAdapterContext): Promise<string> {
       return `<article class="guide-step" id="${escapeHtml(step.id)}"><p class="step-meta">Step ${index + 1}</p><h2>${escapeHtml(step.title)}</h2>${step.instruction || step.caption ? `<p>${escapeHtml(step.instruction ?? step.caption ?? '')}</p>` : ''}${media}${choices}${ctas}</article>`;
     })
     .join('');
-  return `<!doctype html><html lang="${escapeHtml(context.scene.locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(`${context.scene.title} · Guide`)}</title>${sceneMetadata(context, path, { kind: 'guide' })}<style>:root{${themeDeclarations(context.scene)}}${BASE_STYLES}</style></head><body><main class="shell"><p class="context">Step-by-step guide</p><h1>${escapeHtml(context.scene.title)}</h1>${context.scene.description ? `<p class="muted">${escapeHtml(context.scene.description)}</p>` : ''}${steps}${sceneSharePanel(context, path)}${attribution(context)}</main></body></html>`;
+  return `<!doctype html><html lang="${escapeHtml(context.scene.locale)}" dir="${localeDirection(context.scene.locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(`${context.scene.title} · Guide`)}</title>${sceneMetadata(context, path, { kind: 'guide' })}<style>:root{${themeDeclarations(context.scene)}}${BASE_STYLES}</style></head><body><main class="shell"><p class="context">Step-by-step guide</p><h1>${escapeHtml(context.scene.title)}</h1>${context.scene.description ? `<p class="muted">${escapeHtml(context.scene.description)}</p>` : ''}${steps}${sceneSharePanel(context, path)}${attribution(context)}</main></body></html>`;
 }
 
 function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
@@ -858,7 +943,7 @@ export const iframeAdapter: SceneOutputAdapter = {
       await writeOutputFile(
         context.outputDirectory,
         path,
-        `<!doctype html><html lang="${escapeHtml(context.scene.locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${escapeHtml(context.scene.title)} embed</title><style>html,body{margin:0;height:100%}iframe{display:block;width:100%;height:100%;border:0}</style></head><body><iframe id="scenebook-frame" title="${escapeHtml(context.scene.title)}" loading="lazy" allow="fullscreen"></iframe><script>
+        `<!doctype html><html lang="${escapeHtml(context.scene.locale)}" dir="${localeDirection(context.scene.locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${escapeHtml(context.scene.title)} embed</title><style>html,body{margin:0;height:100%}iframe{display:block;width:100%;height:100%;border:0}</style></head><body><iframe id="scenebook-frame" title="${escapeHtml(context.scene.title)}" loading="lazy" allow="fullscreen"></iframe><script>
 (()=>{
   const frame=document.getElementById('scenebook-frame');
   const source=${scriptJson(source)};
@@ -1100,7 +1185,7 @@ export async function renderCatalogIndex(
           const actions = remixEnabled
             ? `<div class="card-actions"><a class="remix-link" href="${escapeHtml(remix)}" download>Download editable Scene</a></div>`
             : '';
-          return `<article class="card" data-search="${escapeHtml(`${title} ${description ?? ''} ${scene.tags.join(' ')}`.toLowerCase())}"><a class="card-link" href="${escapeHtml(page)}">${image}<div class="card-copy"><span class="status ${capability.className}">${capability.label}</span><h2>${escapeHtml(title)}</h2>${description ? `<p class="muted">${escapeHtml(description)}</p>` : ''}<small>${scene.steps.filter((step) => !step.hidden && step.visibility.interactive).length} steps · ${escapeHtml(scene.locale.toUpperCase())} locale</small></div></a>${actions}</article>`;
+          return `<article class="card" lang="${escapeHtml(scene.locale)}" dir="${localeDirection(scene.locale)}" data-search="${escapeHtml(`${title} ${description ?? ''} ${scene.tags.join(' ')}`.toLowerCase())}"><a class="card-link" href="${escapeHtml(page)}">${image}<div class="card-copy"><span class="status ${capability.className}">${capability.label}</span><h2>${escapeHtml(title)}</h2>${description ? `<p class="muted">${escapeHtml(description)}</p>` : ''}<small>${scene.steps.filter((step) => !step.hidden && step.visibility.interactive).length} steps · ${escapeHtml(scene.locale.toUpperCase())} locale</small></div></a>${actions}</article>`;
         })
         .join('');
       if (!cards) return '';
@@ -1159,7 +1244,7 @@ export async function renderCatalogIndex(
   return writeOutputFile(
     outputDirectory,
     'index.html',
-    `<!doctype html><html lang="${escapeHtml(publication.locale ?? 'en')}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><meta name="robots" content="${robotsDirective(publication.distribution)}"><meta property="og:type" content="website"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(description)}">${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}"><meta property="og:url" content="${escapeHtml(canonical)}">` : ''}${socialImage ? `<meta property="og:image" content="${escapeHtml(socialImage)}"><meta property="og:image:alt" content="${escapeHtml(`${title} preview`)}">` : ''}<meta name="twitter:card" content="${socialImage ? 'summary_large_image' : 'summary'}"><meta name="twitter:title" content="${escapeHtml(title)}"><meta name="twitter:description" content="${escapeHtml(description)}">${socialImage ? `<meta name="twitter:image" content="${escapeHtml(socialImage)}">` : ''}<script type="application/ld+json">${scriptJson(structured)}</script><style>${BASE_STYLES}</style></head><body><main class="shell"><p class="context">${contextLabel}</p><h1>${escapeHtml(publication.title)}</h1><p class="muted">${escapeHtml(description)}</p><div class="search-wrap"><label for="search">Search walkthroughs</label><input class="search" id="search" type="search" autocomplete="off" placeholder="Search by title or tag" aria-describedby="search-status"></div><p id="search-status" class="sr-only" aria-live="polite"></p><div id="search-empty" class="empty-search" hidden><p id="search-empty-text"></p><button id="clear-search" type="button">Clear search</button></div>${groups}${attributionFooter}</main><script>const input=document.getElementById('search'),status=document.getElementById('search-status'),empty=document.getElementById('search-empty'),emptyText=document.getElementById('search-empty-text'),clear=document.getElementById('clear-search');const update=()=>{const raw=input.value.trim(),query=raw.toLowerCase();let visible=0;document.querySelectorAll('[data-search]').forEach(card=>{card.hidden=!card.dataset.search.includes(query);if(!card.hidden)visible+=1});document.querySelectorAll('[data-catalog-group]').forEach(group=>group.hidden=![...group.querySelectorAll('[data-search]')].some(card=>!card.hidden));empty.hidden=visible!==0;emptyText.textContent=raw?'No walkthroughs match “'+raw+'”.':'No walkthroughs are available.';clear.hidden=!raw;status.textContent=visible+' walkthrough'+(visible===1?'':'s')+' shown'};input.addEventListener('input',update);clear.addEventListener('click',()=>{input.value='';update();input.focus()});update()</script></body></html>`,
+    `<!doctype html><html lang="${escapeHtml(publication.locale ?? 'en')}" dir="${localeDirection(publication.locale ?? 'en')}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><meta name="robots" content="${robotsDirective(publication.distribution)}"><meta property="og:type" content="website"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(description)}">${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}"><meta property="og:url" content="${escapeHtml(canonical)}">` : ''}${socialImage ? `<meta property="og:image" content="${escapeHtml(socialImage)}"><meta property="og:image:alt" content="${escapeHtml(`${title} preview`)}">` : ''}<meta name="twitter:card" content="${socialImage ? 'summary_large_image' : 'summary'}"><meta name="twitter:title" content="${escapeHtml(title)}"><meta name="twitter:description" content="${escapeHtml(description)}">${socialImage ? `<meta name="twitter:image" content="${escapeHtml(socialImage)}">` : ''}<script type="application/ld+json">${scriptJson(structured)}</script><style>${BASE_STYLES}</style></head><body><main class="shell"><p class="context">${contextLabel}</p><h1>${escapeHtml(publication.title)}</h1><p class="muted">${escapeHtml(description)}</p><div class="search-wrap"><label for="search">Search walkthroughs</label><input class="search" id="search" type="search" autocomplete="off" placeholder="Search by title or tag" aria-describedby="search-status"></div><p id="search-status" class="sr-only" aria-live="polite"></p><div id="search-empty" class="empty-search" hidden><p id="search-empty-text"></p><button id="clear-search" type="button">Clear search</button></div>${groups}${attributionFooter}</main><script>const input=document.getElementById('search'),status=document.getElementById('search-status'),empty=document.getElementById('search-empty'),emptyText=document.getElementById('search-empty-text'),clear=document.getElementById('clear-search');const update=()=>{const raw=input.value.trim(),query=raw.toLowerCase();let visible=0;document.querySelectorAll('[data-search]').forEach(card=>{card.hidden=!card.dataset.search.includes(query);if(!card.hidden)visible+=1});document.querySelectorAll('[data-catalog-group]').forEach(group=>group.hidden=![...group.querySelectorAll('[data-search]')].some(card=>!card.hidden));empty.hidden=visible!==0;emptyText.textContent=raw?'No walkthroughs match “'+raw+'”.':'No walkthroughs are available.';clear.hidden=!raw;status.textContent=visible+' walkthrough'+(visible===1?'':'s')+' shown'};input.addEventListener('input',update);clear.addEventListener('click',()=>{input.value='';update();input.focus()});update()</script></body></html>`,
   );
 }
 

@@ -6,6 +6,7 @@
     type ImportConflictStrategy,
     type ImportScenesResult,
   } from '../scene-library';
+  import { trapDialogFocus } from '../dialog-focus';
   import Icon from './Icon.svelte';
 
   let {
@@ -33,7 +34,7 @@
     else if (!visible && dialog?.open) dialog.close();
   });
 
-  function reset() {
+  function reset(focusPicker = false) {
     importState = 'idle';
     result = null;
     filename = '';
@@ -42,6 +43,7 @@
     strategy = 'rename';
     dragActive = false;
     if (fileInput) fileInput.value = '';
+    if (focusPicker) queueMicrotask(() => fileInput?.focus({ preventScroll: true }));
   }
 
   function handleClose() {
@@ -51,12 +53,13 @@
   }
 
   async function inspectFile(file: File | undefined) {
-    if (!file) return;
+    if (!file || importState === 'reading' || importState === 'importing') return;
     filename = file.name;
     importState = 'reading';
     error = '';
     issues = [];
     result = null;
+    queueMicrotask(() => dialog?.focus({ preventScroll: true }));
     try {
       result = await importPortableBytes(new Uint8Array(await file.arrayBuffer()), file.name);
       importState = 'ready';
@@ -69,16 +72,18 @@
   }
 
   async function applyImport() {
-    if (!result) return;
+    if (!result || importState !== 'ready') return;
     importState = 'importing';
     error = '';
     issues = [];
+    queueMicrotask(() => dialog?.focus({ preventScroll: true }));
     try {
       const imported = await studioSceneLibrary.importScenes(
         result.scenes,
         strategy,
         result.project,
       );
+      importState = 'ready';
       onimported?.(imported);
       dialog?.close();
       if (imported.imported.length === 1) {
@@ -95,7 +100,10 @@
 
 <dialog
   bind:this={dialog}
+  tabindex="-1"
   aria-labelledby="import-scene-title"
+  aria-busy={importState === 'reading' || importState === 'importing'}
+  onkeydown={(event) => trapDialogFocus(event, dialog)}
   onclose={handleClose}
   oncancel={(event) => {
     if (importState === 'reading' || importState === 'importing') event.preventDefault();
@@ -103,7 +111,7 @@
 >
   <div class="dialog-head">
     <div>
-      <h2 id="import-scene-title">Import Scenes or a project</h2>
+      <h2 id="import-scene-title">Import scenes or a project</h2>
     </div>
     <button
       class="icon-button"
@@ -117,13 +125,17 @@
   </div>
 
   {#if importState === 'idle' || importState === 'reading'}
-    <p>
-      Studio validates canonical YAML, archive paths, expansion limits, asset byte lengths, and
-      SHA-256 integrity before anything enters the local catalog.
-    </p>
+    <p>Choose a Scenebook YAML or ZIP. Studio checks it before saving anything.</p>
+    <details class="validation-details">
+      <summary>What Studio validates</summary>
+      <p>
+        File structure, archive paths and limits, asset sizes, source format, and file integrity.
+      </p>
+    </details>
     <label
       class="drop-zone"
       class:active={dragActive}
+      aria-disabled={importState === 'reading'}
       ondragenter={(event) => {
         event.preventDefault();
         dragActive = true;
@@ -140,6 +152,7 @@
         bind:this={fileInput}
         class="sr-only"
         type="file"
+        disabled={importState === 'reading'}
         accept=".yaml,.yml,.zip,application/yaml,application/zip"
         onchange={(event) => void inspectFile(event.currentTarget.files?.[0])}
       />
@@ -149,20 +162,25 @@
           ? `Inspecting ${filename}…`
           : 'Choose or drop a portable file'}</strong
       >
-      <small>Scene YAML, project YAML, Scene ZIP, or project ZIP</small>
+      <small>Scene YAML, project YAML, scene ZIP, or project ZIP</small>
     </label>
-  {:else if importState === 'ready' && result}
+  {:else if (importState === 'ready' || importState === 'importing') && result}
     <section class="file-summary" aria-live="polite">
       <span class="file-mark"><Icon name="check" size={22} /></span>
       <div>
         <strong>{filename}</strong>
         <small
-          >Valid {result.kind} · {result.scenes.length} Scene{result.scenes.length === 1
+          >Valid {result.kind} · {result.scenes.length} scene{result.scenes.length === 1
             ? ''
             : 's'}{result.project ? ` · ${result.project.name}` : ''}</small
         >
       </div>
-      <button class="button" type="button" onclick={reset}>Choose another</button>
+      <button
+        class="button"
+        type="button"
+        disabled={importState === 'importing'}
+        onclick={() => reset(true)}>Choose another</button
+      >
     </section>
 
     {#if result.warnings.length}
@@ -174,15 +192,30 @@
 
     {#if result.scenes.length}
       <fieldset>
-        <legend>If a Scene ID already exists</legend>
+        <legend>If a scene ID already exists</legend>
         <label
-          ><input type="radio" bind:group={strategy} value="rename" /> Keep both and rename imported</label
+          ><input
+            type="radio"
+            bind:group={strategy}
+            value="rename"
+            disabled={importState === 'importing'}
+          /> Keep both and rename imported</label
         >
         <label
-          ><input type="radio" bind:group={strategy} value="replace" /> Replace the local Scene</label
+          ><input
+            type="radio"
+            bind:group={strategy}
+            value="replace"
+            disabled={importState === 'importing'}
+          /> Replace the local scene</label
         >
         <label
-          ><input type="radio" bind:group={strategy} value="skip" /> Skip conflicting Scenes</label
+          ><input
+            type="radio"
+            bind:group={strategy}
+            value="skip"
+            disabled={importState === 'importing'}
+          /> Skip conflicting scenes</label
         >
       </fieldset>
     {/if}
@@ -198,7 +231,7 @@
         {/if}
       </div>
     </section>
-    <button class="button" type="button" onclick={reset}>Choose another file</button>
+    <button class="button" type="button" onclick={() => reset(true)}>Choose another file</button>
   {/if}
 
   <div class="dialog-actions">
@@ -234,7 +267,7 @@
     width: 100%;
   }
   dialog::backdrop {
-    background: rgba(25, 24, 22, 0.46);
+    background: var(--backdrop);
   }
   .dialog-head {
     align-items: start;
@@ -248,9 +281,24 @@
   }
   dialog > p {
     color: var(--muted);
-    font-size: 0.76rem;
+    font-size: 0.84rem;
     line-height: 1.55;
     margin: 12px 0 18px;
+  }
+  .validation-details {
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin: -8px 0 18px;
+  }
+  .validation-details summary {
+    cursor: pointer;
+    font-weight: 650;
+    min-height: 40px;
+    padding-block: 9px;
+  }
+  .validation-details p {
+    line-height: 1.55;
+    margin: 2px 0 0;
   }
   .drop-zone {
     align-items: center;
@@ -291,7 +339,7 @@
   .drop-zone small,
   .file-summary small {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin-top: 4px;
   }
   .file-summary,
@@ -316,11 +364,11 @@
   }
   .warning-box {
     background: var(--changed-soft);
-    border: 1px solid #dfc589;
+    border: 1px solid color-mix(in srgb, var(--changed) 32%, var(--line));
     border-radius: 8px;
     color: var(--changed);
     display: grid;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     gap: 5px;
     margin-top: 10px;
     padding: 10px;
@@ -339,14 +387,14 @@
     padding: 12px;
   }
   legend {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 700;
     padding: 0 5px;
   }
   fieldset label {
     align-items: center;
     display: flex;
-    font-size: 0.7rem;
+    font-size: 0.82rem;
     gap: 8px;
     min-height: 30px;
   }
@@ -364,7 +412,7 @@
   }
   .error-box ul {
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin: 7px 0 0;
     max-height: 140px;
     overflow: auto;
