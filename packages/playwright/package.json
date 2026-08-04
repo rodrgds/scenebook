@@ -52,7 +52,7 @@
     "sharp": "0.35.3"
   },
   "devDependencies": {
-    "@aws-sdk/client-s3": "3.1091.0",
+    "@aws-sdk/client-s3": "3.1101.0",
     "@scenebook/gateway": "workspace:*",
     "@scenebook/server": "workspace:*",
     "@types/node": "26.1.1",
