@@ -31,7 +31,7 @@
     "clean": "rm -rf dist coverage"
   },
   "devDependencies": {
-    "happy-dom": "20.11.0",
+    "happy-dom": "20.11.2",
     "typescript": "7.0.2",
     "vitest": "4.1.10"
   },
