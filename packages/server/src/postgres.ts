@@ -1,6 +1,7 @@
 import { Pool, type PoolClient } from 'pg';
 import { z } from 'zod';
 import { canonicalJsonHash, sha256, stableStringify } from '@scenebook/core';
+import type { JsonObject, JsonValue } from '@scenebook/schema';
 
 import {
   ChannelPolicySchema,
@@ -80,6 +81,7 @@ import {
   normalizeCustomDomainHostname,
 } from './custom-domains.js';
 import { StudioSceneDocumentSchema } from './api-schemas.js';
+import { structuredAssetIdentities } from './structured-assets.js';
 
 type ReviewComment = Review['comments'][number];
 type ReviewDecision = Review['decisions'][number];
@@ -373,7 +375,7 @@ interface RunEvidenceRow {
   scene_id: string;
   source_revision: string;
   artifact_hash: string;
-  artifact_json: unknown;
+  artifact_json: JsonValue;
   idempotency_key: string;
   request_hash: string;
   recorded_by: string;
@@ -385,7 +387,7 @@ interface BuildEvidenceRow {
   workspace_id: string;
   project_id: string;
   artifact_hash: string;
-  artifact_json: unknown;
+  artifact_json: JsonValue;
   idempotency_key: string;
   request_hash: string;
   recorded_by: string;
@@ -587,6 +589,8 @@ interface DeliveryRow {
   last_error: string | null;
 }
 
+type PutStudioWorkspaceResult = Awaited<ReturnType<ControlPlaneRepository['putStudioWorkspace']>>;
+
 interface AuditRow {
   sequence: string | number;
   id: string;
@@ -597,7 +601,7 @@ interface AuditRow {
   target_id: string;
   request_id: string;
   ip_hash: string | null;
-  metadata_json: Record<string, unknown>;
+  metadata_json: JsonObject;
   created_at: Date;
 }
 
@@ -636,60 +640,64 @@ function studioProject(row: StudioProjectRow): StudioProjectDocument {
 }
 
 function user(row: UserRow): UserRecord {
-  return {
+  let record: UserRecord = {
     id: row.id,
     email: row.email,
     displayName: row.display_name,
     createdAt: iso(row.created_at),
-    ...(row.disabled_at ? { disabledAt: iso(row.disabled_at) } : {}),
   };
+  if (row.disabled_at) record = { ...record, disabledAt: iso(row.disabled_at) };
+  return record;
 }
 
 function membership(row: MembershipRow): WorkspaceMembershipRecord {
-  return {
+  let record: WorkspaceMembershipRecord = {
     workspaceId: row.workspace_id,
     userId: row.user_id,
     role: row.role,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
-    ...(row.revoked_at ? { revokedAt: iso(row.revoked_at) } : {}),
   };
+  if (row.revoked_at) record = { ...record, revokedAt: iso(row.revoked_at) };
+  return record;
 }
 
 function identityApiToken(row: IdentityApiTokenRow): IdentityApiTokenRecord {
-  return {
+  let record: IdentityApiTokenRecord = {
     id: row.id,
     userId: row.user_id,
     workspaceId: row.workspace_id,
     name: row.name,
     tokenHash: row.token_hash,
     scopes: row.scopes,
-    ...(row.project_id ? { projectId: row.project_id } : {}),
-    ...(row.channel_id ? { channelId: row.channel_id } : {}),
     createdAt: iso(row.created_at),
     expiresAt: iso(row.expires_at),
-    ...(row.last_used_at ? { lastUsedAt: iso(row.last_used_at) } : {}),
-    ...(row.revoked_at ? { revokedAt: iso(row.revoked_at) } : {}),
   };
+  if (row.project_id) record = { ...record, projectId: row.project_id };
+  if (row.channel_id) record = { ...record, channelId: row.channel_id };
+  if (row.last_used_at) record = { ...record, lastUsedAt: iso(row.last_used_at) };
+  if (row.revoked_at) record = { ...record, revokedAt: iso(row.revoked_at) };
+  return record;
 }
 
 function userSession(row: UserSessionRow): UserSessionRecord {
-  return {
+  let record: UserSessionRecord = {
     id: row.id,
     userId: row.user_id,
     sourceTokenId: row.source_token_id,
     workspaceId: row.workspace_id,
     scopes: row.scopes,
-    ...(row.project_id ? { projectId: row.project_id } : {}),
-    ...(row.channel_id ? { channelId: row.channel_id } : {}),
     createdAt: iso(row.created_at),
     expiresAt: iso(row.expires_at),
-    ...(row.revoked_at ? { revokedAt: iso(row.revoked_at) } : {}),
   };
+  if (row.project_id) record = { ...record, projectId: row.project_id };
+  if (row.channel_id) record = { ...record, channelId: row.channel_id };
+  if (row.revoked_at) record = { ...record, revokedAt: iso(row.revoked_at) };
+  return record;
 }
 
 function portalGrant(row: PortalGrantRow): PortalGrantRecord {
-  return {
+  let record: PortalGrantRecord = {
     id: row.id,
     workspaceId: row.workspace_id,
     projectId: row.project_id,
@@ -702,24 +710,28 @@ function portalGrant(row: PortalGrantRow): PortalGrantRecord {
     createdBy: row.created_by,
     createdAt: iso(row.created_at),
     expiresAt: iso(row.expires_at),
-    ...(row.revoked_at ? { revokedAt: iso(row.revoked_at) } : {}),
   };
+  if (row.revoked_at) record = { ...record, revokedAt: iso(row.revoked_at) };
+  return record;
 }
 
 function privateShareLink(row: PrivateShareLinkRow): PrivateShareLinkRecord {
-  return {
+  let record: PrivateShareLinkRecord = {
     id: row.id,
     grantId: row.grant_id,
     tokenHash: row.token_hash,
     createdBy: row.created_by,
     createdAt: iso(row.created_at),
     expiresAt: iso(row.expires_at),
-    ...(row.revoked_at ? { revokedAt: iso(row.revoked_at) } : {}),
   };
+  if (row.revoked_at) record = { ...record, revokedAt: iso(row.revoked_at) };
+  return record;
 }
 
-function publicationLoginHandoff(row: PublicationLoginHandoffRow): PublicationLoginHandoffRecord {
-  return {
+function publicationLoginHandoff(
+  row: PublicationLoginHandoffRow,
+): PublicationLoginHandoffRecord {
+  let record: PublicationLoginHandoffRecord = {
     id: row.id,
     tokenHash: row.token_hash,
     workspaceId: row.workspace_id,
@@ -732,8 +744,9 @@ function publicationLoginHandoff(row: PublicationLoginHandoffRow): PublicationLo
     returnPath: row.return_path,
     createdAt: iso(row.created_at),
     expiresAt: iso(row.expires_at),
-    ...(row.consumed_at ? { consumedAt: iso(row.consumed_at) } : {}),
   };
+  if (row.consumed_at) record = { ...record, consumedAt: iso(row.consumed_at) };
+  return record;
 }
 
 function binding(row: BindingRow): RepositoryBinding {
@@ -750,7 +763,7 @@ function binding(row: BindingRow): RepositoryBinding {
 function githubInstallationBinding(
   row: GitHubInstallationBindingRow,
 ): GitHubInstallationBindingRecord {
-  return {
+  let record: GitHubInstallationBindingRecord = {
     id: row.id,
     workspaceId: row.workspace_id,
     projectId: row.project_id,
@@ -762,12 +775,13 @@ function githubInstallationBinding(
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
     version: row.version,
-    ...(row.revoked_at ? { revokedAt: iso(row.revoked_at) } : {}),
   };
+  if (row.revoked_at) record = { ...record, revokedAt: iso(row.revoked_at) };
+  return record;
 }
 
 function githubSourceChange(row: GitHubSourceChangeRow): GitHubSourceChangeRecord {
-  return {
+  let record: GitHubSourceChangeRecord = {
     id: row.id,
     workspaceId: row.workspace_id,
     projectId: row.project_id,
@@ -787,16 +801,17 @@ function githubSourceChange(row: GitHubSourceChangeRow): GitHubSourceChangeRecor
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
     attempts: row.attempts,
-    ...(row.lease_id ? { leaseId: row.lease_id } : {}),
-    ...(row.lease_expires_at ? { leaseExpiresAt: iso(row.lease_expires_at) } : {}),
-    ...(row.head_commit_sha ? { headCommitSha: row.head_commit_sha } : {}),
-    ...(row.head_blob_sha ? { headBlobSha: row.head_blob_sha } : {}),
-    ...(row.pull_request_number ? { pullRequestNumber: row.pull_request_number } : {}),
-    ...(row.pull_request_url ? { pullRequestUrl: row.pull_request_url } : {}),
-    ...(row.issue_number ? { issueNumber: row.issue_number } : {}),
-    ...(row.issue_url ? { issueUrl: row.issue_url } : {}),
-    ...(row.failure_code ? { failureCode: row.failure_code } : {}),
   };
+  if (row.lease_id) record = { ...record, leaseId: row.lease_id };
+  if (row.lease_expires_at) record = { ...record, leaseExpiresAt: iso(row.lease_expires_at) };
+  if (row.head_commit_sha) record = { ...record, headCommitSha: row.head_commit_sha };
+  if (row.head_blob_sha) record = { ...record, headBlobSha: row.head_blob_sha };
+  if (row.pull_request_number) record = { ...record, pullRequestNumber: row.pull_request_number };
+  if (row.pull_request_url) record = { ...record, pullRequestUrl: row.pull_request_url };
+  if (row.issue_number) record = { ...record, issueNumber: row.issue_number };
+  if (row.issue_url) record = { ...record, issueUrl: row.issue_url };
+  if (row.failure_code) record = { ...record, failureCode: row.failure_code };
+  return record;
 }
 
 const VerificationExecutionContractSchema: z.ZodType<VerificationExecutionContract> = z
@@ -839,7 +854,7 @@ const VerificationJobResultSchema: z.ZodType<VerificationJobResult> = z.discrimi
 );
 
 function verificationSchedule(row: VerificationScheduleRow): VerificationScheduleRecord {
-  return {
+  let record: VerificationScheduleRecord = {
     id: row.id,
     workspaceId: row.workspace_id,
     projectId: row.project_id,
@@ -854,18 +869,19 @@ function verificationSchedule(row: VerificationScheduleRow): VerificationSchedul
     maxAttempts: row.max_attempts,
     status: row.status,
     nextDueAt: iso(row.next_due_at),
-    ...(row.last_enqueued_at ? { lastEnqueuedAt: iso(row.last_enqueued_at) } : {}),
-    ...(row.last_completed_at ? { lastCompletedAt: iso(row.last_completed_at) } : {}),
-    ...(row.last_successful_at ? { lastSuccessfulAt: iso(row.last_successful_at) } : {}),
     createdBy: row.created_by,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
     version: row.version,
   };
+  if (row.last_enqueued_at) record = { ...record, lastEnqueuedAt: iso(row.last_enqueued_at) };
+  if (row.last_completed_at) record = { ...record, lastCompletedAt: iso(row.last_completed_at) };
+  if (row.last_successful_at) record = { ...record, lastSuccessfulAt: iso(row.last_successful_at) };
+  return record;
 }
 
 function verificationRunner(row: VerificationRunnerRow): VerificationRunnerRecord {
-  return {
+  let record: VerificationRunnerRecord = {
     id: row.id,
     workspaceId: row.workspace_id,
     projectId: row.project_id,
@@ -875,13 +891,14 @@ function verificationRunner(row: VerificationRunnerRow): VerificationRunnerRecor
     createdBy: row.created_by,
     createdAt: iso(row.created_at),
     expiresAt: iso(row.expires_at),
-    ...(row.last_seen_at ? { lastSeenAt: iso(row.last_seen_at) } : {}),
-    ...(row.revoked_at ? { revokedAt: iso(row.revoked_at) } : {}),
   };
+  if (row.last_seen_at) record = { ...record, lastSeenAt: iso(row.last_seen_at) };
+  if (row.revoked_at) record = { ...record, revokedAt: iso(row.revoked_at) };
+  return record;
 }
 
 function verificationJob(row: VerificationJobRow): VerificationJobRecord {
-  return {
+  let record: VerificationJobRecord = {
     id: row.id,
     workspaceId: row.workspace_id,
     projectId: row.project_id,
@@ -894,17 +911,21 @@ function verificationJob(row: VerificationJobRow): VerificationJobRecord {
     availableAt: iso(row.available_at),
     attempts: row.attempts,
     maxAttempts: row.max_attempts,
-    ...(row.lease_id ? { leaseId: row.lease_id } : {}),
-    ...(row.leased_by_runner_id ? { leasedByRunnerId: row.leased_by_runner_id } : {}),
-    ...(row.leased_at ? { leasedAt: iso(row.leased_at) } : {}),
-    ...(row.lease_expires_at ? { leaseExpiresAt: iso(row.lease_expires_at) } : {}),
-    ...(row.deadline_at ? { deadlineAt: iso(row.deadline_at) } : {}),
-    ...(row.result_json ? { result: VerificationJobResultSchema.parse(row.result_json) } : {}),
-    ...(row.result_hash ? { resultHash: row.result_hash } : {}),
     createdBy: row.created_by,
     createdAt: iso(row.created_at),
-    ...(row.completed_at ? { completedAt: iso(row.completed_at) } : {}),
   };
+  if (row.lease_id) record = { ...record, leaseId: row.lease_id };
+  if (row.leased_by_runner_id) record = { ...record, leasedByRunnerId: row.leased_by_runner_id };
+  if (row.leased_at) record = { ...record, leasedAt: iso(row.leased_at) };
+  if (row.lease_expires_at) record = { ...record, leaseExpiresAt: iso(row.lease_expires_at) };
+  if (row.deadline_at) record = { ...record, deadlineAt: iso(row.deadline_at) };
+  // SAFETY: result_json rows are only written from VerificationJobResultSchema.parse output.
+  if (row.result_json) {
+    record = { ...record, result: VerificationJobResultSchema.parse(row.result_json) };
+  }
+  if (row.result_hash) record = { ...record, resultHash: row.result_hash };
+  if (row.completed_at) record = { ...record, completedAt: iso(row.completed_at) };
+  return record;
 }
 
 function revision(row: SceneRevisionRow): SceneRevisionRecord {
@@ -922,19 +943,20 @@ function revision(row: SceneRevisionRow): SceneRevisionRecord {
 }
 
 function objectRecord(row: ObjectRow): ArtifactObjectRecord {
-  return {
+  let record: ArtifactObjectRecord = {
     uploadId: row.upload_id,
     sha256: row.sha256,
     byteLength: Number(row.byte_length),
     mediaType: row.media_type,
     status: row.status,
-    ...(row.staging_key ? { stagingKey: row.staging_key } : {}),
-    ...(row.final_key ? { finalKey: row.final_key } : {}),
   };
+  if (row.staging_key) record = { ...record, stagingKey: row.staging_key };
+  if (row.final_key) record = { ...record, finalKey: row.final_key };
+  return record;
 }
 
 function evidenceObjectLifecycle(row: EvidenceObjectLifecycleRow): EvidenceObjectLifecycleRecord {
-  return {
+  let record: EvidenceObjectLifecycleRecord = {
     workspaceId: row.workspace_id,
     sha256: row.sha256,
     byteLength: Number(row.byte_length),
@@ -943,10 +965,11 @@ function evidenceObjectLifecycle(row: EvidenceObjectLifecycleRow): EvidenceObjec
     status: row.status,
     firstFinalizedAt: iso(row.first_finalized_at),
     lastFinalizedAt: iso(row.last_finalized_at),
-    ...(row.claim_id ? { claimId: row.claim_id } : {}),
-    ...(row.claimed_until ? { claimedUntil: iso(row.claimed_until) } : {}),
-    ...(row.deleted_at ? { deletedAt: iso(row.deleted_at) } : {}),
   };
+  if (row.claim_id) record = { ...record, claimId: row.claim_id };
+  if (row.claimed_until) record = { ...record, claimedUntil: iso(row.claimed_until) };
+  if (row.deleted_at) record = { ...record, deletedAt: iso(row.deleted_at) };
+  return record;
 }
 
 function evidenceRetentionClaim(row: EvidenceObjectLifecycleRow): EvidenceRetentionClaimRecord {
@@ -968,7 +991,7 @@ function evidenceRetentionClaim(row: EvidenceObjectLifecycleRow): EvidenceRetent
 }
 
 function upload(row: UploadRow, objects: readonly ObjectRow[]): ArtifactUploadRecord {
-  return {
+  let record: ArtifactUploadRecord = {
     id: row.id,
     workspaceId: row.workspace_id,
     projectId: row.project_id,
@@ -978,16 +1001,17 @@ function upload(row: UploadRow, objects: readonly ObjectRow[]): ArtifactUploadRe
     status: row.status,
     idempotencyKey: row.idempotency_key,
     requestHash: row.request_hash,
-    ...(row.manifest_hash ? { manifestHash: row.manifest_hash } : {}),
     objects: objects.map(objectRecord),
     createdAt: iso(row.created_at),
     expiresAt: iso(row.expires_at),
-    ...(row.finalized_at ? { finalizedAt: iso(row.finalized_at) } : {}),
   };
+  if (row.manifest_hash) record = { ...record, manifestHash: row.manifest_hash };
+  if (row.finalized_at) record = { ...record, finalizedAt: iso(row.finalized_at) };
+  return record;
 }
 
 function channel(row: ChannelRow): ChannelRecord {
-  return {
+  let record: ChannelRecord = {
     id: row.id,
     workspaceId: row.workspace_id,
     projectId: row.project_id,
@@ -997,14 +1021,15 @@ function channel(row: ChannelRow): ChannelRecord {
     policy: ChannelPolicySchema.parse(row.policy_json),
     webhookIds: z.array(z.string()).parse(row.webhook_ids),
     analyticsTokenHash: row.analytics_token_hash,
-    ...(row.current_release_id ? { currentReleaseId: row.current_release_id } : {}),
     sequence: Number(row.sequence),
     createdAt: iso(row.created_at),
   };
+  if (row.current_release_id) record = { ...record, currentReleaseId: row.current_release_id };
+  return record;
 }
 
 function customDomain(row: CustomDomainRow): CustomDomainRecord {
-  return {
+  let record: CustomDomainRecord = {
     id: row.id,
     workspaceId: row.workspace_id,
     projectId: row.project_id,
@@ -1016,56 +1041,75 @@ function customDomain(row: CustomDomainRow): CustomDomainRecord {
       status: row.dns_status,
       challengeName: row.challenge_name,
       challengeValue: row.challenge_value,
-      ...(row.dns_checked_at ? { checkedAt: iso(row.dns_checked_at) } : {}),
-      ...(row.dns_verified_at ? { verifiedAt: iso(row.dns_verified_at) } : {}),
     },
-    ...(row.provisioning_json
-      ? { provisioning: CustomDomainProvisioningRecordSchema.parse(row.provisioning_json) }
-      : {}),
     version: Number(row.version),
     createdBy: row.created_by,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
-    ...(row.removed_at ? { removedAt: iso(row.removed_at) } : {}),
   };
+  if (row.dns_checked_at) {
+    record = { ...record, dnsProof: { ...record.dnsProof, checkedAt: iso(row.dns_checked_at) } };
+  }
+  if (row.dns_verified_at) {
+    record = { ...record, dnsProof: { ...record.dnsProof, verifiedAt: iso(row.dns_verified_at) } };
+  }
+  // SAFETY: provisioning_json rows are only written from CustomDomainProvisioningRecordSchema output.
+  if (row.provisioning_json) {
+    record = {
+      ...record,
+      provisioning: CustomDomainProvisioningRecordSchema.parse(row.provisioning_json),
+    };
+  }
+  if (row.removed_at) record = { ...record, removedAt: iso(row.removed_at) };
+  return record;
 }
 
 function release(row: ReleaseRow): ReleaseRecord {
-  return {
+  let record: ReleaseRecord = {
+    // SAFETY: release_json is written only from sealed Release artifacts that already carry status.
     release: ReleaseSchema.parse({ ...(row.release_json as object), status: row.status }),
     workspaceId: row.workspace_id,
     projectId: row.project_id,
     idempotencyKey: row.idempotency_key,
     requestHash: row.request_hash,
-    ...(row.evidence_json
-      ? { promotionEvidence: ReleasePromotionEvidenceSchema.parse(row.evidence_json) }
-      : {}),
   };
+  if (row.evidence_json) {
+    record = {
+      ...record,
+      promotionEvidence: ReleasePromotionEvidenceSchema.parse(row.evidence_json),
+    };
+  }
+  return record;
 }
 
 function reviewComment(row: CommentRow): ReviewComment {
-  return {
+  let record: ReviewComment = {
     id: row.id,
     actorId: row.actor_id,
     body: row.body,
     createdAt: iso(row.created_at),
-    ...(row.step_id ? { stepId: row.step_id } : {}),
-    ...(row.state_id ? { stateId: row.state_id } : {}),
-    ...(row.region_json ? { region: row.region_json as ReviewComment['region'] } : {}),
-    ...(row.resolved_at ? { resolvedAt: iso(row.resolved_at) } : {}),
-    ...(row.resolved_by ? { resolvedBy: row.resolved_by } : {}),
   };
+  if (row.step_id) record = { ...record, stepId: row.step_id };
+  if (row.state_id) record = { ...record, stateId: row.state_id };
+  if (row.region_json) {
+    // SAFETY: region_json is written only from validated ReviewComment region payloads.
+    record = { ...record, region: row.region_json as ReviewComment['region'] };
+  }
+  if (row.resolved_at) record = { ...record, resolvedAt: iso(row.resolved_at) };
+  if (row.resolved_by) record = { ...record, resolvedBy: row.resolved_by };
+  return record;
 }
 
 function reviewDecision(row: DecisionRow): ReviewDecision {
-  return {
+  let record: ReviewDecision = {
     id: row.id,
     actorId: row.actor_id,
     decision: row.decision,
     createdAt: iso(row.created_at),
-    ...(row.change_id ? { changeId: row.change_id } : {}),
-    ...(row.reason ? { reason: row.reason } : {}),
   };
+  if (row.change_id) record = { ...record, changeId: row.change_id };
+  if (row.reason) record = { ...record, reason: row.reason };
+  return record;
 }
 
 function verificationRun(row: RunEvidenceRow): VerificationRunRecord {
@@ -1150,40 +1194,15 @@ async function transaction<T>(pool: Pool, run: (client: PoolClient) => Promise<T
   }
 }
 
-function structuredAssetIdentities(value: unknown): readonly {
-  readonly sha256: string;
-  readonly mediaType: string;
-}[] {
-  const values = new Map<string, { sha256: string; mediaType: string }>();
-  const visit = (candidate: unknown): void => {
-    if (!candidate || typeof candidate !== 'object') return;
-    if (Array.isArray(candidate)) {
-      for (const item of candidate) visit(item);
-      return;
-    }
-    const record = candidate as Record<string, unknown>;
-    if (
-      typeof record.sha256 === 'string' &&
-      /^[a-f0-9]{64}$/u.test(record.sha256) &&
-      typeof record.mediaType === 'string'
-    ) {
-      values.set(`${record.sha256}\0${record.mediaType}`, {
-        sha256: record.sha256,
-        mediaType: record.mediaType,
-      });
-    }
-    for (const child of Object.values(record)) visit(child);
-  };
-  visit(value);
-  return [...values.values()];
+function isDatabaseConnectionString(value: string | Pool): value is string {
+  return typeof value === 'string';
 }
 
 export class PostgresControlPlaneRepository implements ControlPlaneRepository, DatabasePoolOwner {
   readonly pool: Pool;
 
   constructor(databaseUrlOrPool: string | Pool) {
-    this.pool =
-      typeof databaseUrlOrPool === 'string'
+    this.pool = isDatabaseConnectionString(databaseUrlOrPool)
         ? new Pool({
             connectionString: databaseUrlOrPool,
             max: 20,
@@ -1565,7 +1584,9 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository, D
           ],
         );
       }
-      return { records, ...(projectDocument ? { project: projectDocument } : {}) };
+      const result: PutStudioWorkspaceResult = { records };
+      if (projectDocument) result.project = projectDocument;
+      return result;
     });
   }
 
@@ -3602,7 +3623,7 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository, D
   private async assertStructuredAssetsActive(
     client: PoolClient,
     workspaceId: string,
-    value: unknown,
+    value: JsonValue,
   ): Promise<void> {
     const assets = structuredAssetIdentities(value);
     if (assets.length === 0) return;
@@ -4886,13 +4907,16 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository, D
           };
     const row = (await this.pool.query<HostedPublicationRow>(query.text, query.values)).rows[0];
     if (!row) return undefined;
-    return {
+    let record: HostedPublicationRecord = {
       workspace: workspace(row.workspace_record),
       project: project(row.project_record),
       channel: channel(row.channel_record),
-      ...(row.release_record ? { release: release(row.release_record) } : {}),
-      ...(row.custom_domain_record ? { customDomain: customDomain(row.custom_domain_record) } : {}),
     };
+    if (row.release_record) record = { ...record, release: release(row.release_record) };
+    if (row.custom_domain_record) {
+      record = { ...record, customDomain: customDomain(row.custom_domain_record) };
+    }
+    return record;
   }
 
   async createCustomDomain(input: CustomDomainRecord): Promise<CustomDomainRecord> {
@@ -5090,16 +5114,20 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository, D
         throw new RepositoryConflictError('Channel current Release changed');
       }
       const nextSequence = Number(channelRow.sequence) + 1;
-      const releaseValue = ReleaseSchema.parse({
+      let releaseArtifact: ReleaseRecord['release'] = {
         ...input.release,
         channelId: input.channelId,
         sequence: nextSequence,
         status: 'published',
         publishedAt: input.now,
-        ...(channelRow.current_release_id
-          ? { supersedesReleaseId: channelRow.current_release_id }
-          : {}),
-      });
+      };
+      if (channelRow.current_release_id) {
+        releaseArtifact = {
+          ...releaseArtifact,
+          supersedesReleaseId: channelRow.current_release_id,
+        };
+      }
+      const releaseValue = ReleaseSchema.parse(releaseArtifact);
       if (channelRow.current_release_id) {
         await client.query("UPDATE releases SET status='superseded' WHERE id=$1", [
           channelRow.current_release_id,
@@ -5128,14 +5156,17 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository, D
         releaseValue.id,
         nextSequence,
       ]);
-      return {
+      let result: ReleaseRecord = {
         release: releaseValue,
         workspaceId: input.workspaceId,
         projectId: input.projectId,
         idempotencyKey: input.idempotencyKey,
         requestHash: input.requestHash,
-        ...(input.promotionEvidence ? { promotionEvidence: input.promotionEvidence } : {}),
       };
+      if (input.promotionEvidence) {
+        result = { ...result, promotionEvidence: input.promotionEvidence };
+      }
+      return result;
     });
   }
 
@@ -5320,14 +5351,15 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository, D
     return result.rows.map((row) => {
       const scope: AnalyticsAggregateRow['scope'] =
         row.scene_grouped === 1 ? 'total' : row.step_grouped === 1 ? 'scene' : 'step';
-      return {
+      let record: AnalyticsAggregateRow = {
         scope,
-        ...(row.scene_id ? { sceneId: row.scene_id } : {}),
-        ...(scope === 'step' && row.step_id ? { stepId: row.step_id } : {}),
         type: row.event_type,
         eventCount: Number(row.event_count),
         uniqueSubjectCount: Number(row.unique_subject_count),
       };
+      if (row.scene_id) record = { ...record, sceneId: row.scene_id };
+      if (scope === 'step' && row.step_id) record = { ...record, stepId: row.step_id };
+      return record;
     });
   }
 
@@ -5391,16 +5423,19 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository, D
           [rows.rows.map((row) => row.id), now],
         );
       }
-      return rows.rows.map((row) => ({
-        id: row.id,
-        submissionId: row.submission_id,
-        webhookId: row.webhook_id,
-        status: 'delivering',
-        attempts: row.attempts + 1,
-        nextAttemptAt: iso(row.next_attempt_at),
-        ...(row.last_status === null ? {} : { lastStatus: row.last_status }),
-        ...(row.last_error === null ? {} : { lastError: row.last_error }),
-      }));
+      return rows.rows.map((row) => {
+        let record: WebhookDeliveryRecord = {
+          id: row.id,
+          submissionId: row.submission_id,
+          webhookId: row.webhook_id,
+          status: 'delivering',
+          attempts: row.attempts + 1,
+          nextAttemptAt: iso(row.next_attempt_at),
+        };
+        if (row.last_status !== null) record = { ...record, lastStatus: row.last_status };
+        if (row.last_error !== null) record = { ...record, lastError: row.last_error };
+        return record;
+      });
     });
   }
 
@@ -5423,20 +5458,21 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository, D
     const row = (await this.pool.query<CtaRow>('SELECT * FROM cta_submissions WHERE id=$1', [id]))
       .rows[0];
     if (!row) return undefined;
-    return {
+    let submission: CtaSubmissionRecord = {
       id: row.id,
       workspaceId: row.workspace_id,
       projectId: row.project_id,
       channelId: row.channel_id,
       releaseId: row.release_id,
       sceneId: row.scene_id,
-      ...(row.step_id ? { stepId: row.step_id } : {}),
       ctaId: row.cta_id,
       webhookId: row.webhook_id,
       payloadHash: row.payload_hash,
       encryptedPayload: row.encrypted_payload,
       createdAt: iso(row.created_at),
     };
+    if (row.step_id) submission = { ...submission, stepId: row.step_id };
+    return submission;
   }
 
   async appendAudit(event: AuditEventRecord): Promise<void> {
@@ -5467,18 +5503,21 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository, D
       'SELECT * FROM audit_events WHERE workspace_id=$1 AND sequence>$2 ORDER BY sequence LIMIT $3',
       [workspaceId, afterSequence, limit],
     );
-    return rows.rows.map((row) => ({
-      sequence: Number(row.sequence),
-      id: row.id,
-      ...(row.workspace_id ? { workspaceId: row.workspace_id } : {}),
-      actorId: row.actor_id,
-      action: row.action,
-      targetType: row.target_type,
-      targetId: row.target_id,
-      requestId: row.request_id,
-      ...(row.ip_hash ? { ipHash: row.ip_hash } : {}),
-      metadata: row.metadata_json,
-      createdAt: iso(row.created_at),
-    }));
+    return rows.rows.map((row) => {
+      let event: AuditEventRecord & { sequence: number } = {
+        sequence: Number(row.sequence),
+        id: row.id,
+        actorId: row.actor_id,
+        action: row.action,
+        targetType: row.target_type,
+        targetId: row.target_id,
+        requestId: row.request_id,
+        metadata: row.metadata_json,
+        createdAt: iso(row.created_at),
+      };
+      if (row.workspace_id) event = { ...event, workspaceId: row.workspace_id };
+      if (row.ip_hash) event = { ...event, ipHash: row.ip_hash };
+      return event;
+    });
   }
 }

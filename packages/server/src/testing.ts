@@ -1,5 +1,6 @@
 import {
   ChannelPolicySchema,
+  JsonValueSchema,
   ReleaseSchema,
   ReviewCommentSchema,
   ReviewDecisionSchema,
@@ -56,42 +57,16 @@ import {
   type ControlPlaneRepository,
 } from './repository.js';
 import { canonicalJsonHash } from '@scenebook/core';
+import type { JsonValue } from '@scenebook/schema';
 import { nextScheduleOccurrence, scheduledJobIdentity } from './schedule.js';
 import { normalizeCustomDomainHostname } from './custom-domains.js';
+import { structuredAssetIdentities } from './structured-assets.js';
 
 type ReviewComment = Review['comments'][number];
 type ReviewDecision = Review['decisions'][number];
 
 function clone<T>(value: T): T {
   return structuredClone(value);
-}
-
-function structuredAssetIdentities(value: unknown): readonly {
-  readonly sha256: string;
-  readonly mediaType: string;
-}[] {
-  const values = new Map<string, { sha256: string; mediaType: string }>();
-  const visit = (candidate: unknown): void => {
-    if (!candidate || typeof candidate !== 'object') return;
-    if (Array.isArray(candidate)) {
-      for (const item of candidate) visit(item);
-      return;
-    }
-    const record = candidate as Record<string, unknown>;
-    if (
-      typeof record.sha256 === 'string' &&
-      /^[a-f0-9]{64}$/u.test(record.sha256) &&
-      typeof record.mediaType === 'string'
-    ) {
-      values.set(`${record.sha256}\0${record.mediaType}`, {
-        sha256: record.sha256,
-        mediaType: record.mediaType,
-      });
-    }
-    for (const child of Object.values(record)) visit(child);
-  };
-  visit(value);
-  return [...values.values()];
 }
 
 export class MemoryControlPlaneRepository implements ControlPlaneRepository {
@@ -1578,7 +1553,7 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
     const key = `${input.projectId}\0${input.scene.id}\0${input.revision}`;
     const existing = this.revisions.get(key);
     if (existing) return clone(existing);
-    this.assertLifecycleAssetsActive(input.workspaceId, input.scene, true);
+    this.assertLifecycleAssetsActive(input.workspaceId, JsonValueSchema.parse(input.scene), true);
     const value: SceneRevisionRecord = {
       id: input.id,
       workspaceId: input.workspaceId,
@@ -1771,7 +1746,7 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
       if (!run || run.workspaceId !== workspaceId || run.projectId !== projectId) {
         throw new RepositoryConflictError('Review Run evidence is unavailable');
       }
-      this.assertLifecycleAssetsActive(workspaceId, run.run);
+      this.assertLifecycleAssetsActive(workspaceId, JsonValueSchema.parse(run.run));
     }
     const status =
       normalized.decision === 'approve'
@@ -1830,7 +1805,7 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
 
   private assertLifecycleAssetsActive(
     workspaceId: string,
-    value: unknown,
+    value: JsonValue,
     requireExisting = false,
   ): void {
     for (const asset of structuredAssetIdentities(value)) {
@@ -1846,7 +1821,7 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
   }
 
   async recordVerificationRun(input: VerificationRunRecord): Promise<VerificationRunRecord> {
-    this.assertLifecycleAssetsActive(input.workspaceId, input.run);
+    this.assertLifecycleAssetsActive(input.workspaceId, JsonValueSchema.parse(input.run));
     const recorded = this.recordEvidence('run', this.verificationRuns, input);
     const diagnostic = input.run.attempts.flatMap((attempt) => [
       ...(attempt.trace ? [attempt.trace] : []),
@@ -1920,9 +1895,10 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
   async recordVerificationBaseline(
     input: VerificationBaselineRecord,
   ): Promise<VerificationBaselineRecord> {
-    this.assertLifecycleAssetsActive(input.workspaceId, input.baseline);
+    this.assertLifecycleAssetsActive(input.workspaceId, JsonValueSchema.parse(input.baseline));
     const sourceRun = this.verificationRuns.get(input.sourceRunId);
-    if (sourceRun) this.assertLifecycleAssetsActive(input.workspaceId, sourceRun.run);
+    if (sourceRun)
+      this.assertLifecycleAssetsActive(input.workspaceId, JsonValueSchema.parse(sourceRun.run));
     return this.recordEvidence('baseline', this.verificationBaselines, input);
   }
 
@@ -2794,7 +2770,10 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
     const artifactUploadId = input.promotionEvidence?.artifactUploadId;
     const artifactUpload = artifactUploadId ? this.uploads.get(artifactUploadId) : undefined;
     if (artifactUpload) {
-      this.assertLifecycleAssetsActive(input.workspaceId, artifactUpload.objects);
+      this.assertLifecycleAssetsActive(
+        input.workspaceId,
+        JsonValueSchema.parse(artifactUpload.objects),
+      );
     }
     const current = this.channels.get(input.channelId);
     if (
