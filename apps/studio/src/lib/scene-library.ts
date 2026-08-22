@@ -1,6 +1,7 @@
 import { cloneEditorWorkingScene, cloneScene, defaultStep } from './model';
 import type { EditorScene, RunStatus } from './model';
 import { createLocalMediaUrl, getLocalMediaBlob, revokeLocalMediaUrl } from './local-media';
+import { readHostedWorkspace } from './hosted-workspace';
 import type { Project, ReviewChange } from '@scenebook/schema';
 import { attachEvidenceToScene, runEvidenceStatus, type EvidenceImportCandidate } from './evidence';
 
@@ -561,6 +562,17 @@ function versionSummary(envelope: StoredSceneEnvelope): SceneVersionSummary {
   };
 }
 
+export function summarizeStoredSceneVersion(value: unknown): SceneVersionSummary {
+  const envelope = readStoredEnvelope(value);
+  if (!envelope) {
+    throw new SceneStorageError(
+      'Saved revision data is invalid. Studio left it untouched for recovery.',
+      'read',
+    );
+  }
+  return versionSummary(envelope);
+}
+
 function createPayloadObjectUrl(payload: ScenePayloadRecord): string {
   if (typeof URL?.createObjectURL !== 'function') {
     throw new SceneStorageError(
@@ -807,10 +819,10 @@ async function extractPayload(
       representation: 'binary-data-uri',
     };
   }
-  if (isRemoteUrl(value) || !allowPlainText) return null;
+  if (isRemoteUrl(value) || !allowPlainText || value.length === 0) return null;
   return {
     bytes: exactArrayBuffer(new TextEncoder().encode(value)),
-    mediaType: 'text/plain;charset=utf-8',
+    mediaType: 'text/plain',
     representation: 'utf8',
   };
 }
@@ -2651,7 +2663,59 @@ export class SceneLibrary {
   }
 }
 
+class ConfiguredSceneStorage implements SceneStorageBackend {
+  #storage: Promise<SceneStorageBackend> | undefined;
+
+  #resolve(): Promise<SceneStorageBackend> {
+    if (this.#storage) return this.#storage;
+    const hosted = Boolean(readHostedWorkspace());
+    this.#storage = hosted
+      ? import('./hosted-scene-storage').then(({ HostedSceneStorage }) => new HostedSceneStorage())
+      : Promise.resolve(new IndexedDbSceneStorage());
+    return this.#storage;
+  }
+
+  async get(id: string): Promise<StoredSceneRecord | null> {
+    return (await this.#resolve()).get(id);
+  }
+
+  async listSummaryPage(request?: ScenePageRequest): Promise<ScenePage<SceneSummary>> {
+    return (await this.#resolve()).listSummaryPage(request);
+  }
+
+  async put(record: StoredSceneRecord, expectedRevision: number): Promise<void> {
+    return (await this.#resolve()).put(record, expectedRevision);
+  }
+
+  async putBatch(writes: readonly SceneBatchWrite[], project?: StoredProjectRecord): Promise<void> {
+    return (await this.#resolve()).putBatch(writes, project);
+  }
+
+  async delete(id: string): Promise<void> {
+    return (await this.#resolve()).delete(id);
+  }
+
+  async listVersionSummaries(
+    id: string,
+    request?: ScenePageRequest,
+  ): Promise<ScenePage<SceneVersionSummary>> {
+    return (await this.#resolve()).listVersionSummaries(id, request);
+  }
+
+  async getVersion(id: string, revision: number): Promise<StoredSceneRecord | null> {
+    return (await this.#resolve()).getVersion(id, revision);
+  }
+
+  async getProject(id: string): Promise<StoredProjectRecord | null> {
+    return (await this.#resolve()).getProject(id);
+  }
+
+  async putProject(record: StoredProjectRecord): Promise<void> {
+    return (await this.#resolve()).putProject(record);
+  }
+}
+
 export const studioSceneLibrary = new SceneLibrary(
-  new IndexedDbSceneStorage(),
+  new ConfiguredSceneStorage(),
   new LocalStorageRecoveryJournal(),
 );

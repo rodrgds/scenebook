@@ -4,6 +4,7 @@
   import { ProjectSchema, type Project } from '@scenebook/schema';
 
   import AppShell from '$lib/components/AppShell.svelte';
+  import HostedWorkspaceSettings from '$lib/components/HostedWorkspaceSettings.svelte';
   import Icon from '$lib/components/Icon.svelte';
   import {
     effectiveLocalProject,
@@ -18,6 +19,7 @@
     type LoadedScene,
     type SceneSummary,
   } from '$lib/scene-library';
+  import { readHostedWorkspace } from '$lib/hosted-workspace';
 
   let scenes = $state<SceneSummary[]>([]);
   let draft = $state<Project | null>(null);
@@ -33,6 +35,7 @@
   let action = $state<'save' | 'yaml' | 'zip' | null>(null);
   let status = $state('');
   let error = $state('');
+  const hostedWorkspace = readHostedWorkspace();
 
   async function loadSettings() {
     loadState = 'loading';
@@ -100,7 +103,9 @@
       draft = structuredClone(valid);
       saved = structuredClone(valid);
       dirty = false;
-      status = 'Project settings saved to this browser.';
+      status = hostedWorkspace
+        ? 'Project settings saved to the self-hosted workspace.'
+        : 'Project settings saved to this browser.';
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Project settings could not be saved.';
     } finally {
@@ -173,7 +178,6 @@
     <header class="surface-header">
       <div>
         <h1>Project settings</h1>
-        <p>Manage project details, publishing defaults, privacy, and portable backups.</p>
       </div>
       <div class="surface-actions">
         {#if dirty}<button class="button" type="button" onclick={discardSettings}>Discard</button
@@ -193,12 +197,14 @@
         <Icon name="check" size={14} />{status}
       </p>{/if}
 
+    <HostedWorkspaceSettings />
+
     {#if loadState === 'loading'}
       <div class="surface-state" aria-busy="true">
         <Icon name="clock" />
         <div>
           <strong>Reading project settings…</strong><small
-            >Loading the active local project record.</small
+            >Loading the active {hostedWorkspace ? 'self-hosted' : 'local'} project record.</small
           >
         </div>
       </div>
@@ -267,13 +273,13 @@
             </div>
           </section>
 
-          <section class="surface-card settings-section" aria-labelledby="distribution-title">
-            <header>
+          <details class="surface-card settings-section" aria-labelledby="distribution-title">
+            <summary>
               <div>
                 <h2 id="distribution-title">Publishing</h2>
               </div>
               <span class="status-chip local">telemetry off unless configured</span>
-            </header>
+            </summary>
             <div class="toggle-list">
               <label
                 ><span
@@ -341,15 +347,15 @@
                 </div>
               </dl>
             {/if}
-          </section>
+          </details>
 
-          <section class="surface-card settings-section" aria-labelledby="privacy-title">
-            <header>
+          <details class="surface-card settings-section" aria-labelledby="privacy-title">
+            <summary>
               <div>
                 <h2 id="privacy-title">Privacy</h2>
               </div>
               <Icon name="lock" size={17} />
-            </header>
+            </summary>
             <p class="section-note">
               These defaults guide readiness checks. The release pipeline still performs the
               required scan and OCR checks.
@@ -389,13 +395,12 @@
                 /></label
               >
             </div>
-          </section>
+          </details>
         </div>
 
         <aside class="settings-aside">
           <section class="surface-card export-card">
             <h2>Project data</h2>
-            <p>Import source, download configuration, or back up all local scenes and assets.</p>
             <a class="button" href="/settings?action=import"
               ><Icon name="download" size={14} />Import project</a
             ><button class="button" type="button" disabled={Boolean(action)} onclick={exportYaml}
@@ -492,7 +497,8 @@
   .settings-section {
     overflow: hidden;
   }
-  .settings-section > header {
+  .settings-section > header,
+  .settings-section > summary {
     align-items: center;
     border-bottom: 1px solid var(--line);
     display: flex;
@@ -501,7 +507,18 @@
     justify-content: space-between;
     padding: 16px 19px;
   }
-  .settings-section > header .status-chip {
+  .settings-section > summary {
+    cursor: pointer;
+    list-style: none;
+    min-height: 56px;
+  }
+  .settings-section > summary::-webkit-details-marker {
+    display: none;
+  }
+  .settings-section:not([open]) > summary {
+    border-bottom: 0;
+  }
+  .settings-section > summary .status-chip {
     max-width: 100%;
     white-space: normal;
   }
@@ -615,7 +632,6 @@
     gap: 11px;
     padding: 17px;
   }
-  .export-card p,
   .inventory-card p {
     color: var(--muted);
     font-size: 0.8rem;

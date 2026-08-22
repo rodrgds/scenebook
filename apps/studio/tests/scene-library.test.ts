@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { demoScene } from '../src/lib/demo';
+import { HostedSceneStorage } from '../src/lib/hosted-scene-storage';
+import { HOSTED_SESSION_KEY, openHostedSession } from '../src/lib/hosted-workspace';
 import { cloneScene } from '../src/lib/model';
 import {
   LocalStorageRecoveryJournal,
@@ -301,6 +303,238 @@ describe('content-addressed Scene payload codec', () => {
     });
     expect(hydrated.scene.steps[0]!.masks[0]!.locator).toBeUndefined();
     expect(resolver).not.toHaveBeenCalled();
+  });
+});
+
+describe('hosted Scene storage', () => {
+  it('opens a short session and fetches only the Project bound to the source token', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), 'https://studio.example.test');
+      if (url.pathname === '/v1/auth/sessions') {
+        expect(new Headers(init?.headers).get('authorization')).toBe('Bearer personal-token');
+        return Response.json({ credential: 'session-credential'.padEnd(64, 's') }, { status: 201 });
+      }
+      expect(new Headers(init?.headers).get('authorization')).toMatch(/^Bearer session-/u);
+      if (url.pathname === '/v1/auth/me') {
+        return Response.json({
+          user: { displayName: 'Workspace owner' },
+          principal: {
+            workspaceId: 'workspace-1',
+            projectId: 'project-1',
+            scopes: ['workspace:read', 'project:read', 'project:write'],
+          },
+          membership: { role: 'owner' },
+        });
+      }
+      if (url.pathname.endsWith('/projects/project-1')) {
+        return Response.json({ project: { id: 'project-1', name: 'Product', slug: 'product' } });
+      }
+      if (url.pathname.endsWith('/workspaces/workspace-1')) {
+        return Response.json({ workspace: { name: 'Acme' } });
+      }
+      return new Response(null, { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(openHostedSession(' personal-token ')).resolves.toEqual({
+      workspaceId: 'workspace-1',
+      workspaceName: 'Acme',
+      userName: 'Workspace owner',
+      projects: [{ id: 'project-1', name: 'Product', slug: 'product' }],
+    });
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('/projects?'))).toBe(false);
+    expect(sessionStorage.getItem(HOSTED_SESSION_KEY)).toMatch(/^session-/u);
+
+    vi.unstubAllGlobals();
+    sessionStorage.removeItem(HOSTED_SESSION_KEY);
+  });
+
+  it('uploads compact immutable payloads before saving and hydrates them through private APIs', async () => {
+    sessionStorage.setItem(HOSTED_SESSION_KEY, 'session-credential'.padEnd(64, 's'));
+    let stored: unknown;
+    const assets = new Map<string, Uint8Array>();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), 'https://studio.example.test');
+      expect(new Headers(init?.headers).get('authorization')).toMatch(/^Bearer /u);
+      if (url.pathname.includes('/studio/assets/') && init?.method === 'PUT') {
+        const bytes = new Uint8Array(await new Response(init.body).arrayBuffer());
+        assets.set(url.pathname, bytes);
+        return Response.json({ asset: { byteLength: bytes.byteLength } });
+      }
+      if (url.pathname.endsWith('/studio/scenes') && init?.method === 'PUT') {
+        const body = JSON.parse(String(init.body)) as {
+          writes: Array<{ record: unknown }>;
+        };
+        stored = body.writes[0]!.record;
+        return Response.json({ records: [{ id: 'hosted-scene', revision: 1 }] });
+      }
+      if (url.pathname.endsWith('/studio/scenes/hosted-scene')) {
+        return stored ? Response.json({ record: stored }) : new Response(null, { status: 404 });
+      }
+      if (url.pathname.includes('/studio/assets/')) {
+        const bytes = assets.get(url.pathname);
+        return bytes
+          ? new Response(bytes.slice().buffer as ArrayBuffer, {
+              headers: { 'content-type': 'image/png' },
+            })
+          : new Response(null, { status: 404 });
+      }
+      return new Response(null, { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const storage = new HostedSceneStorage({
+      workspaceId: 'workspace-1',
+      workspaceName: 'Acme',
+      projectId: 'project-1',
+      projectName: 'Product',
+    });
+    const scene = createBlankScene('hosted-scene', 'Hosted scene');
+    scene.steps[0]!.image =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+XwO0GQAAAABJRU5ErkJggg==';
+    await storage.put({ id: scene.id, scene, revision: 1, savedAt: 100 }, 0);
+
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('/studio/assets/'))).toBe(
+      true,
+    );
+    expect(JSON.stringify(stored)).not.toContain('data:image/png');
+    const loaded = await storage.get(scene.id);
+    expect(loaded?.scene.steps[0]!.image).toMatch(/^blob:/u);
+    releaseLocalMediaUrls(loaded);
+    vi.unstubAllGlobals();
+    sessionStorage.removeItem(HOSTED_SESSION_KEY);
+  });
+
+  it('never sends raw screenshot bytes when an opaque privacy mask is authored', async () => {
+    sessionStorage.setItem(HOSTED_SESSION_KEY, 'session-credential'.padEnd(64, 's'));
+    const canary = 'RAW_HOSTED_PRIVACY_CANARY';
+    const sourceBytes = new TextEncoder().encode(canary);
+    const safeBytes = Uint8Array.from(
+      atob(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+XwO0GQAAAABJRU5ErkJggg==',
+      ),
+      (value) => value.charCodeAt(0),
+    );
+    let flattened: Blob | null = null;
+    const uploaded: Uint8Array[] = [];
+    let savedJson = '';
+    const createElementSource = document.createElement.bind(document);
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      flattened = blob instanceof Blob ? blob : null;
+      return 'blob:privacy-safe-screenshot';
+    });
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const createElement = vi.spyOn(document, 'createElement').mockImplementation(((
+      name: string,
+    ) => {
+      if (name !== 'canvas') return createElementSource(name);
+      const context = {
+        drawImage: vi.fn(),
+        fillRect: vi.fn(),
+        fillStyle: '',
+      };
+      return {
+        width: 0,
+        height: 0,
+        getContext: () => context,
+        toBlob: (callback: BlobCallback) =>
+          callback(new Blob([safeBytes.slice().buffer as ArrayBuffer], { type: 'image/png' })),
+      } as unknown as HTMLCanvasElement;
+    }) as typeof document.createElement);
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn(async (blob: Blob) => {
+        expect(await blob.text()).toBe(canary);
+        return { width: 1, height: 1, close: vi.fn() } as unknown as ImageBitmap;
+      }),
+    );
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const source = String(input);
+      if (source.startsWith('data:image/png')) {
+        return new Response(sourceBytes.slice().buffer as ArrayBuffer, {
+          headers: { 'content-type': 'image/png' },
+        });
+      }
+      if (source === 'blob:privacy-safe-screenshot') {
+        return new Response(await flattened!.arrayBuffer(), {
+          headers: { 'content-type': 'image/png' },
+        });
+      }
+      const url = new URL(source, 'https://studio.example.test');
+      if (url.pathname.includes('/studio/assets/') && init?.method === 'PUT') {
+        const bytes = new Uint8Array(await new Response(init.body).arrayBuffer());
+        uploaded.push(bytes);
+        return Response.json({ asset: { byteLength: bytes.byteLength } });
+      }
+      if (url.pathname.endsWith('/studio/scenes') && init?.method === 'PUT') {
+        savedJson = String(init.body);
+        return Response.json({ records: [{ id: 'privacy-scene', revision: 1 }] });
+      }
+      return new Response(null, { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const storage = new HostedSceneStorage({
+      workspaceId: 'workspace-1',
+      workspaceName: 'Acme',
+      projectId: 'project-1',
+      projectName: 'Product',
+    });
+    const scene = createBlankScene('privacy-scene', 'Privacy scene');
+    scene.steps[0]!.image = `data:image/png;base64,${btoa(canary)}`;
+    scene.steps[0]!.masks = [
+      {
+        id: 'secret-mask',
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+        mode: 'opaque',
+        source: 'manual',
+        scope: 'both',
+        classification: 'token',
+      },
+    ];
+    const rawAsset = (path: string) => ({
+      sha256: 'f'.repeat(64),
+      path,
+      mediaType: 'image/png',
+      byteLength: sourceBytes.byteLength,
+      role: 'screenshot' as const,
+    });
+    scene.portableAssets = {
+      'assets/raw-before.png': scene.steps[0]!.image,
+      'assets/raw-after.png': scene.steps[0]!.image,
+    };
+    scene.portableSource = {
+      assets: [rawAsset('assets/raw-before.png'), rawAsset('assets/raw-after.png')],
+      steps: [
+        {
+          id: scene.steps[0]!.id,
+          presentation: { state: 'before' },
+          states: {
+            before: { screenshot: rawAsset('assets/raw-before.png') },
+            after: { screenshot: rawAsset('assets/raw-after.png') },
+          },
+        },
+      ],
+    } as never;
+
+    await storage.put({ id: scene.id, scene, revision: 1, savedAt: 100 }, 0);
+
+    const uploadedText = uploaded.map((bytes) => new TextDecoder().decode(bytes)).join('');
+    expect(uploadedText).not.toContain(canary);
+    expect(savedJson).not.toContain(canary);
+    expect(savedJson).not.toContain('data:image/png');
+    expect(savedJson).not.toContain('assets/raw-before.png');
+    expect(savedJson).not.toContain('assets/raw-after.png');
+    expect(
+      uploaded.some((bytes) => bytes.every((value, index) => value === safeBytes[index])),
+    ).toBe(true);
+
+    createObjectUrl.mockRestore();
+    revokeObjectUrl.mockRestore();
+    createElement.mockRestore();
+    vi.unstubAllGlobals();
+    sessionStorage.removeItem(HOSTED_SESSION_KEY);
   });
 });
 
