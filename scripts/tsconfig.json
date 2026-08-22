@@ -5,6 +5,10 @@
     "types": ["bun", "vitest/globals"]
   },
   "include": [
+    "agent-context.ts",
+    "agent-tools.test.ts",
+    "agent-tools.ts",
+    "check-ui.ts",
     "publish-release.ts",
     "release-packages.ts",
     "release.test.ts",

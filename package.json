@@ -19,8 +19,10 @@
     "examples/*"
   ],
   "scripts": {
+    "agent:context": "bun scripts/agent-context.ts",
     "build": "turbo run build",
     "check": "turbo run check && tsc -p scripts/tsconfig.json",
+    "check:ui": "bun scripts/check-ui.ts",
     "changeset": "changeset",
     "dev": "turbo run dev --filter=@scenebook/studio",
     "example:seed": "bun scripts/build-example-scene.ts",
