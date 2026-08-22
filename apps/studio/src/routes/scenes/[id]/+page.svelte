@@ -265,9 +265,8 @@
         <div class="title-row">
           <h1>{scene.title}</h1>
           {#if scene.sample}
-            <span class="sample-badge"><Icon name="warning" size={12} />Synthetic sample</span>
-          {/if}
-          {#if scene.portableSource?.capability === 'verified'}
+            <span class="sample-badge"><Icon name="warning" size={12} />Sample</span>
+          {:else if scene.portableSource?.capability === 'verified'}
             <span class="capability"><Icon name="check" size={12} />Verified source</span>
           {:else if scene.portableSource?.capability === 'monitored'}
             <span class="capability"><Icon name="clock" size={12} />Monitored source</span>
@@ -275,7 +274,6 @@
             <span class="capability"><Icon name="edit" size={12} />Captured source</span>
           {/if}
         </div>
-        <p>{scene.description || 'No description yet.'}</p>
       </div>
       <div class="scene-actions">
         <button
@@ -469,8 +467,8 @@
     display: grid;
     gap: 22px;
     grid-template-columns: minmax(280px, 1fr) auto;
-    min-height: 86px;
-    padding: 12px 18px;
+    min-height: 72px;
+    padding: 9px 18px;
   }
   .scene-identity nav {
     align-items: center;
@@ -496,11 +494,6 @@
     font-size: 1.2rem;
     letter-spacing: -0.03em;
     margin: 0 5px 0 0;
-  }
-  .scene-identity > p {
-    color: var(--muted);
-    font-size: 0.75rem;
-    margin: 3px 0 0;
   }
   .capability,
   .sample-badge {
@@ -670,9 +663,6 @@
       align-items: start;
       grid-template-columns: 1fr;
       padding: 10px 12px;
-    }
-    .scene-identity > p {
-      display: none;
     }
     .scene-actions {
       display: flex;

@@ -37,6 +37,7 @@ const styles = String.raw`
     background: var(--sb-paper);
     border: 1px solid var(--sb-line);
     border-radius: var(--sb-radius);
+    container-type: inline-size;
     overflow: clip;
   }
   .topline {
@@ -59,6 +60,7 @@ const styles = String.raw`
   .stage {
     aspect-ratio: 16 / 10;
     background: #24221f;
+    container-type: inline-size;
     display: grid;
     margin: 0;
     overflow: hidden;
@@ -81,7 +83,7 @@ const styles = String.raw`
   .media-overlays { inset: 0; overflow: hidden; pointer-events: none; position: absolute; }
   .mask { background: #191816; border: 1px solid rgba(255,255,255,.25); border-radius: 4px; position: absolute; }
   .mask.blur { backdrop-filter: blur(16px); background: rgba(25,24,22,.08); }
-  .annotation { align-items:center; background: var(--sb-surface); border: 1px solid var(--sb-line); border-radius: 9px; display:flex; font-size: 12px; font-weight: 600; justify-content:center; overflow:hidden; padding: 8px 10px; position: absolute; }
+  .annotation { align-items:center; background: var(--sb-surface); border: 1px solid var(--sb-line); border-radius: 9px; display:flex; font-size:clamp(8px,1.45cqw,12px); font-weight:600; justify-content:center; line-height:1.15; min-width:0; overflow:hidden; overflow-wrap:anywhere; padding:clamp(4px,1.1cqw,8px) clamp(5px,1.35cqw,10px); position:absolute; text-align:center; z-index:2; }
   .annotation.spotlight { background: transparent; border: 3px solid var(--annotation-color,var(--sb-accent)); border-radius: 50%; box-shadow: 0 0 0 999px rgba(0,0,0,.32); color: transparent; padding: 0; }
   .annotation-arrow { height:100%; inset:0; overflow:visible; pointer-events:none; position:absolute; width:100%; }
   .annotation-arrow line { stroke-linecap:round; stroke-width:.8; }
@@ -109,6 +111,9 @@ const styles = String.raw`
     pointer-events: auto;
   }
   .hotspot::before { background: var(--sb-accent); border-radius: 50%; content: ""; height: 12px; margin: 0 14px; width: 12px; }
+  .hotspot.with-cursor { background:transparent; border-color:transparent; box-shadow:none; }
+  .hotspot.with-cursor::before { display:none; }
+  .hotspot.with-cursor:focus-visible { background:var(--sb-surface); border-color:var(--sb-accent); }
   .hotspot-label { background: var(--sb-ink); border-radius: 8px; color: var(--sb-on-ink); font-size: 12px; font-weight: 650; left: 50%; max-width: min(220px, 70vw); max-width: min(220px, 70cqw); overflow-wrap: anywhere; padding: 7px 9px; pointer-events: none; position: absolute; text-align: center; top: calc(100% + 12px); transform: translateX(-50%); white-space: normal; width: max-content; }
   .hotspot.label-left .hotspot-label { left: 50%; transform: none; }
   .hotspot.label-right .hotspot-label { left: auto; right: 50%; transform: none; }
@@ -121,7 +126,9 @@ const styles = String.raw`
   .step-meta { color: var(--sb-muted); font-size: 12px; font-weight: 650; }
   h2 { font-size: 22px; letter-spacing: -.02em; line-height: 1.2; margin: 0; text-wrap: balance; }
   .instruction { color: var(--sb-muted); font-size: 14px; margin: 0; max-width: 68ch; }
-  .choice-card, .end-card { align-content: center; background: var(--sb-ink); color: var(--sb-on-ink); display: grid; gap: 18px; height: 100%; overflow: auto; overscroll-behavior: contain; padding: clamp(28px, 8vw, 84px); width: 100%; }
+  .choice-card, .end-card { align-content:safe center; background:var(--sb-ink); color:var(--sb-on-ink); display:grid; gap:clamp(12px,2.4cqw,22px); height:100%; overflow:auto; overscroll-behavior:contain; padding:clamp(20px,6cqw,64px); width:100%; }
+  .choice-card > *, .end-card > * { min-width:0; }
+  .choice-card h2, .end-card h2 { font-size:clamp(24px,4.5cqw,52px); letter-spacing:-.035em; line-height:1.04; max-width:19ch; overflow-wrap:anywhere; }
   .choice-card p, .end-card p { color: color-mix(in srgb, var(--sb-on-ink) 76%, transparent); margin: 0; max-width: 58ch; }
   .choice-list, .cta-list { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
   .comparison { display:grid; grid-template-columns:1fr 1fr; height:100%; width:100%; }
@@ -158,17 +165,23 @@ const styles = String.raw`
   .transcript button { align-items: baseline; background: transparent; border: 0; border-radius: 7px; color: var(--sb-muted); cursor: pointer; display: grid; gap: 10px; grid-template-columns: 24px 1fr; min-height: 44px; padding: 9px; text-align: start; width: 100%; }
   .transcript button[aria-current="step"] { background: var(--sb-accent-soft); color: var(--sb-ink); }
   .step-number { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; }
-  .empty { background: var(--sb-paper); border: 1px dashed var(--sb-line); border-radius: var(--sb-radius); color: var(--sb-muted); padding: 40px; text-align: center; }
+  .empty, .asset-fallback { background:var(--sb-paper); color:var(--sb-muted); padding:clamp(24px,6cqw,48px); text-align:center; }
+  .empty { border:1px dashed var(--sb-line); border-radius:var(--sb-radius); }
+  .asset-fallback { align-content:center; display:grid; gap:4px; height:100%; inset:0; position:absolute; }
+  .asset-fallback strong { color:var(--sb-ink); font-size:14px; }
+  .asset-fallback span { font-size:12px; }
   .sr-only { height: 1px; margin: -1px; overflow: hidden; padding: 0; position: absolute; width: 1px; clip: rect(0,0,0,0); white-space: nowrap; }
-  @media (max-width: 620px) {
+  @container (max-width: 620px) {
     .topline { min-height: 46px; }
     .provenance code { max-width: 28ch; }
     .stage { aspect-ratio: 4 / 3; }
+    .stage.interstitial-stage { aspect-ratio: 2 / 3; }
     .copy { padding: 14px 16px; }
     .controls { grid-template-columns: 1fr auto; }
     .progress { grid-column: 1 / -1; grid-row: 1; }
-    .nav { grid-row: 2; }
-    .nav:last-child { justify-self: end; }
+    .nav { grid-row: 2; min-width: 0; }
+    .nav:first-child { grid-column: 1; }
+    .nav:last-child { grid-column: 2; justify-self: end; }
     .control .label { display: none; }
     .choice-card, .end-card { align-content: start; padding: 24px 18px; }
     h2 { font-size: 20px; }
@@ -839,7 +852,7 @@ export class ScenebookPlayerElement extends HTMLElement {
           </button>`,
         )
         .join('');
-      return `<section class="stage"><div class="choice-card"><div><span class="step-meta">Choose a path</span><h2>${escapeHtml(step.title)}</h2></div>${step.instruction || step.caption ? `<p>${escapeHtml(step.instruction ?? step.caption ?? '')}</p>` : ''}<div class="choice-list">${choices}</div></div></section>`;
+      return `<section class="stage interstitial-stage"><div class="choice-card"><div><span class="step-meta">Choose a path</span><h2>${escapeHtml(step.title)}</h2></div>${step.instruction || step.caption ? `<p>${escapeHtml(step.instruction ?? step.caption ?? '')}</p>` : ''}<div class="choice-list">${choices}</div></div></section>`;
     }
 
     if (step.type === 'end' || step.type === 'intro' || step.type === 'separator') {
@@ -864,7 +877,7 @@ export class ScenebookPlayerElement extends HTMLElement {
             : `<button class="${classes}" type="button" data-cta="${escapeHtml(cta.id)}" data-focus-key="cta:${escapeHtml(cta.id)}">${escapeHtml(cta.label)}</button>`;
         })
         .join('');
-      return `<section class="stage"><div class="end-card"><span class="step-meta">${step.type === 'end' ? 'Complete' : 'Chapter'}</span><h2>${escapeHtml(step.title)}</h2>${step.instruction || step.caption ? `<p>${escapeHtml(step.instruction ?? step.caption ?? '')}</p>` : ''}${ctas ? `<div class="cta-list">${ctas}</div>` : ''}</div></section>`;
+      return `<section class="stage interstitial-stage"><div class="end-card"><span class="step-meta">${step.type === 'end' ? 'Complete' : 'Chapter'}</span><h2>${escapeHtml(step.title)}</h2>${step.instruction || step.caption ? `<p>${escapeHtml(step.instruction ?? step.caption ?? '')}</p>` : ''}${ctas ? `<div class="cta-list">${ctas}</div>` : ''}</div></section>`;
     }
 
     const crop = effectiveCrop(step.crop);
@@ -905,6 +918,7 @@ export class ScenebookPlayerElement extends HTMLElement {
           : '';
       })
       .join('');
+    const cursorPoint = step.cursor?.visible ? mapPointToCrop(step.cursor, crop) : undefined;
     let hotspot = '';
     if (step.hotspot) {
       const width = Math.max(0, Math.min(1, step.hotspot.width ?? 0));
@@ -925,26 +939,28 @@ export class ScenebookPlayerElement extends HTMLElement {
         ? { x: mappedRect.x + mappedRect.width / 2, y: mappedRect.y + mappedRect.height / 2 }
         : mapPointToCrop(step.hotspot, crop);
       if (point) {
+        const sharesCursor = Boolean(
+          cursorPoint && Math.hypot(point.x - cursorPoint.x, point.y - cursorPoint.y) <= 0.08,
+        );
         const labelPosition = [
           point.x <= 0.35 ? 'label-left' : point.x >= 0.65 ? 'label-right' : '',
           point.y >= 0.65 ? 'label-above' : '',
         ]
           .filter(Boolean)
           .join(' ');
-        hotspot = `<button class="hotspot${labelPosition ? ` ${labelPosition}` : ''}" type="button" data-hotspot-next data-focus-key="hotspot" aria-label="${escapeHtml(step.hotspot.label)}" style="left:${percent(point.x, 0.5)};top:${percent(point.y, 0.5)}"><span class="hotspot-label">${escapeHtml(step.hotspot.label)}</span></button>`;
+        hotspot = `<button class="hotspot${sharesCursor ? ' with-cursor' : ''}${labelPosition ? ` ${labelPosition}` : ''}" type="button" data-hotspot-next data-focus-key="hotspot" aria-label="${escapeHtml(step.hotspot.label)}" style="left:${percent(point.x, 0.5)};top:${percent(point.y, 0.5)}"><span class="hotspot-label">${escapeHtml(step.hotspot.label)}</span></button>`;
       }
     }
-    const cursorPoint = step.cursor?.visible ? mapPointToCrop(step.cursor, crop) : undefined;
     const cursor = cursorPoint
       ? `<span class="cursor${step.cursor?.click ? ' click' : ''} ${escapeHtml(step.cursor?.style ?? 'default')}" aria-hidden="true" style="left:${percent(cursorPoint.x)};top:${percent(cursorPoint.y)};--sb-click-delay:${Math.max(0, step.cursor?.clickAtMs ?? 0)}ms"><svg viewBox="0 0 24 32" focusable="false"><path d="M2 2v24l6-6 4 10 5-2-4-9h8z" fill="white" stroke="#171512" stroke-width="2" stroke-linejoin="round"/></svg></span>`
       : '';
     const imageSource = safeImageSource(step.image, this.ownerDocument.baseURI);
     const secondaryImageSource = safeImageSource(step.secondaryImage, this.ownerDocument.baseURI);
     const image = imageSource
-      ? `<div class="image-plane" style="left:${planePercent(-crop.x / crop.width)};top:${planePercent(-crop.y / crop.height)};width:${planePercent(1 / crop.width)};height:${planePercent(1 / crop.height)}"><img src="${escapeHtml(imageSource)}" alt="${escapeHtml(step.alt ?? '')}" draggable="false"></div>`
-      : '<div class="empty">No screenshot for this step.</div>';
+      ? `<div class="image-plane" style="left:${planePercent(-crop.x / crop.width)};top:${planePercent(-crop.y / crop.height)};width:${planePercent(1 / crop.width)};height:${planePercent(1 / crop.height)}"><img data-presentation-image src="${escapeHtml(imageSource)}" alt="${escapeHtml(step.alt ?? '')}" draggable="false"></div>`
+      : '<div class="asset-fallback" role="status"><strong>Screenshot unavailable</strong><span>This step remains available in the transcript.</span></div>';
     const media = secondaryImageSource
-      ? `<div class="comparison">${image}<div class="image-plane"><img src="${escapeHtml(secondaryImageSource)}" alt="${escapeHtml(`${step.alt ?? step.title} after`)}" draggable="false"></div></div>`
+      ? `<div class="comparison">${image}<div class="image-plane"><img data-presentation-image src="${escapeHtml(secondaryImageSource)}" alt="${escapeHtml(`${step.alt ?? step.title} after`)}" draggable="false"></div></div>`
       : image;
     const chrome =
       frame === 'browser'
@@ -981,6 +997,28 @@ export class ScenebookPlayerElement extends HTMLElement {
     });
     if (frames.length < 2 || typeof element.animate !== 'function') return;
     element.animate(frames, { duration, easing: 'linear', fill: 'forwards' });
+  }
+
+  #bindImageFallbacks(step: PlayerStep): void {
+    this.#root.querySelectorAll<HTMLImageElement>('[data-presentation-image]').forEach((image) => {
+      image.addEventListener(
+        'error',
+        () => {
+          const viewport = image.closest<HTMLElement>('.media-viewport');
+          if (!viewport || viewport.querySelector('.asset-fallback')) return;
+          const fallback = this.ownerDocument.createElement('div');
+          fallback.className = 'asset-fallback';
+          fallback.setAttribute('role', 'status');
+          const title = this.ownerDocument.createElement('strong');
+          title.textContent = 'Screenshot unavailable';
+          const detail = this.ownerDocument.createElement('span');
+          detail.textContent = `The visual for “${step.title}” could not be loaded.`;
+          fallback.append(title, detail);
+          viewport.replaceChildren(fallback);
+        },
+        { once: true },
+      );
+    });
   }
 
   #activeFocusKey(): string | null {
@@ -1108,6 +1146,7 @@ export class ScenebookPlayerElement extends HTMLElement {
         if (cta) void this.#submitCtaForm(form, step, cta);
       }),
     );
+    this.#bindImageFallbacks(step);
     this.#animateCursor(step);
     this.#schedule(step);
   }

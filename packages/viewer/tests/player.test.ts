@@ -72,11 +72,13 @@ describe('player runtime state', () => {
       completions.push((event as CustomEvent<Record<string, unknown>>).detail),
     );
 
+    expect(element.shadowRoot!.querySelector('.stage.interstitial-stage')).toBeTruthy();
     element.shadowRoot!.querySelector<HTMLButtonElement>('[data-choice="finish"]')!.click();
 
     expect(element.scene).toBe(target);
     expect(element.currentStep).toBe(0);
     expect(element.getAttribute('step')).toBe('target-end');
+    expect(element.shadowRoot!.querySelector('.stage.interstitial-stage')).toBeTruthy();
     expect(stepChanges).toEqual([
       expect.objectContaining({
         sceneId: 'target',

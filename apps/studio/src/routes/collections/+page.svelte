@@ -253,7 +253,6 @@
     <header class="surface-header">
       <div>
         <h1>Collections</h1>
-        <p>Group scenes into ordered paths for publishing.</p>
       </div>
       <div class="surface-actions">
         {#if dirty}<button class="button" type="button" onclick={discardChanges}>Discard</button
@@ -286,9 +285,7 @@
       <div class="surface-state" aria-busy="true">
         <Icon name="clock" />
         <div>
-          <strong>Reading collections…</strong><small
-            >Loading project configuration and local scene identities.</small
-          >
+          <strong>Reading collections…</strong>
         </div>
       </div>
     {:else if loadState === 'error'}

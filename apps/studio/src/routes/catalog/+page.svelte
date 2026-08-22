@@ -71,7 +71,6 @@
     <header class="surface-header catalog-header">
       <div>
         <h1>Scenes</h1>
-        <p>Create, review, and organize your product walkthroughs.</p>
       </div>
       <div class="header-actions">
         <button
@@ -119,12 +118,6 @@
     display: flex;
     gap: 24px;
     justify-content: space-between;
-  }
-  .catalog-header p {
-    color: var(--muted);
-    font-size: 0.9rem;
-    line-height: 1.45;
-    margin: 0;
   }
   .header-actions {
     display: flex;

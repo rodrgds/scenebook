@@ -9,12 +9,6 @@
   let overviewState = $state<'loading' | 'ready' | 'error'>('loading');
   let error = $state('');
 
-  let verifiedSourceCount = $derived(
-    scenes.filter((scene) => scene.capability === 'verified').length,
-  );
-  let passedRunCount = $derived(scenes.filter((scene) => scene.runStatus === 'passed').length);
-  let stepCount = $derived(scenes.reduce((total, scene) => total + scene.stepCount, 0));
-
   async function loadOverview() {
     overviewState = 'loading';
     error = '';
@@ -38,84 +32,55 @@
 <AppShell active="home">
   <div class="home-page">
     <header class="welcome">
-      <div>
-        <h1>Your product journeys</h1>
-        <p>Document complete outcomes, verify them in the product, and publish what is ready.</p>
-      </div>
+      <h1>Your product journeys</h1>
     </header>
 
-    <section
-      class="workspace-summary"
-      class:error-state={overviewState === 'error'}
-      aria-live="polite"
-    >
-      {#if overviewState === 'loading'}
-        <Icon name="clock" size={18} />
-        <div><strong>Loading your workspace</strong><span>Reading local project data…</span></div>
-      {:else if overviewState === 'error'}
-        <Icon name="health" size={18} />
-        <div><strong>Could not open this workspace</strong><span>{error}</span></div>
-        <button class="button" type="button" onclick={loadOverview}>Try again</button>
-      {:else}
-        <span class="local-indicator" aria-hidden="true"><span class="status-dot"></span></span>
-        <div>
-          <strong
-            >{scenes.length
-              ? `${scenes.length} local scene${scenes.length === 1 ? '' : 's'}`
-              : 'Empty local workspace'}</strong
-          >
-          <span
-            >{scenes.length
-              ? `Last saved ${new Date(scenes[0]!.savedAt).toLocaleString()}`
-              : 'Create a scene or import portable source to begin.'}</span
-          >
-        </div>
-        {#if scenes.length}
-          <dl class="summary-counts">
-            <div>
-              <dt>Verified</dt>
-              <dd>{verifiedSourceCount}</dd>
-            </div>
-            <div>
-              <dt>Passed</dt>
-              <dd>{passedRunCount}</dd>
-            </div>
-            <div>
-              <dt>Steps</dt>
-              <dd>{stepCount}</dd>
-            </div>
-          </dl>
+    {#if overviewState !== 'ready' || scenes.length > 0}
+      <section
+        class="workspace-summary"
+        class:error-state={overviewState === 'error'}
+        aria-live="polite"
+      >
+        {#if overviewState === 'loading'}
+          <Icon name="clock" size={18} />
+          <div><strong>Loading workspace…</strong></div>
+        {:else if overviewState === 'error'}
+          <Icon name="health" size={18} />
+          <div><strong>Could not open this workspace</strong><span>{error}</span></div>
+          <button class="button" type="button" onclick={loadOverview}>Try again</button>
+        {:else}
+          <span class="local-indicator" aria-hidden="true"><span class="status-dot"></span></span>
+          <div>
+            <strong>{scenes.length} local scene{scenes.length === 1 ? '' : 's'}</strong>
+            <span>Last saved {new Date(scenes[0]!.savedAt).toLocaleString()}</span>
+          </div>
         {/if}
-      {/if}
-    </section>
+      </section>
+    {/if}
 
     {#if overviewState === 'ready' && scenes.length === 0}
       <section class="getting-started" aria-labelledby="start-title">
         <div>
-          <h2 id="start-title">Create your first product journey</h2>
-          <p>
-            A Scene is an ordered, portable story of one outcome—from the first action to proof that
-            it worked.
-          </p>
+          <h2 id="start-title">Create your first scene</h2>
+          <p>Document one complete product outcome.</p>
         </div>
         <div class="start-actions">
           <a class="button primary" href="/?action=create"
-            ><Icon name="plus" size={16} />Create a Scene</a
+            ><Icon name="plus" size={16} />New scene</a
           >
           <a class="button" href="/?action=import"
             ><Icon name="download" size={16} />Import source</a
           >
         </div>
         <a class="example-link" href="/scenes/invite-teammate"
-          >Or explore the included example <Icon name="arrow-right" size={15} /></a
+          >Explore the example <Icon name="arrow-right" size={15} /></a
         >
       </section>
     {:else}
       <section class="recent" aria-labelledby="recent-title">
         <div class="section-heading">
           <div>
-            <h2 id="recent-title">Recent Scenes</h2>
-            <p>Continue editing, reviewing, or publishing your latest work.</p>
+            <h2 id="recent-title">Recent scenes</h2>
           </div>
           {#if scenes.length}<a href="/catalog"
               >View catalog <Icon name="arrow-right" size={15} /></a
@@ -124,10 +89,7 @@
 
         {#if overviewState === 'loading'}
           <div class="work-state" aria-busy="true">
-            <Icon name="clock" /><span
-              ><strong>Loading recent Scenes</strong><small>Reading durable local records…</small
-              ></span
-            >
+            <Icon name="clock" /><span><strong>Loading recent scenes…</strong></span>
           </div>
         {:else if scenes.length}
           <div class="recent-list">
@@ -192,8 +154,6 @@
     line-height: 1.08;
     margin: 0 0 9px;
   }
-  .welcome p,
-  .section-heading p,
   .getting-started p {
     color: var(--muted);
     font-size: 0.9rem;
@@ -245,28 +205,6 @@
     height: 34px;
     justify-content: center;
     width: 34px;
-  }
-  .summary-counts {
-    align-items: center;
-    display: flex;
-    gap: 0;
-    margin: 0;
-  }
-  .summary-counts div {
-    border-left: 1px solid var(--line);
-    display: grid;
-    gap: 1px;
-    min-width: 78px;
-    padding-left: 14px;
-  }
-  .summary-counts dt {
-    color: var(--muted);
-    font-size: 0.75rem;
-  }
-  .summary-counts dd {
-    font-size: 0.9rem;
-    font-weight: 720;
-    margin: 0;
   }
   .recent {
     display: grid;
@@ -404,26 +342,18 @@
     min-height: 96px;
     padding: 18px;
   }
-  .work-state strong,
-  .work-state small {
+  .work-state strong {
     display: block;
   }
   .work-state strong {
     color: var(--ink);
     font-size: 0.8rem;
   }
-  .work-state small {
-    font-size: 0.75rem;
-    margin-top: 3px;
-  }
   @media (max-width: 800px) {
     .welcome,
     .section-heading {
       align-items: flex-start;
       flex-direction: column;
-    }
-    .summary-counts {
-      display: none;
     }
     .getting-started {
       align-items: start;

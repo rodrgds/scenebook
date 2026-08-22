@@ -74,7 +74,6 @@
     <header class="surface-header">
       <div>
         <h1>Review</h1>
-        <p>Review source edits and differences found in imported runs.</p>
       </div>
       <div class="surface-actions">
         <a class="button primary" href="/runs?action=import"
@@ -108,9 +107,7 @@
         <div class="surface-state" aria-live="polite" aria-busy="true">
           <Icon name="clock" />
           <div>
-            <strong>Reading revision history…</strong><small
-              >Checking the two newest saved versions for every local scene.</small
-            >
+            <strong>Reading revision history…</strong>
           </div>
         </div>
       {:else if loadState === 'error'}

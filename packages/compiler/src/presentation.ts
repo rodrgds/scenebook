@@ -157,23 +157,37 @@ function svgLines(
     readonly fontFamily?: string;
   },
 ): string {
-  const words = value.replace(/\s+/gu, ' ').trim().split(' ').filter(Boolean);
+  const source = value.replace(/\s+/gu, ' ').trim();
   const averageCharacterWidth = options.fontSize * 0.54;
   const maximumCharacters = Math.max(4, Math.floor(options.width / averageCharacterWidth));
+  const words = source.split(' ').filter(Boolean);
+  const tokens = words.flatMap((word, wordIndex) => {
+    const chunks: { readonly text: string; readonly separator: string }[] = [];
+    for (let offset = 0; offset < word.length; offset += maximumCharacters) {
+      chunks.push({
+        text: word.slice(offset, offset + maximumCharacters),
+        separator: offset === 0 && wordIndex > 0 ? ' ' : '',
+      });
+    }
+    return chunks;
+  });
   const lines: string[] = [];
   let current = '';
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length <= maximumCharacters || !current) current = candidate;
-    else {
+  let consumed = 0;
+  for (const token of tokens) {
+    const candidate = current ? `${current}${token.separator}${token.text}` : token.text;
+    if (candidate.length <= maximumCharacters || !current) {
+      current = candidate;
+      consumed += 1;
+    } else {
       lines.push(current);
-      current = word;
+      if (lines.length === options.maxLines) break;
+      current = token.text;
+      consumed += 1;
     }
-    if (lines.length === options.maxLines) break;
   }
   if (lines.length < options.maxLines && current) lines.push(current);
-  const consumed = lines.join(' ').length;
-  if (consumed < value.replace(/\s+/gu, ' ').trim().length && lines.length) {
+  if (consumed < tokens.length && lines.length) {
     lines[lines.length - 1] = `${lines.at(-1)?.replace(/[.,;:!?]?$/u, '') ?? ''}\u2026`;
   }
   return lines
@@ -195,6 +209,9 @@ function overlaySvg(
   const crop = effectiveCrop(step);
   const elements: string[] = [];
   const accent = color(context.scene, 'accent', '#eb4d2f');
+  const paper = color(context.scene, 'paper', '#f4f5f6');
+  const ink = color(context.scene, 'ink', '#1c1d1f');
+  const cursor = cursorPointAt(step, timeMs);
   for (const annotation of step.annotations) {
     const annotationColor =
       annotation.color && /^#[a-f0-9]{3,8}$/iu.test(annotation.color) ? annotation.color : accent;
@@ -210,17 +227,40 @@ function overlaySvg(
           `<path d="M0 0H${width}V${height}H0Z M${x} ${y}H${x + w}V${y + h}H${x}Z" fill="#000" fill-opacity=".5" fill-rule="evenodd"/><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" fill="none" stroke="${annotationColor}" stroke-width="4"/>`,
         );
       } else if (annotation.kind === 'hotspot') {
-        elements.push(
-          `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${Math.max(12, w / 2)}" ry="${Math.max(12, h / 2)}" fill="none" stroke="${annotationColor}" stroke-width="5"/><ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${Math.max(17, w / 2 + 5)}" ry="${Math.max(17, h / 2 + 5)}" fill="none" stroke="${annotationColor}" stroke-opacity=".35" stroke-width="7"/>`,
+        const sharesCursor = Boolean(
+          cursor &&
+          cursor.x >= annotation.rect.x - 0.04 &&
+          cursor.x <= annotation.rect.x + annotation.rect.width + 0.04 &&
+          cursor.y >= annotation.rect.y - 0.04 &&
+          cursor.y <= annotation.rect.y + annotation.rect.height + 0.04,
         );
+        if (!sharesCursor) {
+          elements.push(
+            `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${Math.max(12, w / 2)}" ry="${Math.max(12, h / 2)}" fill="none" stroke="${annotationColor}" stroke-width="5"/><ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${Math.max(17, w / 2 + 5)}" ry="${Math.max(17, h / 2 + 5)}" fill="none" stroke="${annotationColor}" stroke-opacity=".35" stroke-width="7"/>`,
+          );
+        }
       } else {
+        const isText = annotation.kind === 'text';
         elements.push(
-          `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${annotation.kind === 'text' ? '#171512' : 'none'}" fill-opacity=".88" stroke="${annotationColor}" stroke-width="4"/>`,
+          `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${isText ? ink : paper}" fill-opacity=".96" stroke="${annotationColor}" stroke-width="2"/>`,
         );
         const annotationText = annotation.text ?? annotation.label;
-        if (annotationText) {
+        if (annotationText && w >= 20 && h >= 18) {
+          const fontSize = clamp(Math.min(20, h * 0.38), 11, 20);
+          const lineHeight = fontSize * 1.15;
+          const padding = clamp(w * 0.05, 6, 12);
+          const maxLines = Math.max(1, Math.min(3, Math.floor((h - padding * 2) / lineHeight)));
           elements.push(
-            `<text x="${x + 12}" y="${y + Math.min(h - 10, 28)}" fill="${annotation.kind === 'text' ? '#fff' : annotationColor}" font-family="Arial,sans-serif" font-size="18" font-weight="700">${svgText(annotationText, 80)}</text>`,
+            svgLines(annotationText, {
+              x: x + padding,
+              y: y + padding + fontSize,
+              width: Math.max(8, w - padding * 2),
+              fontSize,
+              lineHeight,
+              maxLines,
+              fill: isText ? paper : ink,
+              weight: 700,
+            }),
           );
         }
       }
@@ -236,7 +276,6 @@ function overlaySvg(
     }
   }
 
-  const cursor = cursorPointAt(step, timeMs);
   const mappedCursor = cursor ? mapPoint(cursor, crop) : undefined;
   if (mappedCursor) {
     const x = mappedCursor.x * width;
@@ -301,16 +340,39 @@ async function applyMasks(
   return composites.length ? sharp(input).composite(composites).png().toBuffer() : input;
 }
 
-function cardSvg(context: SceneAdapterContext, step: NormalizedStep): Buffer {
+function cardSvg(
+  context: SceneAdapterContext,
+  step: NormalizedStep,
+  family: PresentationFamily,
+): Buffer {
   const paper = color(context.scene, 'paper', '#f4f5f6');
   const ink = color(context.scene, 'ink', '#1c1d1f');
-  const muted = color(context.scene, 'muted', '#5f646b');
+  const accent = color(context.scene, 'accent', '#eb4d2f');
+  const muted = '#c7c0b7';
   const label =
-    step.kind === 'separator' ? 'Section' : step.kind === 'end' ? 'Complete' : step.kind;
+    step.kind === 'choice'
+      ? 'Choose a path'
+      : step.kind === 'separator' || step.kind === 'intro'
+        ? 'Chapter'
+        : step.kind === 'end'
+          ? 'Complete'
+          : 'Visual unavailable';
   const copy = step.instruction ?? step.caption ?? '';
-  const cta = step.cta;
+  const compact = family === 'motion';
+  const choices = step.choices.slice(0, 2).map((choice, index) => {
+    const x = 80 + index * 568;
+    const y = compact ? 178 : 500;
+    const height = compact ? 230 : 132;
+    return `<rect x="${x}" y="${y}" width="544" height="${height}" rx="12" fill="#2c2a27" stroke="#5e5851" stroke-width="2"/>${svgLines(choice.label, { x: x + 24, y: y + 50, width: 496, fontSize: 23, lineHeight: 26, maxLines: 2, fill: paper, weight: 700 })}${choice.description ? svgLines(choice.description, { x: x + 24, y: y + 112, width: 496, fontSize: 16, lineHeight: 21, maxLines: 3, fill: muted }) : ''}`;
+  });
+  const ctas = step.ctas.slice(0, 2).map((cta, index) => {
+    const x = 80 + index * 330;
+    const y = compact ? 250 : 570;
+    const primary = cta.variant === 'primary';
+    return `<rect x="${x}" y="${y}" width="306" height="62" rx="10" fill="${primary ? accent : '#2c2a27'}" stroke="${primary ? accent : '#5e5851'}" stroke-width="2"/>${svgLines(cta.label, { x: x + 24, y: y + 39, width: 258, fontSize: 19, lineHeight: 22, maxLines: 1, fill: paper, weight: 700 })}`;
+  });
   return Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="1280" height="720" fill="${paper}"/><text x="88" y="90" font-family="Arial,sans-serif" font-size="20" font-weight="700" fill="${ink}">${svgText(label, 30)}</text>${svgLines(step.title, { x: 88, y: 245, width: 1040, fontSize: 68, lineHeight: 72, maxLines: 3, fill: ink, weight: 800, fontFamily: 'Georgia,serif' })}${svgLines(copy, { x: 88, y: 495, width: 940, fontSize: 28, lineHeight: 39, maxLines: 3, fill: muted })}${cta ? `<rect x="88" y="610" width="${Math.min(420, Math.max(180, cta.label.length * 17 + 60))}" height="58" rx="10" fill="${ink}"/><text x="118" y="648" font-family="Arial,sans-serif" font-size="22" font-weight="700" fill="${paper}">${svgText(cta.label, 42)}</text>` : ''}</svg>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="1280" height="720" fill="${ink}"/><text x="80" y="76" font-family="Arial,sans-serif" font-size="18" font-weight="700" fill="${accent}">${svgText(label, 30)}</text>${compact ? '' : svgLines(step.title, { x: 80, y: 180, width: 1120, fontSize: 58, lineHeight: 62, maxLines: 3, fill: paper, weight: 800 })}${compact ? '' : svgLines(copy, { x: 80, y: 400, width: 1060, fontSize: 24, lineHeight: 32, maxLines: 3, fill: muted })}${choices.length ? choices.join('') : ctas.join('')}</svg>`,
   );
 }
 
@@ -323,7 +385,9 @@ async function render(
 ): Promise<RenderedPresentation> {
   const reference = secondary ? step.secondaryImageReference : step.imageReference;
   if (!reference) {
-    const buffer = await sharp(cardSvg(context, step)).png().toBuffer();
+    const buffer = await sharp(cardSvg(context, step, family))
+      .png()
+      .toBuffer();
     return {
       buffer,
       width: 1280,

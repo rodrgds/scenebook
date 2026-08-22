@@ -117,7 +117,6 @@
     <header class="surface-header">
       <div>
         <h1>Runs</h1>
-        <p>Inspect imported test results, screenshots, and review changes.</p>
       </div>
       <div class="surface-actions">
         <button class="button primary" type="button" onclick={() => (importVisible = true)}

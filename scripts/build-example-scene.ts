@@ -10,6 +10,7 @@ import { stringify } from 'yaml';
 const repositoryRoot = resolve(import.meta.dir, '..');
 const sceneDirectory = join(repositoryRoot, 'examples/acme-product/scenes/invite-member.scene');
 const outputAssets = join(sceneDirectory, 'assets');
+const studioDemoDirectory = join(repositoryRoot, 'apps/studio/static/demo');
 const baseUrl = 'http://127.0.0.1:4174';
 const createdAt = '2026-07-20T12:00:00.000Z';
 
@@ -163,6 +164,26 @@ async function main(): Promise<void> {
     await page.getByText('Invitation sent').waitFor();
     const successState = await capture();
     await browser.close();
+
+    await mkdir(studioDemoDirectory, { recursive: true });
+    await Promise.all([
+      writeFile(
+        join(studioDemoDirectory, 'members.png'),
+        await readFile(join(stagingAssets, `${membersState.sha256}.png`)),
+      ),
+      writeFile(
+        join(studioDemoDirectory, 'details.png'),
+        await readFile(join(stagingAssets, `${formState.sha256}.png`)),
+      ),
+      writeFile(
+        join(studioDemoDirectory, 'role.png'),
+        await readFile(join(stagingAssets, `${completedFormState.sha256}.png`)),
+      ),
+      writeFile(
+        join(studioDemoDirectory, 'sent.png'),
+        await readFile(join(stagingAssets, `${successState.sha256}.png`)),
+      ),
+    ]);
 
     const state = (id: string, screenshot: Asset) => ({
       id,

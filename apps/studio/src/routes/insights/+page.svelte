@@ -69,7 +69,6 @@
     <header class="surface-header">
       <div>
         <h1>Coverage</h1>
-        <p>Find scenes that need visuals, run evidence, collection placement, or release setup.</p>
       </div>
       <div class="surface-actions">
         <a class="button" href="/publish"><Icon name="publish" size={15} />Review release</a>
@@ -80,9 +79,7 @@
       <div class="surface-state" aria-busy="true">
         <Icon name="clock" />
         <div>
-          <strong>Computing local coverage…</strong><small
-            >Reading compact scene and project summaries.</small
-          >
+          <strong>Computing local coverage…</strong>
         </div>
       </div>
     {:else if loadState === 'error'}
@@ -104,37 +101,6 @@
         <a class="button" href="/settings?action=import">Import project</a>
       </div>
     {:else if metrics}
-      <dl class="coverage-summary" aria-label="Authoring coverage summary">
-        <div>
-          <dt>Scenes</dt>
-          <dd>{metrics.sceneCount}<span>{metrics.stepCount} steps</span></dd>
-        </div>
-        <div>
-          <dt>Run evidence</dt>
-          <dd>
-            {percent(metrics.evidenceCount, metrics.sceneCount)}%<span
-              >{metrics.evidenceCount} covered</span
-            >
-          </dd>
-        </div>
-        <div>
-          <dt>Collections</dt>
-          <dd>
-            {percent(metrics.collectionSceneCount, metrics.sceneCount)}%<span
-              >{metrics.collectionSceneCount} included</span
-            >
-          </dd>
-        </div>
-        <div>
-          <dt>Channels</dt>
-          <dd>
-            {percent(metrics.channelSceneCount, metrics.sceneCount)}%<span
-              >{metrics.channelSceneCount} selected</span
-            >
-          </dd>
-        </div>
-      </dl>
-
       <div class="insight-layout">
         <section class="surface-card coverage-card" aria-labelledby="coverage-title">
           <header>
@@ -152,13 +118,6 @@
               </div>
             {/each}
           </div>
-          <footer>
-            <Icon name="globe" size={14} /><span
-              ><strong>{metrics.translationCount} translation drafts</strong><small
-                >Counts language drafts, not completeness or review approval.</small
-              ></span
-            >
-          </footer>
         </section>
 
         <section class="surface-card freshness-card" aria-labelledby="freshness-title">
@@ -217,33 +176,6 @@
 </AppShell>
 
 <style>
-  .coverage-summary {
-    border-block: 1px solid var(--line);
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    margin: 0;
-  }
-  .coverage-summary > div {
-    padding: 13px 16px;
-  }
-  .coverage-summary > div + div {
-    border-left: 1px solid var(--line);
-  }
-  .coverage-summary dt {
-    color: var(--muted);
-    font-size: 0.78rem;
-  }
-  .coverage-summary dd {
-    font-size: 1.05rem;
-    font-weight: 720;
-    margin: 4px 0 0;
-  }
-  .coverage-summary dd span {
-    color: var(--muted);
-    font-size: 0.78rem;
-    font-weight: 500;
-    margin-left: 6px;
-  }
   .insight-layout {
     align-items: start;
     display: grid;
@@ -309,26 +241,6 @@
   .bar-row small {
     color: var(--muted);
     font-size: 0.78rem;
-  }
-  .coverage-card footer {
-    align-items: center;
-    background: var(--paper-2);
-    border-top: 1px solid var(--line);
-    display: flex;
-    gap: 9px;
-    padding: 12px 18px;
-  }
-  .coverage-card footer strong,
-  .coverage-card footer small {
-    display: block;
-  }
-  .coverage-card footer strong {
-    font-size: 0.8rem;
-  }
-  .coverage-card footer small {
-    color: var(--muted);
-    font-size: 0.78rem;
-    margin-top: 2px;
   }
   .freshness-summary {
     display: grid;
@@ -422,16 +334,6 @@
     }
   }
   @media (max-width: 650px) {
-    .coverage-summary {
-      grid-template-columns: 1fr 1fr;
-    }
-    .coverage-summary > div:nth-child(3) {
-      border-left: 0;
-      border-top: 1px solid var(--line);
-    }
-    .coverage-summary > div:nth-child(4) {
-      border-top: 1px solid var(--line);
-    }
     .freshness-summary {
       grid-template-columns: 1fr 1fr;
     }

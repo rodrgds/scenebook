@@ -2,7 +2,6 @@
   import { onDestroy, onMount } from 'svelte';
 
   import {
-    cloneScene,
     cloneEditorWorkingScene,
     defaultStep,
     duplicateStep,
@@ -63,7 +62,10 @@
   let canvasElement: HTMLDivElement;
   let screenshotInput = $state<HTMLInputElement>();
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let recoveryTimer: ReturnType<typeof setTimeout> | undefined;
   let pendingSave: { snapshot: EditorScene; recoveryToken?: number } | null = null;
+  let pendingRecoverySnapshot: EditorScene | null = null;
+  let continuousInput: HTMLElement | null = null;
   let savesInFlight = 0;
   let destroyed = false;
   let imageError = $state('');
@@ -129,7 +131,10 @@
     const abandonedHistory = [...history, ...future];
     destroyed = true;
     if (saveTimer) clearTimeout(saveTimer);
+    if (recoveryTimer) clearTimeout(recoveryTimer);
     saveTimer = undefined;
+    recoveryTimer = undefined;
+    writePendingRecovery();
     void commitPendingSave(false);
     void studioSceneLibrary
       .waitForPendingSaves(scene.id)
@@ -140,22 +145,44 @@
   onMount(() => {
     refreshSavedThemes();
     onflushchange?.(() => commitPendingSave(true, true));
-    return () => onflushchange?.(null);
+    const endContinuousEdit = (event: FocusEvent) => {
+      if (event.target === continuousInput) continuousInput = null;
+    };
+    window.addEventListener('focusout', endContinuousEdit);
+    return () => {
+      window.removeEventListener('focusout', endContinuousEdit);
+      onflushchange?.(null);
+    };
   });
+
+  function writePendingRecovery() {
+    const snapshot = pendingRecoverySnapshot;
+    pendingRecoverySnapshot = null;
+    if (!snapshot) return;
+    try {
+      const recoveryToken = studioSceneLibrary.writeRecovery(snapshot).token;
+      if (pendingSave?.snapshot === snapshot) pendingSave.recoveryToken = recoveryToken;
+    } catch (error) {
+      saveState = 'error';
+      saveError = error instanceof Error ? error.message : 'Crash recovery is unavailable.';
+    }
+  }
 
   function capturePendingSave() {
     saveState = 'unsaved';
     saveError = '';
     saveConflict = false;
-    const snapshot = cloneScene(scene);
-    let recoveryToken: number | undefined;
-    try {
-      recoveryToken = studioSceneLibrary.writeRecovery(snapshot).token;
-    } catch (error) {
-      saveState = 'error';
-      saveError = error instanceof Error ? error.message : 'Crash recovery is unavailable.';
-    }
-    pendingSave = { snapshot, recoveryToken };
+    // Editor mutations replace the Scene instead of changing it in place, so this reference is a
+    // stable save snapshot. Avoiding another deep clone here keeps typing responsive on media-rich
+    // Scenes. The recovery journal is still written after the current input burst settles.
+    const snapshot = scene;
+    pendingSave = { snapshot };
+    pendingRecoverySnapshot = snapshot;
+    if (recoveryTimer) clearTimeout(recoveryTimer);
+    recoveryTimer = setTimeout(() => {
+      recoveryTimer = undefined;
+      writePendingRecovery();
+    }, 100);
   }
 
   function queueSave(immediate = false): Promise<void> | undefined {
@@ -173,6 +200,11 @@
   }
 
   async function commitPendingSave(updateUi = true, propagateError = false): Promise<void> {
+    if (recoveryTimer) {
+      clearTimeout(recoveryTimer);
+      recoveryTimer = undefined;
+      writePendingRecovery();
+    }
     const pending = pendingSave;
     if (!pending) return;
     pendingSave = null;
@@ -206,7 +238,15 @@
   }
 
   function mutate(update: (draft: EditorScene) => void, immediateSave = false) {
-    history = [...history.slice(-39), cloneEditorWorkingScene(scene)];
+    const activeElement = document.activeElement;
+    const isContinuousInput =
+      activeElement instanceof HTMLTextAreaElement ||
+      (activeElement instanceof HTMLInputElement &&
+        !['button', 'checkbox', 'file', 'radio', 'reset', 'submit'].includes(activeElement.type));
+    if (!isContinuousInput || activeElement !== continuousInput) {
+      history = [...history.slice(-39), cloneEditorWorkingScene(scene)];
+    }
+    continuousInput = isContinuousInput ? activeElement : null;
     future = [];
     const draft = cloneEditorWorkingScene(scene);
     update(draft);
@@ -288,6 +328,7 @@
     scene = previous;
     history = history.slice(0, -1);
     selectedIndex = Math.min(selectedIndex, scene.steps.length - 1);
+    continuousInput = null;
     queueSave();
   }
 
@@ -298,6 +339,7 @@
     scene = next;
     future = future.slice(1);
     selectedIndex = Math.min(selectedIndex, scene.steps.length - 1);
+    continuousInput = null;
     queueSave();
   }
 
@@ -1273,22 +1315,24 @@
                 ></span
               >
             </button>
-            <div class="reorder-actions" role="group" aria-label={`Reorder ${step.title}`}>
-              <button
-                type="button"
-                title="Move up"
-                aria-label={`Move ${step.title} up`}
-                disabled={index === 0}
-                onclick={() => reorder(index, index - 1)}><Icon name="up" size={12} /></button
-              >
-              <button
-                type="button"
-                title="Move down"
-                aria-label={`Move ${step.title} down`}
-                disabled={index === scene.steps.length - 1}
-                onclick={() => reorder(index, index + 1)}><Icon name="down" size={12} /></button
-              >
-            </div>
+            {#if selectedIndex === index}
+              <div class="reorder-actions" role="group" aria-label={`Reorder ${step.title}`}>
+                <button
+                  type="button"
+                  title="Move up"
+                  aria-label={`Move ${step.title} up`}
+                  disabled={index === 0}
+                  onclick={() => reorder(index, index - 1)}><Icon name="up" size={12} /></button
+                >
+                <button
+                  type="button"
+                  title="Move down"
+                  aria-label={`Move ${step.title} down`}
+                  disabled={index === scene.steps.length - 1}
+                  onclick={() => reorder(index, index + 1)}><Icon name="down" size={12} /></button
+                >
+              </div>
+            {/if}
           </li>
         {/each}
       </ol>

@@ -28,10 +28,10 @@ steps:
         id: members-before-invite
         route: /?scenebook=1
         screenshot:
-          sha256: 8edc25f47a09a08f6b762fc7a2d9d758e25806ca5996712bfb12271b614df4b4
-          path: assets/8edc25f47a09a08f6b762fc7a2d9d758e25806ca5996712bfb12271b614df4b4.png
+          sha256: 3f6caa2e56ea8b433269ae58399c7914f64b4bdd5ec147442adef3e6d92e91e1
+          path: assets/3f6caa2e56ea8b433269ae58399c7914f64b4bdd5ec147442adef3e6d92e91e1.png
           mediaType: image/png
-          byteLength: 55227
+          byteLength: 54310
           role: screenshot
           width: 1440
           height: 900
@@ -118,10 +118,10 @@ steps:
         id: invite-form-empty
         route: /?scenebook=1
         screenshot:
-          sha256: b4d8863610871cb52ef565fac827fe7317e169abb4a703b33ffb66dd3f3f1adb
-          path: assets/b4d8863610871cb52ef565fac827fe7317e169abb4a703b33ffb66dd3f3f1adb.png
+          sha256: 65355247acd6ff4e25a8e289e0b059601ea4c1522b3e22a4230a166bdd5e770e
+          path: assets/65355247acd6ff4e25a8e289e0b059601ea4c1522b3e22a4230a166bdd5e770e.png
           mediaType: image/png
-          byteLength: 72262
+          byteLength: 71470
           role: screenshot
           width: 1440
           height: 900
@@ -223,10 +223,10 @@ steps:
         id: invite-form-complete
         route: /?scenebook=1
         screenshot:
-          sha256: b4d8863610871cb52ef565fac827fe7317e169abb4a703b33ffb66dd3f3f1adb
-          path: assets/b4d8863610871cb52ef565fac827fe7317e169abb4a703b33ffb66dd3f3f1adb.png
+          sha256: 65355247acd6ff4e25a8e289e0b059601ea4c1522b3e22a4230a166bdd5e770e
+          path: assets/65355247acd6ff4e25a8e289e0b059601ea4c1522b3e22a4230a166bdd5e770e.png
           mediaType: image/png
-          byteLength: 72262
+          byteLength: 71470
           role: screenshot
           width: 1440
           height: 900
@@ -316,10 +316,10 @@ steps:
         id: invite-sent
         route: /?scenebook=1
         screenshot:
-          sha256: ebf82111413ab6f5750911a8267eaee9771b566f75435cda2bf77325752b30ed
-          path: assets/ebf82111413ab6f5750911a8267eaee9771b566f75435cda2bf77325752b30ed.png
+          sha256: ffab7072c7300ab97111e85f9240e366e6a94a9e0b2a5cc01150e1210448dbf6
+          path: assets/ffab7072c7300ab97111e85f9240e366e6a94a9e0b2a5cc01150e1210448dbf6.png
           mediaType: image/png
-          byteLength: 68550
+          byteLength: 67673
           role: screenshot
           width: 1440
           height: 900
@@ -378,24 +378,24 @@ steps:
       label: Watch again
       fields: []
 assets:
-  - sha256: 8edc25f47a09a08f6b762fc7a2d9d758e25806ca5996712bfb12271b614df4b4
-    path: assets/8edc25f47a09a08f6b762fc7a2d9d758e25806ca5996712bfb12271b614df4b4.png
+  - sha256: 3f6caa2e56ea8b433269ae58399c7914f64b4bdd5ec147442adef3e6d92e91e1
+    path: assets/3f6caa2e56ea8b433269ae58399c7914f64b4bdd5ec147442adef3e6d92e91e1.png
     mediaType: image/png
-    byteLength: 55227
+    byteLength: 54310
     role: screenshot
     width: 1440
     height: 900
-  - sha256: b4d8863610871cb52ef565fac827fe7317e169abb4a703b33ffb66dd3f3f1adb
-    path: assets/b4d8863610871cb52ef565fac827fe7317e169abb4a703b33ffb66dd3f3f1adb.png
+  - sha256: 65355247acd6ff4e25a8e289e0b059601ea4c1522b3e22a4230a166bdd5e770e
+    path: assets/65355247acd6ff4e25a8e289e0b059601ea4c1522b3e22a4230a166bdd5e770e.png
     mediaType: image/png
-    byteLength: 72262
+    byteLength: 71470
     role: screenshot
     width: 1440
     height: 900
-  - sha256: ebf82111413ab6f5750911a8267eaee9771b566f75435cda2bf77325752b30ed
-    path: assets/ebf82111413ab6f5750911a8267eaee9771b566f75435cda2bf77325752b30ed.png
+  - sha256: ffab7072c7300ab97111e85f9240e366e6a94a9e0b2a5cc01150e1210448dbf6
+    path: assets/ffab7072c7300ab97111e85f9240e366e6a94a9e0b2a5cc01150e1210448dbf6.png
     mediaType: image/png
-    byteLength: 68550
+    byteLength: 67673
     role: screenshot
     width: 1440
     height: 900

@@ -19,7 +19,13 @@
     step,
     aspect = 'standard',
     decorative = false,
-  }: { step: PlayerStep; aspect?: PreviewAspect; decorative?: boolean } = $props();
+    compact = false,
+  }: {
+    step: PlayerStep;
+    aspect?: PreviewAspect;
+    decorative?: boolean;
+    compact?: boolean;
+  } = $props();
 
   const aspectRatios: Record<PreviewAspect, string> = {
     standard: '16 / 10',
@@ -28,6 +34,8 @@
     portrait: '9 / 16',
   };
 
+  let failedImageSource = $state<string>();
+
   let crop = $derived(effectiveCrop(step.crop));
   let frame = $derived(
     step.frame === 'mobile' || step.frame === 'none' || step.frame === 'browser'
@@ -35,6 +43,7 @@
       : 'browser',
   );
   let imageSource = $derived(safeImageSource(step.image, 'http://scenebook.local/'));
+  let imageAvailable = $derived(Boolean(imageSource && failedImageSource !== imageSource));
   let masks = $derived.by(() =>
     (step.masks ?? []).flatMap((mask) => {
       const rect = mapRectToCrop(mask, crop);
@@ -64,12 +73,6 @@
     return result;
   });
   let cursor = $derived(step.cursor?.visible ? mapPointToCrop(step.cursor, crop) : undefined);
-  let cursorPath = $derived.by(() =>
-    (step.cursor?.path ?? []).flatMap((keyframe) => {
-      const point = mapPointToCrop(keyframe, crop);
-      return point ? [point] : [];
-    }),
-  );
   let hotspot = $derived.by(() => {
     if (!step.hotspot) return undefined;
     const width = Math.max(0, Math.min(1, step.hotspot.width ?? 0));
@@ -90,9 +93,19 @@
       ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
       : mapPointToCrop(step.hotspot, crop);
   });
+  let hotspotHasCursor = $derived(
+    Boolean(hotspot && cursor && Math.hypot(hotspot.x - cursor.x, hotspot.y - cursor.y) <= 0.08),
+  );
 
   function position(value: number): string {
     return `${Math.max(0, Math.min(1, value)) * 100}%`;
+  }
+
+  function stepLabel(type: PlayerStep['type']): string {
+    if (type === 'choice') return 'Choose a path';
+    if (type === 'end') return 'Complete';
+    if (type === 'intro' || type === 'separator') return 'Chapter';
+    return 'Visual unavailable';
   }
 </script>
 
@@ -121,7 +134,7 @@
       <div class="mobile-chrome" aria-hidden="true"></div>
     {/if}
     <div class="media-viewport">
-      {#if imageSource}
+      {#if imageAvailable && imageSource}
         <div
           class="image-plane"
           style:left={`${(-crop.x / crop.width) * 100}%`}
@@ -129,111 +142,127 @@
           style:width={`${(1 / crop.width) * 100}%`}
           style:height={`${(1 / crop.height) * 100}%`}
         >
-          <img src={imageSource} alt={decorative ? '' : (step.alt ?? '')} draggable="false" />
+          <img
+            src={imageSource}
+            alt={decorative ? '' : (step.alt ?? '')}
+            draggable="false"
+            onerror={() => (failedImageSource = imageSource)}
+          />
         </div>
-      {:else}
-        <div class="empty-visual">No screenshot</div>
-      {/if}
-      <div class="overlays">
-        {#each masks as item (item.mask.id)}
-          <span
-            class="mask"
-            role="img"
-            aria-label={item.mask.label ?? 'Redacted content'}
-            style:left={position(item.rect.x)}
-            style:top={position(item.rect.y)}
-            style:width={position(item.rect.width)}
-            style:height={position(item.rect.height)}
-          ></span>
-        {/each}
-        {#each annotations as item (item.annotation.id)}
-          {#if item.kind === 'arrow'}
-            <svg
-              class="annotation-arrow"
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none"
-              role="img"
-              aria-label={item.annotation.text}
-            >
-              <defs>
-                <marker
-                  id={`preview-arrow-${item.annotation.id}`}
-                  markerWidth="5"
-                  markerHeight="5"
-                  refX="4"
-                  refY="2.5"
-                  orient="auto"
-                >
-                  <path d="M0,0 L5,2.5 L0,5 Z" fill={item.annotation.color ?? 'var(--accent)'}
-                  ></path>
-                </marker>
-              </defs>
-              <line
-                x1={item.from.x * 100}
-                y1={item.from.y * 100}
-                x2={item.to.x * 100}
-                y2={item.to.y * 100}
-                stroke={item.annotation.color ?? 'var(--accent)'}
-                marker-end={`url(#preview-arrow-${item.annotation.id})`}
-              ></line>
-            </svg>
-          {:else}
+        <div class="overlays">
+          {#each masks as item (item.mask.id)}
             <span
-              class:spotlight={item.annotation.kind === 'spotlight'}
-              class="annotation"
-              role="note"
+              class="mask"
+              role="img"
+              aria-label={item.mask.label ?? 'Redacted content'}
               style:left={position(item.rect.x)}
               style:top={position(item.rect.y)}
               style:width={position(item.rect.width)}
               style:height={position(item.rect.height)}
-              style:--annotation-color={item.annotation.color ?? 'var(--accent)'}
-              >{item.annotation.kind === 'spotlight' ? '' : item.annotation.text}</span
+            ></span>
+          {/each}
+          {#each annotations as item (item.annotation.id)}
+            {#if item.kind === 'arrow'}
+              <svg
+                class="annotation-arrow"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                role="img"
+                aria-label={item.annotation.text}
+              >
+                <defs>
+                  <marker
+                    id={`preview-arrow-${item.annotation.id}`}
+                    markerWidth="5"
+                    markerHeight="5"
+                    refX="4"
+                    refY="2.5"
+                    orient="auto"
+                  >
+                    <path d="M0,0 L5,2.5 L0,5 Z" fill={item.annotation.color ?? 'var(--accent)'}
+                    ></path>
+                  </marker>
+                </defs>
+                <line
+                  x1={item.from.x * 100}
+                  y1={item.from.y * 100}
+                  x2={item.to.x * 100}
+                  y2={item.to.y * 100}
+                  stroke={item.annotation.color ?? 'var(--accent)'}
+                  marker-end={`url(#preview-arrow-${item.annotation.id})`}
+                ></line>
+              </svg>
+            {:else}
+              <span
+                class:spotlight={item.annotation.kind === 'spotlight'}
+                class="annotation"
+                role="note"
+                style:left={position(item.rect.x)}
+                style:top={position(item.rect.y)}
+                style:width={position(item.rect.width)}
+                style:height={position(item.rect.height)}
+                style:--annotation-color={item.annotation.color ?? 'var(--accent)'}
+                >{item.annotation.kind === 'spotlight' ? '' : item.annotation.text}</span
+              >
+            {/if}
+          {/each}
+          {#if cursor}
+            <span
+              class:click={step.cursor?.click}
+              class:dot={step.cursor?.style === 'dot'}
+              class:pointer={step.cursor?.style === 'pointer'}
+              class="cursor"
+              aria-hidden="true"
+              style:left={position(cursor.x)}
+              style:top={position(cursor.y)}
+            >
+              <svg viewBox="0 0 24 32" focusable="false">
+                <path
+                  d="M2 2v24l6-6 4 10 5-2-4-9h8z"
+                  fill="white"
+                  stroke="#171512"
+                  stroke-width="2"
+                  stroke-linejoin="round"
+                ></path>
+              </svg>
+            </span>
+          {/if}
+          {#if hotspot && !hotspotHasCursor}
+            <span
+              class="hotspot"
+              role="img"
+              aria-label={step.hotspot?.label ?? 'Interactive target'}
+              style:left={position(hotspot.x)}
+              style:top={position(hotspot.y)}><i></i></span
             >
           {/if}
-        {/each}
-        {#if cursorPath.length > 1}
-          <svg
-            class="cursor-path"
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            <polyline
-              points={cursorPath.map((point) => `${point.x * 100},${point.y * 100}`).join(' ')}
-            ></polyline>
-          </svg>
-        {/if}
-        {#if cursor}
-          <span
-            class:click={step.cursor?.click}
-            class:dot={step.cursor?.style === 'dot'}
-            class:pointer={step.cursor?.style === 'pointer'}
-            class="cursor"
-            aria-hidden="true"
-            style:left={position(cursor.x)}
-            style:top={position(cursor.y)}
-          >
-            <svg viewBox="0 0 24 32" focusable="false">
-              <path
-                d="M2 2v24l6-6 4 10 5-2-4-9h8z"
-                fill="white"
-                stroke="#171512"
-                stroke-width="2"
-                stroke-linejoin="round"
-              ></path>
-            </svg>
-          </span>
-        {/if}
-        {#if hotspot}
-          <span
-            class="hotspot"
-            role="img"
-            aria-label={step.hotspot?.label ?? 'Interactive target'}
-            style:left={position(hotspot.x)}
-            style:top={position(hotspot.y)}><i></i></span
-          >
-        {/if}
-      </div>
+        </div>
+      {:else}
+        <div class:compact class="presentation-card" data-presentation-fallback>
+          <span class="card-label">{stepLabel(step.type)}</span>
+          <div class="card-copy">
+            <h2>{step.title}</h2>
+            {#if step.instruction || step.caption}<p>{step.instruction ?? step.caption}</p>{/if}
+          </div>
+          {#if step.type === 'choice' && step.choices?.length}
+            <div class="card-options">
+              {#each step.choices.slice(0, 3) as choice (choice.id)}
+                <span
+                  ><strong>{choice.label}</strong>{#if choice.description}<small
+                      >{choice.description}</small
+                    >{/if}</span
+                >
+              {/each}
+            </div>
+          {:else if step.ctas?.length}
+            <div class="card-actions">
+              {#each step.ctas.slice(0, 2) as cta (cta.id)}<span
+                  class:primary={cta.variant === 'primary'}>{cta.label}</span
+                >{/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
     </div>
   </div>
 </figure>
@@ -324,6 +353,103 @@
     position: relative;
     width: 100%;
   }
+  .presentation-card {
+    align-content: safe center;
+    background: #191816;
+    color: #fffdf8;
+    display: grid;
+    gap: clamp(10px, 2.5cqw, 22px);
+    height: 100%;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: clamp(18px, 6cqw, 56px);
+    width: 100%;
+  }
+  .presentation-card.compact {
+    gap: clamp(6px, 1.5cqw, 12px);
+    grid-template-rows: auto minmax(0, 1fr);
+    padding: clamp(10px, 3cqw, 24px);
+  }
+  .presentation-card.compact .card-copy {
+    display: none;
+  }
+  .presentation-card.compact .card-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: none;
+  }
+  .presentation-card.compact .card-options > span {
+    align-content: center;
+  }
+  @container (max-width: 420px) {
+    .presentation-card.compact .card-options small {
+      display: none;
+    }
+  }
+  .card-label {
+    color: #c7c0b7;
+    font-size: clamp(8px, 1.35cqw, 12px);
+    font-weight: 650;
+  }
+  .card-copy {
+    display: grid;
+    gap: clamp(5px, 1.2cqw, 10px);
+    max-width: 66ch;
+  }
+  .card-copy h2 {
+    font-size: clamp(20px, 4.4cqw, 46px);
+    letter-spacing: -0.035em;
+    line-height: 1.04;
+    margin: 0;
+    max-width: 19ch;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+  }
+  .card-copy p {
+    color: #c7c0b7;
+    font-size: clamp(10px, 1.8cqw, 17px);
+    line-height: 1.4;
+    margin: 0;
+    max-width: 58ch;
+    text-wrap: pretty;
+  }
+  .card-options,
+  .card-actions {
+    display: grid;
+    gap: clamp(6px, 1.3cqw, 10px);
+    grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+    max-width: 760px;
+  }
+  .card-options > span,
+  .card-actions > span {
+    background: #2c2a27;
+    border: 1px solid #5e5851;
+    border-radius: 9px;
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    padding: clamp(8px, 1.7cqw, 14px);
+  }
+  .card-options strong,
+  .card-actions > span {
+    font-size: clamp(10px, 1.7cqw, 16px);
+  }
+  .card-options small {
+    color: #c7c0b7;
+    font-size: clamp(8px, 1.3cqw, 12px);
+    line-height: 1.35;
+  }
+  .card-actions {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .card-actions > span {
+    min-width: min(190px, 100%);
+    text-align: center;
+  }
+  .card-actions > span.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
   .frame-mobile .media-viewport {
     border-radius: clamp(8px, 3cqw, 15px);
   }
@@ -348,6 +474,7 @@
     border: 1px solid rgb(255 255 255 / 25%);
     border-radius: 4px;
     position: absolute;
+    z-index: 1;
   }
   .annotation {
     background: #fffdf8;
@@ -362,6 +489,12 @@
     justify-content: center;
     padding: clamp(4px, 1.2cqw, 8px) clamp(5px, 1.5cqw, 10px);
     position: absolute;
+    line-height: 1.15;
+    min-width: 0;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    text-align: center;
+    z-index: 3;
   }
   .annotation.spotlight {
     background: transparent;
@@ -372,23 +505,17 @@
     overflow: hidden;
     padding: 0;
   }
-  .annotation-arrow,
-  .cursor-path {
+  .annotation-arrow {
     height: 100%;
     inset: 0;
     overflow: visible;
     position: absolute;
     width: 100%;
+    z-index: 2;
   }
   .annotation-arrow line {
     stroke-linecap: round;
     stroke-width: 0.8;
-  }
-  .cursor-path polyline {
-    fill: none;
-    stroke: color-mix(in srgb, var(--accent) 65%, white);
-    stroke-dasharray: 2 1.5;
-    stroke-width: 0.4;
   }
   .cursor {
     filter: drop-shadow(0 2px 2px rgb(0 0 0 / 45%));
@@ -396,7 +523,7 @@
     position: absolute;
     transform: translate(-4px, -3px);
     width: clamp(13px, 4cqw, 22px);
-    z-index: 4;
+    z-index: 5;
   }
   .cursor svg {
     display: block;
@@ -440,22 +567,13 @@
     position: absolute;
     transform: translate(-50%, -50%);
     width: clamp(20px, 6cqw, 36px);
-    z-index: 3;
+    z-index: 4;
   }
   .hotspot i {
     background: var(--accent);
     border-radius: 50%;
     height: 30%;
     width: 30%;
-  }
-  .empty-visual {
-    align-items: center;
-    color: #c7c0b7;
-    display: flex;
-    font-size: 0.75rem;
-    inset: 0;
-    justify-content: center;
-    position: absolute;
   }
   @keyframes preview-click {
     from {

@@ -129,7 +129,6 @@
     <header class="surface-header">
       <div>
         <h1>Release</h1>
-        <p>Resolve blockers, review channel policy, then export source for the release pipeline.</p>
       </div>
     </header>
 
@@ -156,7 +155,6 @@
           <div>
             <h2 id="scene-readiness-title">Authoring blockers</h2>
           </div>
-          <p>Only scenes that need attention are shown.</p>
         </div>
         {#if scenes.length === 0}
           <div class="surface-state">
@@ -224,10 +222,6 @@
           <div>
             <h2 id="channels-title">Channels</h2>
           </div>
-          <p>
-            Readiness below is preflight only. Approval and derivative evidence remain external
-            gates.
-          </p>
         </div>
         {#if coverage.length === 0}
           <div class="surface-state">
@@ -313,7 +307,6 @@
           <div>
             <h2 id="export-title">Export handoff</h2>
           </div>
-          <p>Export portable source only after reviewing authoring and channel blockers.</p>
         </div>
         <div
           class="release-summary"

@@ -6,7 +6,7 @@ import { demoScene } from '../src/lib/demo';
 import * as evidenceModule from '../src/lib/evidence';
 import type { EvidenceImportInspection } from '../src/lib/evidence';
 import { createLocalMediaUrl, getLocalMediaBlob } from '../src/lib/local-media';
-import { cloneScene } from '../src/lib/model';
+import { cloneScene, toPlayerScene } from '../src/lib/model';
 import * as portableModule from '../src/lib/portable';
 import { defaultProject, exportSceneYaml } from '../src/lib/portable';
 import type { PortableImportResult } from '../src/lib/portable';
@@ -21,6 +21,7 @@ import { studioThemeLibrary } from '../src/lib/theme-library';
 import AppShell from '../src/lib/components/AppShell.svelte';
 import CatalogView from '../src/lib/components/CatalogView.svelte';
 import EvidenceImportDialog from '../src/lib/components/EvidenceImportDialog.svelte';
+import PresentationPreview from '../src/lib/components/PresentationPreview.svelte';
 import SceneCreateDialog from '../src/lib/components/SceneCreateDialog.svelte';
 import SceneEditor from '../src/lib/components/SceneEditor.svelte';
 import SceneHealth from '../src/lib/components/SceneHealth.svelte';
@@ -490,6 +491,20 @@ describe('Studio component workflows', () => {
     });
   });
 
+  it('groups one continuous text edit into a single undo step', async () => {
+    render(SceneEditor, { props: { scene: cloneScene(demoScene) } });
+    const title = screen.getByLabelText('Title') as HTMLInputElement;
+    const original = title.value;
+
+    title.focus();
+    await fireEvent.input(title, { target: { value: `${original} draft` } });
+    await fireEvent.input(title, { target: { value: `${original} revised draft` } });
+    await fireEvent.blur(title);
+    await fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+
+    expect(title.value).toBe(original);
+  });
+
   it('keeps the mobile editor to one navigable pane and collapses advanced authoring controls', async () => {
     window.matchMedia = matchMedia(true);
     render(SceneEditor, { props: { scene: cloneScene(demoScene) } });
@@ -533,9 +548,7 @@ describe('Studio component workflows', () => {
   it('authors and keyboard-edits callouts, spotlights, arrows, and masks on the canvas', async () => {
     render(SceneEditor, { props: { scene: cloneScene(demoScene) } });
 
-    const existingCallout = screen.getByRole('button', {
-      name: /Callout 1: Only workspace admins/iu,
-    });
+    const existingCallout = screen.getByRole('button', { name: /Callout 1: Admin only/iu });
     await fireEvent.click(existingCallout);
     expect(screen.getByLabelText('Selected annotation controls')).toBeTruthy();
     const canvas = document.querySelector<HTMLElement>('.canvas')!;
@@ -557,7 +570,7 @@ describe('Studio component workflows', () => {
     await fireEvent.pointerUp(window);
     expect(
       screen
-        .getByRole('button', { name: /Callout 1: Only workspace admins/iu })
+        .getByRole('button', { name: /Callout 1: Admin only/iu })
         .closest<HTMLElement>('.canvas-annotation-object')!.style.left,
     ).not.toBe(initialCalloutLeft);
 
@@ -1028,6 +1041,52 @@ describe('Studio component workflows', () => {
         expect(Number.parseFloat(overlay.style.top)).toBeLessThanOrEqual(100);
       }
     }
+  });
+
+  it('uses a bounded interstitial and reserved copy header for image-free motion steps', async () => {
+    render(ScenePreview, { props: { scene: cloneScene(demoScene) } });
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'Motion' }));
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'View What access should they have?' }),
+    );
+
+    const frame = document.querySelector<HTMLElement>('.motion-frame')!;
+    const heading = frame.querySelector<HTMLElement>('.motion-heading')!;
+    const fallback = frame.querySelector<HTMLElement>('[data-presentation-fallback]')!;
+    expect(within(heading).getByText('What access should they have?')).toBeTruthy();
+    expect(within(fallback).getByText('Member access')).toBeTruthy();
+    expect(within(fallback).getByText('Administrator access')).toBeTruthy();
+    expect(within(frame).queryByText(/No screenshot/iu)).toBeNull();
+    expect(frame.querySelector('.motion-heading + .motion-visual')).toBeTruthy();
+  });
+
+  it('keeps automatic motion playback off when reduced motion is requested', async () => {
+    window.matchMedia = matchMedia(true);
+    render(ScenePreview, { props: { scene: cloneScene(demoScene) } });
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'Motion' }));
+    const play = screen.getByRole('button', { name: 'Play 00:14' });
+    await fireEvent.click(play);
+
+    expect(play.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Automatic playback is disabled while reduced motion is enabled.',
+    );
+  });
+
+  it('contains a failed Studio preview image instead of exposing broken alt text', async () => {
+    const original = toPlayerScene(cloneScene(demoScene)).steps[0]!;
+    render(PresentationPreview, {
+      props: { step: { ...original, image: '/missing-preview-image.png' } },
+    });
+
+    await fireEvent.error(screen.getByAltText(original.alt!));
+    await tick();
+
+    const fallback = document.querySelector<HTMLElement>('[data-presentation-fallback]')!;
+    expect(screen.queryByAltText(original.alt!)).toBeNull();
+    expect(within(fallback).getByRole('heading', { name: original.title })).toBeTruthy();
   });
 
   it('provides roving keyboard tabs for output previews without hiding mobile labels', async () => {

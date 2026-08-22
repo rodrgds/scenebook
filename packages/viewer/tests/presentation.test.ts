@@ -144,4 +144,59 @@ describe('viewer presentation geometry', () => {
       }
     }
   });
+
+  it('keeps the hotspot target and label without stacking its marker under the cursor', () => {
+    const tag = 'scenebook-presentation-test';
+    const player = document.createElement(tag) as ScenebookPlayerElement;
+    document.body.append(player);
+    player.scene = {
+      version: 1,
+      id: 'cursor-hotspot-scene',
+      title: 'Cursor target',
+      steps: [
+        {
+          id: 'target',
+          type: 'screen',
+          title: 'Choose continue',
+          image: 'data:image/png;base64,iVBORw0KGgo=',
+          cursor: { x: 0.8, y: 0.25, visible: true, click: true },
+          hotspot: { x: 0.8, y: 0.25, label: 'Continue' },
+        },
+      ],
+    };
+
+    const hotspot = player.shadowRoot!.querySelector<HTMLButtonElement>('.hotspot')!;
+    expect(hotspot.classList.contains('with-cursor')).toBe(true);
+    expect(hotspot.getAttribute('aria-label')).toBe('Continue');
+    expect(hotspot.querySelector('.hotspot-label')?.textContent).toBe('Continue');
+  });
+
+  it('replaces a failed screenshot with a contained status instead of broken alt text', () => {
+    const tag = 'scenebook-presentation-test';
+    const player = document.createElement(tag) as ScenebookPlayerElement;
+    document.body.append(player);
+    player.scene = {
+      version: 1,
+      id: 'missing-image-scene',
+      title: 'Missing image',
+      steps: [
+        {
+          id: 'missing-image',
+          type: 'screen',
+          title: 'Review the result',
+          alt: 'A product screenshot that must not spill into the layout',
+          image: '/missing-image.png',
+        },
+      ],
+    };
+
+    const root = player.shadowRoot!;
+    root
+      .querySelector<HTMLImageElement>('[data-presentation-image]')!
+      .dispatchEvent(new Event('error'));
+
+    expect(root.querySelector('.asset-fallback')?.textContent).toContain('Screenshot unavailable');
+    expect(root.querySelector('[data-presentation-image]')).toBeNull();
+    expect(root.textContent).not.toContain('A product screenshot that must not spill');
+  });
 });

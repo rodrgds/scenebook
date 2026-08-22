@@ -163,10 +163,7 @@
   <header>
     <div>
       <h2>Export this scene</h2>
-      <p>
-        Download portable source here. Use the CLI for privacy-gated production formats and
-        deployment; Studio never uploads or deploys on your behalf.
-      </p>
+      <p>Download portable source here. Build production formats with the CLI.</p>
     </div>
   </header>
 
@@ -175,66 +172,69 @@
   <div class="publish-layout">
     <div class="publish-main">
       <section class="release-card" aria-labelledby="release-contents">
-        <div class="section-heading">
-          <span>
-            <strong id="release-contents">Portable release contents</strong>
-            <small>Computed from the current saved scene</small>
-          </span>
-          <span class="draft-badge">Local only</span>
-        </div>
-        <div class="release-summary">
-          <div>
-            <span class="summary-icon"><Icon name="file" size={16} /></span>
-            <span
-              ><strong>{scene.steps.length} Steps</strong><small>{assetCount} visual assets</small
-              ></span
-            >
-          </div>
-          <div>
-            <span class="summary-icon"><Icon name="globe" size={16} /></span>
-            <span
-              ><strong>{translationCount} translations</strong><small>Locale drafts retained</small
-              ></span
-            >
-          </div>
-          <div>
-            <span class="summary-icon"><Icon name="lock" size={16} /></span>
+        <details class="card-disclosure">
+          <summary class="section-heading">
             <span>
-              <strong>{opaqueMaskCount} opaque masks</strong>
-              <small>Irreversible privacy redaction</small>
+              <strong id="release-contents">Source details</strong>
+              <small>{scene.steps.length} steps · {assetCount} visual assets</small>
             </span>
+            <span class="draft-badge">Local only</span>
+          </summary>
+          <div class="release-summary">
+            <div>
+              <span class="summary-icon"><Icon name="file" size={16} /></span>
+              <span
+                ><strong>{scene.steps.length} steps</strong><small>{assetCount} visual assets</small
+                ></span
+              >
+            </div>
+            <div>
+              <span class="summary-icon"><Icon name="globe" size={16} /></span>
+              <span
+                ><strong>{translationCount} translations</strong><small
+                  >Locale drafts retained</small
+                ></span
+              >
+            </div>
+            <div>
+              <span class="summary-icon"><Icon name="lock" size={16} /></span>
+              <span>
+                <strong>{opaqueMaskCount} opaque masks</strong>
+                <small>Irreversible privacy redaction</small>
+              </span>
+            </div>
+            <div>
+              <span class="summary-icon"><Icon name="mask" size={16} /></span>
+              <span>
+                <strong>{decorativeBlurCount} manual blurs</strong>
+                <small>Decorative custom regions only</small>
+              </span>
+            </div>
           </div>
-          <div>
-            <span class="summary-icon"><Icon name="mask" size={16} /></span>
-            <span>
-              <strong>{decorativeBlurCount} manual blurs</strong>
-              <small>Decorative custom regions only</small>
-            </span>
-          </div>
-        </div>
-        <dl class="release-metadata">
-          <div>
-            <dt>Scene ID</dt>
-            <dd>
-              <code>{scene.id}</code>
-              <button type="button" onclick={() => copyText(scene.id, 'scene-id')}>
-                {copiedKey === 'scene-id' ? 'Copied' : 'Copy'}
-              </button>
-            </dd>
-          </div>
-          <div>
-            <dt>Capability</dt>
-            <dd>{scene.portableSource?.capability ?? 'captured'}</dd>
-          </div>
-          <div>
-            <dt>Automation</dt>
-            <dd>{scene.portableSource?.automation.level ?? 'none'}</dd>
-          </div>
-          <div>
-            <dt>Checks</dt>
-            <dd>{checkCount} definitions, no invented results</dd>
-          </div>
-        </dl>
+          <dl class="release-metadata">
+            <div>
+              <dt>Scene ID</dt>
+              <dd>
+                <code>{scene.id}</code>
+                <button type="button" onclick={() => copyText(scene.id, 'scene-id')}>
+                  {copiedKey === 'scene-id' ? 'Copied' : 'Copy'}
+                </button>
+              </dd>
+            </div>
+            <div>
+              <dt>Capability</dt>
+              <dd>{scene.portableSource?.capability ?? 'captured'}</dd>
+            </div>
+            <div>
+              <dt>Automation</dt>
+              <dd>{scene.portableSource?.automation.level ?? 'none'}</dd>
+            </div>
+            <div>
+              <dt>Checks</dt>
+              <dd>{checkCount} definitions, no invented results</dd>
+            </div>
+          </dl>
+        </details>
       </section>
 
       <section class="distribution-card" aria-labelledby="distribution-policy">
@@ -383,45 +383,11 @@
     </div>
 
     <aside>
-      <section class="artifact-card">
-        <div class="section-heading">
-          <span><strong>Scene YAML</strong><small>Human-reviewable canonical source</small></span>
-          <Icon name="file" size={16} />
-        </div>
-        <p>
-          Best for code review and readable diffs. Inline passive image data keeps a single file
-          self-contained.
-        </p>
-        <ul>
-          <li><Icon name="check" size={13} />Schema version 1</li>
-          <li><Icon name="check" size={13} />Narrative, presentation, locales, checks</li>
-          <li><Icon name="check" size={13} />No network or deployment side effect</li>
-        </ul>
-        <button
-          class="button"
-          type="button"
-          disabled={Boolean(exporting)}
-          onclick={() => exportScene('yaml')}
-        >
-          <Icon name="download" size={14} />
-          {exporting === 'yaml' ? 'Preparing YAML…' : 'Download scene YAML'}
-        </button>
-      </section>
-
       <section class="artifact-card primary-artifact">
         <div class="section-heading">
-          <span><strong>Scene ZIP</strong><small>Complete source handoff</small></span>
+          <span><strong>Download source</strong><small>ZIP recommended</small></span>
           <Icon name="collection" size={16} />
         </div>
-        <p>
-          Bundles <code>scene.yaml</code> with content-addressed passive raster assets and retained sidecars.
-          Import verifies paths, sizes, media, and hashes.
-        </p>
-        <ul>
-          <li><Icon name="check" size={13} />Portable across Studio instances</li>
-          <li><Icon name="check" size={13} />No remote asset dependency</li>
-          <li><Icon name="check" size={13} />Strict archive safety limits</li>
-        </ul>
         <button
           class="button primary"
           type="button"
@@ -430,6 +396,15 @@
         >
           <Icon name="download" size={14} />
           {exporting === 'zip' ? 'Preparing ZIP…' : 'Download scene ZIP'}
+        </button>
+        <button
+          class="button"
+          type="button"
+          disabled={Boolean(exporting)}
+          onclick={() => exportScene('yaml')}
+        >
+          <Icon name="download" size={14} />
+          {exporting === 'yaml' ? 'Preparing YAML…' : 'Download scene YAML'}
         </button>
       </section>
 
@@ -821,30 +796,6 @@
   .boundary-note strong {
     color: var(--ink);
   }
-  .artifact-card > p {
-    color: var(--muted);
-    font-size: 0.8rem;
-    line-height: 1.55;
-    margin: 0;
-    padding: 13px;
-  }
-  .artifact-card ul {
-    display: grid;
-    gap: 7px;
-    list-style: none;
-    margin: 0;
-    padding: 0 13px 13px;
-  }
-  .artifact-card li {
-    align-items: center;
-    color: var(--muted);
-    display: flex;
-    font-size: 0.78rem;
-    gap: 6px;
-  }
-  .artifact-card li :global(svg) {
-    color: var(--pass);
-  }
   .artifact-card > .button {
     justify-content: center;
     margin: 0 13px 13px;
@@ -906,10 +857,6 @@
     }
     .deploy-card {
       grid-column: auto;
-    }
-    .artifact-card > p,
-    .artifact-card > ul {
-      display: none;
     }
     .artifact-card > .button {
       margin-top: 13px;

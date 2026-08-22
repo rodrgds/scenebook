@@ -232,8 +232,8 @@ describe('portable Studio files', () => {
       {
         id: 'open-members-hotspot',
         kind: 'hotspot',
-        rect: { x: 0.7355, y: 0.1945, width: 0.045, height: 0.045 },
-        label: 'Choose Invite member',
+        rect: { x: 0.8235, y: 0.14450000000000002, width: 0.045, height: 0.045 },
+        label: 'Invite member',
       },
       {
         id: 'authored-callout',

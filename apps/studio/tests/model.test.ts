@@ -148,7 +148,7 @@ describe('Studio scene editing', () => {
     source.steps[0]!.cursor = { x: 0.81, y: 0.36, visible: true, click: true };
     const player = toPlayerScene(source);
     expect(player.id).toBe(demoScene.id);
-    expect(player.steps[0]!.hotspot?.label).toBe('Choose Invite member');
+    expect(player.steps[0]!.hotspot?.label).toBe('Invite member');
     expect(player.steps[0]).toMatchObject({
       crop: { x: 0.78, y: 0.31, zoom: 2.4 },
       frame: 'mobile',

@@ -331,14 +331,21 @@
                 >Enable Motion in a step’s output visibility.</span
               >
             </div>{:else if motionSteps[currentMotion]}
-            <PresentationPreview step={motionSteps[currentMotion]!} aspect="wide" />
+            <header class="motion-heading">
+              <span class="mono">{String(currentMotion + 1).padStart(2, '0')}</span>
+              <div>
+                <strong>{motionSteps[currentMotion]?.title}</strong>
+                <p>{motionSteps[currentMotion]?.instruction}</p>
+              </div>
+            </header>
+            <div class="motion-visual">
+              <PresentationPreview
+                step={motionSteps[currentMotion]!}
+                aspect="wide"
+                compact={!motionSteps[currentMotion]?.image}
+              />
+            </div>
           {/if}
-          <div class="motion-caption">
-            <span class="mono">{String(currentMotion + 1).padStart(2, '0')}</span><strong
-              >{motionSteps[currentMotion]?.title}</strong
-            >
-            <p>{motionSteps[currentMotion]?.instruction}</p>
-          </div>
         </div>
         <div class="motion-controls">
           <button
@@ -404,7 +411,7 @@
             </div>
             <div>
               <dt>Captions</dt>
-              <dd>Step copy overlay</dd>
+              <dd>Reserved frame header</dd>
             </div>
           </dl>
         </aside>
@@ -737,10 +744,15 @@
     background: var(--ink);
     border-radius: 10px;
     box-shadow: var(--shadow-md);
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
     overflow: hidden;
     position: relative;
   }
-  .motion-frame :global([data-presentation-preview]) {
+  .motion-visual {
+    min-height: 0;
+  }
+  .motion-visual :global([data-presentation-preview]) {
     height: 100%;
     width: 100%;
   }
@@ -761,28 +773,34 @@
   .preview-empty span {
     font-size: 0.75rem;
   }
-  .motion-caption {
-    background: rgba(25, 24, 22, 0.9);
-    bottom: 24px;
+  .motion-heading {
+    align-items: start;
+    background: var(--ink);
     color: white;
-    left: 24px;
-    max-width: 430px;
-    padding: 14px 16px;
-    position: absolute;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: auto minmax(0, 1fr);
+    min-width: 0;
+    padding: clamp(10px, 1.8vw, 16px) clamp(12px, 2vw, 20px);
   }
-  .motion-caption .mono {
+  .motion-heading .mono {
     color: #e58c78;
     font-size: 0.75rem;
+    padding-top: 2px;
   }
-  .motion-caption strong {
+  .motion-heading strong {
     display: block;
-    font-size: 1rem;
-    margin-top: 3px;
+    font-size: clamp(0.82rem, 1.45vw, 1rem);
+    line-height: 1.25;
+    overflow-wrap: anywhere;
   }
-  .motion-caption p {
+  .motion-heading p {
     color: #cbc5bd;
     font-size: 0.75rem;
-    margin: 4px 0 0;
+    line-height: 1.35;
+    margin: 2px 0 0;
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
   }
   .motion-controls {
     align-items: center;
@@ -803,20 +821,21 @@
     display: flex;
     font-size: 0.75rem;
     gap: 6px;
-    height: 35px;
+    min-height: 40px;
     padding: 0 12px;
   }
   .motion-timeline {
     display: flex;
     flex: 1;
     gap: 2px;
-    height: 24px;
+    min-height: 40px;
     margin-left: 6px;
   }
   .motion-timeline button {
     background: transparent;
     border: 0;
-    padding: 8px 1px;
+    min-height: 40px;
+    padding: 16px 1px;
   }
   .motion-timeline span {
     background: var(--line);
@@ -858,13 +877,13 @@
     color: var(--faint);
     font-size: 0.75rem;
     margin-bottom: 3px;
-    text-transform: uppercase;
   }
   dd {
     font-size: 0.75rem;
     margin: 0;
   }
   .social-grid {
+    align-items: start;
     display: grid;
     gap: 15px;
     grid-template-columns: 1.3fr 0.8fr 270px;
@@ -875,6 +894,7 @@
     aspect-ratio: 1200 / 630;
     background: var(--paper);
     border: 1px solid var(--line);
+    container-type: inline-size;
     display: grid;
     padding: clamp(22px, 4vw, 50px);
     position: relative;
@@ -933,6 +953,15 @@
     position: absolute;
     width: 83px;
   }
+  @container (max-width: 420px) {
+    .og-route {
+      display: none;
+    }
+    .og-card h2,
+    .og-card > p {
+      max-width: 100%;
+    }
+  }
   .readme-card {
     align-items: center;
     background: var(--ink);
@@ -963,24 +992,27 @@
   .social-square {
     aspect-ratio: 1;
     background: var(--ink);
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
     grid-column: 1 / 3;
-    max-width: 540px;
+    max-width: 640px;
     overflow: hidden;
     position: relative;
+    width: 100%;
   }
   .social-square > :global([data-presentation-preview]) {
+    aspect-ratio: auto !important;
     height: 100%;
-    opacity: 0.68;
-    position: absolute;
+    min-height: 0;
+    opacity: 0.78;
+    position: relative;
     width: 100%;
   }
   .social-square > .social-copy {
-    bottom: 0;
+    background: var(--ink);
     color: white;
-    left: 0;
-    padding: 28px;
-    position: absolute;
-    right: 0;
+    padding: clamp(16px, 3vw, 24px);
+    position: relative;
   }
   .social-square .mono {
     color: #ef9d8a;
@@ -996,10 +1028,11 @@
     margin: 0;
   }
   .social-grid aside {
+    align-self: start;
     background: var(--surface);
     border: 1px solid var(--line);
     grid-column: 3;
-    grid-row: 1 / span 2;
+    grid-row: 1;
     padding: 17px;
   }
   .social-grid aside h3 {
@@ -1037,6 +1070,9 @@
   @media (max-width: 950px) {
     .preview-toolbar {
       grid-template-columns: 1fr auto;
+    }
+    .preview-context {
+      display: none;
     }
     .viewport-switch {
       display: none;
@@ -1095,10 +1131,8 @@
     .guide-page li {
       grid-template-columns: 24px 1fr;
     }
-    .motion-caption {
-      bottom: 10px;
-      left: 10px;
-      right: 10px;
+    .motion-heading p {
+      display: none;
     }
     .social-grid {
       grid-template-columns: 1fr;

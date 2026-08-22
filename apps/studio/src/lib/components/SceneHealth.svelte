@@ -285,10 +285,7 @@
               ? `${warnings.length} improvements recommended`
               : 'Ready for portable export'}
         </h2>
-        <p>
-          This audit checks the current scene source. It does not claim to replay the product or
-          compare visual baselines.
-        </p>
+        <p>Checks source only — not product replay or visual comparison.</p>
       </div>
     </div>
     <div class="audit-meta">
@@ -347,7 +344,10 @@
                   size={14}
                 /></span
               >
-              <span><strong>{item.title}</strong><small>{item.detail}</small></span>
+              <span>
+                <strong>{item.title}</strong>
+                {#if item.level !== 'pass'}<small>{item.detail}</small>{/if}
+              </span>
               {#if item.stepId}<code>{item.stepId}</code>{/if}
             </li>
           {/each}
