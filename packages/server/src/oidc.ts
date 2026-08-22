@@ -14,10 +14,38 @@ export interface GitHubOidcVerifier {
   verify(token: string): Promise<GitHubOidcClaims>;
 }
 
-function claim(payload: JWTPayload, key: string): string {
+interface ClaimedOidcPayload extends JWTPayload {
+  readonly repository: string;
+  readonly run_id: string;
+  readonly sha: string;
+  readonly ref: string;
+  readonly job_workflow_ref?: string;
+  readonly workflow_ref: string;
+  readonly actor: string;
+  readonly run_attempt: string;
+}
+
+function isClaimedOidcPayload(payload: JWTPayload): payload is ClaimedOidcPayload {
+  for (const key of [
+    'repository',
+    'run_id',
+    'sha',
+    'ref',
+    'workflow_ref',
+    'actor',
+    'run_attempt',
+  ] as const) {
+    const value = payload[key];
+    if (typeof value !== 'string' || value.length === 0) return false;
+  }
+  return true;
+}
+
+function claim<
+  K extends 'repository' | 'run_id' | 'sha' | 'ref' | 'workflow_ref' | 'actor' | 'run_attempt',
+>(payload: ClaimedOidcPayload, key: K): string {
   const value = payload[key];
-  if (typeof value !== 'string' || value.length === 0)
-    throw new Error(`GitHub OIDC token is missing ${key}`);
+  if (value.length === 0) throw new Error(`GitHub OIDC token is missing ${String(key)}`);
   return value;
 }
 
@@ -43,10 +71,13 @@ export class RemoteGitHubOidcVerifier implements GitHubOidcVerifier {
       clockTolerance: 5,
       maxTokenAge: '10 minutes',
     });
+    if (!isClaimedOidcPayload(payload)) {
+      throw new Error('GitHub OIDC token is missing required claims');
+    }
     const repository = claim(payload, 'repository');
     const runId = claim(payload, 'run_id');
     const workflowRef =
-      typeof payload.job_workflow_ref === 'string' && payload.job_workflow_ref.length > 0
+      payload.job_workflow_ref && payload.job_workflow_ref.length > 0
         ? payload.job_workflow_ref
         : claim(payload, 'workflow_ref');
     return {
@@ -56,10 +87,7 @@ export class RemoteGitHubOidcVerifier implements GitHubOidcVerifier {
       workflowRef,
       actor: claim(payload, 'actor'),
       runId,
-      tokenId:
-        typeof payload.jti === 'string'
-          ? payload.jti
-          : `${repository}:${runId}:${claim(payload, 'run_attempt')}`,
+      tokenId: payload.jti ?? `${repository}:${runId}:${claim(payload, 'run_attempt')}`,
     };
   }
 }

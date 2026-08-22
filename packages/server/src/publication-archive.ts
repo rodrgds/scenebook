@@ -212,7 +212,7 @@ export async function verifyPublicationArchive(
   const members: VerifiedMember[] = [];
   let archiveByteLength = 0;
   let totalUncompressedBytes = 0;
-  let failure: unknown;
+  let failure: PublicationArchiveIntegrityError | undefined;
   const unzip = new Unzip((file) => {
     if (failure) return;
     const expected = inventory.files[members.length];

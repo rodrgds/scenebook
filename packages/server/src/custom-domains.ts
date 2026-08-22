@@ -3,6 +3,8 @@ import { resolveTxt } from 'node:dns/promises';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { isIP, type LookupFunction } from 'node:net';
+
+import type { JsonValue } from '@scenebook/schema';
 import { domainToASCII } from 'node:url';
 
 import { z } from 'zod';
@@ -118,16 +120,25 @@ export interface CustomDomainDnsResolver {
   resolveTxt(hostname: string): Promise<readonly (readonly string[])[]>;
 }
 
+function hasErrnoCode<T>(error: T, code: string): boolean {
+  return error instanceof Error && 'code' in error && error.code === code;
+}
+
+function isStringSegments<T>(value: T): value is T & readonly string[] {
+  if (!Array.isArray(value)) return false;
+  for (const segment of value) {
+    const text: unknown = segment;
+    if (typeof text !== 'string') return false;
+  }
+  return true;
+}
+
 export class NodeCustomDomainDnsResolver implements CustomDomainDnsResolver {
   async resolveTxt(hostname: string): Promise<readonly (readonly string[])[]> {
     try {
       return await resolveTxt(hostname);
     } catch (error) {
-      const code =
-        typeof error === 'object' && error !== null && 'code' in error
-          ? String((error as { code?: unknown }).code)
-          : '';
-      if (code === 'ENODATA' || code === 'ENOTFOUND') return [];
+      if (hasErrnoCode(error, 'ENODATA') || hasErrnoCode(error, 'ENOTFOUND')) return [];
       throw new CustomDomainDnsError('DNS verification is temporarily unavailable');
     }
   }
@@ -148,7 +159,7 @@ export async function hasExactCustomDomainDnsProof(
   return records.some(
     (segments) =>
       Array.isArray(segments) &&
-      segments.every((segment) => typeof segment === 'string') &&
+      isStringSegments(segments) &&
       segments.join('') === challengeValue,
   );
 }
@@ -347,9 +358,10 @@ export class HttpCustomDomainProvisioner implements CustomDomainProvisioner {
         'provisioner_response_unauthenticated',
       );
     }
-    let parsed: unknown;
+    let parsed: JsonValue;
     try {
-      parsed = JSON.parse(responseBody) as unknown;
+      // SAFETY: JSON.parse of the capped response body only yields JSON-compatible values.
+      parsed = JSON.parse(responseBody) as JsonValue;
     } catch {
       throw new CustomDomainProvisionerError(
         'Custom-domain provisioner returned invalid JSON',
@@ -392,21 +404,16 @@ export class HttpCustomDomainProvisioner implements CustomDomainProvisioner {
         (incoming) => {
           void readCappedWebhookResponse(incoming, MAX_PROVISIONER_RESPONSE_BYTES)
             .then((responseBody) => {
+              const responseHeaders = new Headers({
+                'content-length': String(Buffer.byteLength(responseBody)),
+                'content-type': String(incoming.headers['content-type'] ?? 'application/json'),
+              });
+              const signature = incoming.headers[PROVISIONER_SIGNATURE_HEADER];
+              if (signature !== undefined) {
+                responseHeaders.set(PROVISIONER_SIGNATURE_HEADER, String(signature));
+              }
               resolve(
-                new Response(responseBody, {
-                  status: incoming.statusCode ?? 502,
-                  headers: {
-                    ...(incoming.headers[PROVISIONER_SIGNATURE_HEADER]
-                      ? {
-                          [PROVISIONER_SIGNATURE_HEADER]: String(
-                            incoming.headers[PROVISIONER_SIGNATURE_HEADER],
-                          ),
-                        }
-                      : {}),
-                    'content-length': String(Buffer.byteLength(responseBody)),
-                    'content-type': String(incoming.headers['content-type'] ?? 'application/json'),
-                  },
-                }),
+                new Response(responseBody, { status: incoming.statusCode ?? 502, headers: responseHeaders }),
               );
             })
             .catch(reject);

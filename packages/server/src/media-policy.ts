@@ -483,6 +483,7 @@ export class ObjectMediaStreamValidator {
       throw error;
     }
     const prefix = this.prefix.subarray(0, this.prefixBytes);
+    // SAFETY: the constructor validates mediaType against AllowedObjectMediaType.
     let matches = true;
     switch (this.mediaType as AllowedObjectMediaType) {
       case 'application/json':

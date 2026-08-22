@@ -23,6 +23,7 @@ import {
 
 import { ALLOWED_OBJECT_MEDIA_TYPES } from './media-policy.js';
 import { artifactObjectIdentity } from './object-identity.js';
+import { asJsonDocument, isJsonObject, isJsonString } from './json-document.js';
 import { assertSafeGitHubSourcePath } from './github-app.js';
 
 export const IdentityScopeSchema = z.enum([
@@ -103,8 +104,8 @@ const StudioSceneJsonSchema = z
     if (!IdSchema.safeParse(scene.id).success) {
       context.addIssue({ code: 'custom', message: 'Studio Scene id is invalid', path: ['id'] });
     }
-    const visit = (value: unknown, path: PropertyKey[]): void => {
-      if (typeof value === 'string') {
+    const visit = (value: ReturnType<typeof asJsonDocument>, path: PropertyKey[]): void => {
+      if (isJsonString(value)) {
         if (/^(?:blob|data):/iu.test(value)) {
           context.addIssue({
             code: 'custom',
@@ -118,11 +119,11 @@ const StudioSceneJsonSchema = z
         value.forEach((item, index) => visit(item, [...path, index]));
         return;
       }
-      if (value && typeof value === 'object') {
+      if (isJsonObject(value)) {
         for (const [key, item] of Object.entries(value)) visit(item, [...path, key]);
       }
     };
-    visit(scene, []);
+    visit(asJsonDocument(scene), []);
   });
 
 export const StudioSceneDocumentSchema = z
