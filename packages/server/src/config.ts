@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { JsonValue } from '@scenebook/schema';
+
 import { IdentityTokenService, MAX_PREVIOUS_IDENTITY_VERIFICATION_KEYS } from './auth.js';
 import { normalizeCustomDomainHostname } from './custom-domains.js';
 
@@ -502,16 +504,26 @@ function required(env: NodeJS.ProcessEnv, key: string): string {
 function jsonStringArray(env: NodeJS.ProcessEnv, key: string): string[] {
   const raw = env[key];
   if (raw === undefined || raw === '') return [];
-  let value: unknown;
+  let parsed: JsonValue;
   try {
-    value = JSON.parse(raw);
+    // SAFETY: JSON.parse of environment JSON only yields JSON-compatible values.
+    parsed = JSON.parse(raw) as JsonValue;
   } catch {
     throw new Error(`${key} must be a JSON array of strings`);
   }
-  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
+  if (!isJsonStringArray(parsed)) {
     throw new Error(`${key} must be a JSON array of strings`);
   }
-  return value;
+  return [...parsed];
+}
+
+function isJsonStringArray(value: JsonValue): value is JsonValue & readonly string[] {
+  if (!Array.isArray(value)) return false;
+  for (const entry of value) {
+    const item: unknown = entry;
+    if (typeof item !== 'string') return false;
+  }
+  return true;
 }
 
 function integer(env: NodeJS.ProcessEnv, key: string, fallback: number): number {
@@ -550,10 +562,11 @@ export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
           kind: 'filesystem' as const,
           root: env.SCENEBOOK_STORAGE_ROOT ?? '/var/lib/scenebook/objects',
         };
-  let webhooks: unknown = [];
+  let webhooks: JsonValue = [];
   if (env.SCENEBOOK_WEBHOOKS_JSON) {
     try {
-      webhooks = JSON.parse(env.SCENEBOOK_WEBHOOKS_JSON) as unknown;
+      // SAFETY: JSON.parse of environment JSON only yields JSON-compatible values.
+      webhooks = JSON.parse(env.SCENEBOOK_WEBHOOKS_JSON) as JsonValue;
     } catch (error) {
       throw new Error('SCENEBOOK_WEBHOOKS_JSON must be valid JSON', { cause: error });
     }

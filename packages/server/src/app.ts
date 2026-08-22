@@ -6105,18 +6105,19 @@ export function createControlPlaneApp(
 
       const policy = evaluateChannelPolicy(channel.policy, readiness);
       if (!policy.allowed) {
+        const decisionDetail: JsonObject = {
+          allowed: policy.allowed,
+          scenes: policy.scenes.map((scene) => {
+            const entry: JsonObject = { sceneId: scene.sceneId, action: scene.action };
+            if (scene.revision !== undefined) entry['revision'] = scene.revision;
+            entry['reasons'] = scene.reasons.map((reason) => ({ ...reason }));
+            return entry;
+          }),
+          blockers: policy.blockers.map((reason) => ({ ...reason })),
+        };
+        if (policy.evaluatedAt !== undefined) decisionDetail['evaluatedAt'] = policy.evaluatedAt;
         throw new HttpError(409, 'channel_policy_blocked', 'Channel policy blocked publication', {
-          decision: {
-            allowed: policy.allowed,
-            scenes: policy.scenes.map((scene) => ({
-              sceneId: scene.sceneId,
-              action: scene.action,
-              ...(scene.revision === undefined ? {} : { revision: scene.revision }),
-              reasons: scene.reasons.map((reason) => ({ ...reason })),
-            })),
-            blockers: policy.blockers.map((reason) => ({ ...reason })),
-            ...(policy.evaluatedAt === undefined ? {} : { evaluatedAt: policy.evaluatedAt }),
-          },
+          decision: decisionDetail,
         });
       }
       const decisions = new Map(policy.scenes.map((decision) => [decision.sceneId, decision]));

@@ -10,6 +10,7 @@ function blockedIpv4(address: string): boolean {
   const parts = address.split('.').map(Number);
   if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255))
     return true;
+  // SAFETY: parts.length === 4 above guarantees the destructured tuple shape.
   const [a, b] = parts as [number, number, number, number];
   return (
     a === 0 ||
@@ -58,6 +59,7 @@ export async function validateWebhookUrl(
     throw new Error('Webhook hostname resolves to a private, reserved, or unsafe address');
   }
   const selected = addresses[0]!;
+  // SAFETY: lookup with verbatim addresses only returns numeric IPv4/IPv6 families.
   return { url, address: selected.address, family: selected.family as 4 | 6 };
 }
 
@@ -121,7 +123,7 @@ export class WebhookDispatcher {
     return webhook;
   }
 
-  async deliver(id: string, payload: unknown, now = new Date()): Promise<WebhookResponse> {
+  async deliver<T>(id: string, payload: T, now = new Date()): Promise<WebhookResponse> {
     const webhook = this.get(id);
     const resolved = await validateWebhookUrl(webhook.url, { allowHttp: this.allowHttp });
     const body = JSON.stringify(payload);

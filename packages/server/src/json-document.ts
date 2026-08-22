@@ -15,5 +15,6 @@ export function isJsonString(value: JsonValue): value is string {
  * JSON-compatible primitives, arrays, and plain objects.
  */
 export function asJsonDocument<T>(value: T): JsonValue {
+  // SAFETY: callers pass Zod-parsed records whose schemas only admit JSON values.
   return value as JsonValue;
 }

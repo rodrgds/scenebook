@@ -40,10 +40,7 @@ export class UploadAdmissionController {
     }
   }
 
-  acquire(
-    tenantId: string,
-    bytes: number,
-  ): { readonly snapshot: UploadAdmissionSnapshot; release(): UploadAdmissionSnapshot } {
+  acquire(tenantId: string, bytes: number) {
     if (!tenantId || tenantId.length > 200) throw new TypeError('Invalid upload tenant ID');
     if (!Number.isSafeInteger(bytes) || bytes <= 0)
       throw new RangeError('Upload byte reservation must be a positive safe integer');
@@ -66,7 +63,7 @@ export class UploadAdmissionController {
     this.globalBytes += bytes;
     this.tenants.set(tenantId, tenant);
     let released = false;
-    return {
+    const handle = {
       snapshot: this.snapshot(tenantId),
       release: () => {
         if (released) return this.snapshot(tenantId);
@@ -79,6 +76,7 @@ export class UploadAdmissionController {
         return this.snapshot(tenantId);
       },
     };
+    return handle;
   }
 
   snapshot(tenantId: string): UploadAdmissionSnapshot {

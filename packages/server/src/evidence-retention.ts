@@ -44,6 +44,10 @@ export class EvidenceRetentionBusyError extends Error {
   }
 }
 
+function isNonEmptyString<T>(value: T): value is T & string {
+  return typeof value === 'string' && value.length > 0;
+}
+
 export class EvidenceRetentionWorker {
   private timer?: NodeJS.Timeout;
   private stopping = false;
@@ -118,7 +122,7 @@ export class EvidenceRetentionWorker {
     reason: string,
     metadata: JsonObject = {},
     createdAt = this.now().toISOString(),
-  ): { readonly event: EvidenceRetentionEventRecord; readonly audit: AuditEventRecord } {
+  ) {
     let event: EvidenceRetentionEventRecord = {
       id: this.eventId(),
       workspaceId: claim.workspaceId,
@@ -135,8 +139,10 @@ export class EvidenceRetentionWorker {
       },
       createdAt,
     };
-    if ('claimId' in claim && typeof claim.claimId === 'string') {
-      event = { ...event, claimId: claim.claimId };
+    const claimId =
+      'claimId' in claim && isNonEmptyString(claim.claimId) ? claim.claimId : undefined;
+    if (claimId !== undefined) {
+      event = { ...event, claimId };
     }
     return {
       event,
@@ -147,10 +153,7 @@ export class EvidenceRetentionWorker {
         action: `evidence.retention-${disposition}`,
         targetType: 'evidence-object',
         targetId: `${claim.sha256}:${claim.mediaType}`,
-        requestId:
-          'claimId' in claim && typeof claim.claimId === 'string'
-            ? claim.claimId
-            : `evaluation:${event.id}`,
+        requestId: claimId ?? `evaluation:${event.id}`,
         metadata: event.metadata,
         createdAt,
       },

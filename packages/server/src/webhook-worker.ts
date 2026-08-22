@@ -39,7 +39,7 @@ export class WebhookWorker {
         try {
           const submission = await this.options.repository.getCtaSubmission(delivery.submissionId);
           if (!submission) throw new Error('CTA submission is missing');
-          const payload = this.options.secretBox.decrypt<unknown>(submission.encryptedPayload);
+          const payload = this.options.secretBox.decrypt(submission.encryptedPayload);
           const response = await this.options.dispatcher.deliver(
             delivery.webhookId,
             payload,

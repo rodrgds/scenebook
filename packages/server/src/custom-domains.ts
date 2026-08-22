@@ -337,7 +337,7 @@ export class HttpCustomDomainProvisioner implements CustomDomainProvisioner {
             signal: AbortSignal.timeout(this.options.timeoutMs),
           })
         : await this.postToPinnedPublicProvisioner(body, headers);
-    } catch (error) {
+    } catch {
       throw new CustomDomainProvisionerError(
         'Custom-domain provisioner is temporarily unavailable',
         'provisioner_unavailable',

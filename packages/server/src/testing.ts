@@ -56,6 +56,7 @@ import {
   RepositoryNotFoundError,
   type ControlPlaneRepository,
 } from './repository.js';
+import { asJsonDocument, isJsonObject } from './json-document.js';
 import { canonicalJsonHash } from '@scenebook/core';
 import type { JsonValue } from '@scenebook/schema';
 import { nextScheduleOccurrence, scheduledJobIdentity } from './schedule.js';
@@ -116,7 +117,7 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
 
   constructor(private readonly clock: () => Date = () => new Date()) {}
 
-  private trustedLeaseWindow(durationMs: number): { now: string; expiresAt: string } {
+  private trustedLeaseWindow(durationMs: number) {
     if (!Number.isSafeInteger(durationMs) || durationMs < 1)
       throw new RepositoryConflictError('GitHub source change lease duration is invalid');
     const current = this.clock();
@@ -125,7 +126,7 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
     return {
       now: current.toISOString(),
       expiresAt: new Date(current.getTime() + durationMs).toISOString(),
-    };
+    } satisfies { now: string; expiresAt: string };
   }
 
   async health(): Promise<void> {}
@@ -363,10 +364,13 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
         clone(nextProject),
       );
     }
-    return {
+    const result: Parameters<ControlPlaneRepository['putStudioWorkspace']>[0] extends never
+      ? never
+      : Awaited<ReturnType<ControlPlaneRepository['putStudioWorkspace']>> = {
       records: input.writes.map(({ record }) => clone(record)),
-      ...(nextProject ? { project: clone(nextProject) } : {}),
     };
+    if (nextProject) result.project = clone(nextProject);
+    return result;
   }
 
   async deleteStudioSceneDocument(
@@ -448,14 +452,14 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
     if (!this.users.has(input.userId)) throw new RepositoryNotFoundError('User not found');
     const key = `${input.workspaceId}\0${input.userId}`;
     const existing = this.memberships.get(key);
-    const value: WorkspaceMembershipRecord = {
+    let value: WorkspaceMembershipRecord = {
       workspaceId: input.workspaceId,
       userId: input.userId,
       role: input.role,
       createdAt: existing?.createdAt ?? input.createdAt,
       updatedAt: input.updatedAt,
-      ...(input.revokedAt ? { revokedAt: input.revokedAt } : {}),
     };
+    if (input.revokedAt) value = { ...value, revokedAt: input.revokedAt };
     this.memberships.set(key, value);
     return clone(value);
   }
@@ -938,7 +942,6 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
       leaseId: input.leaseId,
       leaseExpiresAt: lease.expiresAt,
       updatedAt: lease.now,
-      ...(existing?.failureCode ? {} : {}),
     };
     const { failureCode: _failureCode, ...withoutFailure } = claimed;
     this.githubSourceChanges.set(claimed.id, withoutFailure);
@@ -1019,8 +1022,8 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
       headBlobSha: input.result.headBlobSha!,
       pullRequestNumber: input.result.pullRequestNumber!,
       pullRequestUrl: input.result.pullRequestUrl!,
-      ...(input.result.issueNumber === undefined ? {} : { issueNumber: input.result.issueNumber }),
-      ...(input.result.issueUrl === undefined ? {} : { issueUrl: input.result.issueUrl }),
+      issueNumber: input.result.issueNumber,
+      issueUrl: input.result.issueUrl,
     };
     this.githubSourceChanges.set(value.id, updated);
     return clone(updated);
@@ -1147,13 +1150,13 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
     );
     if (!current) throw new RepositoryNotFoundError('Verification Schedule not found');
     if (current.status === input.status && input.nextDueAt === undefined) return current;
-    const value: VerificationScheduleRecord = {
+    let value: VerificationScheduleRecord = {
       ...current,
       status: input.status,
-      ...(input.nextDueAt ? { nextDueAt: input.nextDueAt } : {}),
       updatedAt: input.now,
       version: current.version + 1,
     };
+    if (input.nextDueAt) value = { ...value, nextDueAt: input.nextDueAt };
     this.verificationSchedules.set(value.id, value);
     return clone(value);
   }
@@ -1529,13 +1532,14 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
     this.verificationJobs.set(value.id, value);
     const schedule = this.verificationSchedules.get(job.scheduleId);
     if (schedule) {
-      this.verificationSchedules.set(schedule.id, {
+      let updated: VerificationScheduleRecord = {
         ...schedule,
         lastCompletedAt: input.now,
-        ...(succeeded ? { lastSuccessfulAt: input.now } : {}),
         updatedAt: input.now,
         version: schedule.version + 1,
-      });
+      };
+      if (succeeded) updated = { ...updated, lastSuccessfulAt: input.now };
+      this.verificationSchedules.set(schedule.id, updated);
     }
     await this.touchVerificationRunner(input.runnerId, input.now);
     return clone(value);
@@ -2190,28 +2194,28 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
 
   private lifecycleIsProtected(value: EvidenceObjectLifecycleRecord): boolean {
     const identity = artifactObjectIdentity(value.sha256, value.mediaType);
-    const hasAsset = (input: unknown): boolean => {
-      if (!input || typeof input !== 'object') return false;
-      if (Array.isArray(input)) return input.some(hasAsset);
-      const record = input as Record<string, unknown>;
-      if (record.sha256 === value.sha256 && record.mediaType === value.mediaType) return true;
-      return Object.values(record).some(hasAsset);
+    const hasAsset = (input: JsonValue | undefined): boolean => {
+      if (input === undefined) return false;
+      if (Array.isArray(input)) return input.some((entry) => hasAsset(entry));
+      if (!isJsonObject(input)) return false;
+      if (input['sha256'] === value.sha256 && input['mediaType'] === value.mediaType) return true;
+      return Object.values(input).some((entry) => hasAsset(entry));
     };
     for (const scene of this.revisions.values()) {
       if (scene.workspaceId === value.workspaceId && hasAsset(scene.scene)) return true;
     }
     for (const [key, versions] of this.studioSceneVersions) {
-      if (key.startsWith(`${value.workspaceId}\0`) && versions.some(hasAsset)) return true;
+      if (key.startsWith(`${value.workspaceId}\0`) && versions.some((version) => hasAsset(asJsonDocument(version)))) return true;
     }
     for (const baseline of this.verificationBaselines.values()) {
       if (baseline.workspaceId !== value.workspaceId) continue;
-      if (hasAsset(baseline.baseline)) return true;
+      if (hasAsset(asJsonDocument(baseline.baseline))) return true;
       const sourceRun = this.verificationRuns.get(baseline.sourceRunId);
-      if (sourceRun && hasAsset(sourceRun.run)) return true;
+      if (sourceRun && hasAsset(asJsonDocument(sourceRun.run))) return true;
     }
     for (const release of this.releases.values()) {
       if (release.workspaceId !== value.workspaceId) continue;
-      if (hasAsset(release.release)) return true;
+      if (hasAsset(asJsonDocument(release.release))) return true;
       const uploadId = release.promotionEvidence?.artifactUploadId;
       const upload = uploadId ? this.uploads.get(uploadId) : undefined;
       if (
@@ -2223,14 +2227,14 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
       }
       for (const scene of release.promotionEvidence?.scenes ?? []) {
         const run = this.verificationRuns.get(scene.runId);
-        if (run && hasAsset(run.run)) return true;
+        if (run && hasAsset(asJsonDocument(run.run))) return true;
       }
     }
     for (const review of this.reviews.values()) {
       if (review.workspaceId !== value.workspaceId || review.review.status !== 'approved') continue;
       if (review.review.subject.kind === 'run') {
         const run = this.verificationRuns.get(review.review.subject.id);
-        if (run && hasAsset(run.run)) return true;
+        if (run && hasAsset(asJsonDocument(run.run))) return true;
       }
     }
     return false;
@@ -2631,13 +2635,14 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
       : undefined;
     if (!workspace || !project || !value) return undefined;
     const release = value.currentReleaseId ? this.releases.get(value.currentReleaseId) : undefined;
-    return clone({
+    let record: HostedPublicationRecord = {
       workspace,
       project,
       channel: value,
-      ...(release ? { release } : {}),
-      ...(domain ? { customDomain: domain } : {}),
-    });
+    };
+    if (release) record = { ...record, release };
+    if (domain) record = { ...record, customDomain: domain };
+    return clone(record);
   }
 
   async createCustomDomain(input: CustomDomainRecord): Promise<CustomDomainRecord> {
@@ -2791,7 +2796,7 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
       sequence: current.sequence + 1,
       status: 'published',
       publishedAt: input.now,
-      ...(current.currentReleaseId ? { supersedesReleaseId: current.currentReleaseId } : {}),
+      supersedesReleaseId: current.currentReleaseId,
     });
     const value = {
       release,
@@ -2799,7 +2804,9 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
       projectId: input.projectId,
       idempotencyKey: input.idempotencyKey,
       requestHash: input.requestHash,
-      ...(input.promotionEvidence ? { promotionEvidence: clone(input.promotionEvidence) } : {}),
+      promotionEvidence: input.promotionEvidence
+        ? clone(input.promotionEvidence)
+        : undefined,
     };
     if (current.currentReleaseId) {
       const previous = this.releases.get(current.currentReleaseId);
@@ -2931,8 +2938,8 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
       if (!aggregate) {
         aggregate = {
           scope,
-          ...(sceneId ? { sceneId } : {}),
-          ...(stepId ? { stepId } : {}),
+          sceneId: sceneId ?? '',
+          stepId: stepId ?? '',
           type: event.type,
           eventCount: 0,
           subjects: new Set(),
@@ -2958,11 +2965,11 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
       record('scene', event, subject);
       if (event.stepId) record('step', event, subject);
     }
-    const scopeOrder: Readonly<Record<AnalyticsAggregateRow['scope'], number>> = {
-      total: 0,
-      scene: 1,
-      step: 2,
-    };
+    const scopeOrder = new Map<AnalyticsAggregateRow['scope'], number>([
+      ['total', 0],
+      ['scene', 1],
+      ['step', 2],
+    ]);
     return [...aggregates.values()]
       .map(({ subjects, ...aggregate }) => ({
         ...aggregate,
@@ -2970,7 +2977,7 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
       }))
       .sort(
         (left, right) =>
-          scopeOrder[left.scope] - scopeOrder[right.scope] ||
+          (scopeOrder.get(left.scope) ?? 0) - (scopeOrder.get(right.scope) ?? 0) ||
           (left.sceneId ?? '').localeCompare(right.sceneId ?? '') ||
           (left.stepId ?? '').localeCompare(right.stepId ?? '') ||
           left.type.localeCompare(right.type),
@@ -3018,13 +3025,16 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
   ): Promise<void> {
     const delivery = this.deliveries.get(input.id);
     if (!delivery) throw new RepositoryNotFoundError('Webhook delivery not found');
-    this.deliveries.set(input.id, {
+    let updated: WebhookDeliveryRecord = {
       ...delivery,
       status: input.succeeded ? 'succeeded' : input.terminal ? 'exhausted' : 'failed',
-      ...(input.status === undefined ? {} : { lastStatus: input.status }),
-      ...(input.error === undefined ? {} : { lastError: input.error }),
-      ...(input.nextAttemptAt === undefined ? {} : { nextAttemptAt: input.nextAttemptAt }),
-    });
+    };
+    if (input.status !== undefined) updated = { ...updated, lastStatus: input.status };
+    if (input.error !== undefined) updated = { ...updated, lastError: input.error };
+    if (input.nextAttemptAt !== undefined) {
+      updated = { ...updated, nextAttemptAt: input.nextAttemptAt };
+    }
+    this.deliveries.set(input.id, updated);
   }
 
   async getCtaSubmission(id: string): Promise<CtaSubmissionRecord | undefined> {

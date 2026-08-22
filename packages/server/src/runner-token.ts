@@ -14,7 +14,7 @@ export class RunnerTokenService {
       .digest('hex');
   }
 
-  create(id: string): { readonly token: string; readonly tokenHash: string } {
+  create(id: string) {
     const token = `sbk_runner.${id}.${randomBytes(32).toString('base64url')}`;
     return { token, tokenHash: this.digest(token) };
   }

@@ -108,8 +108,8 @@ function withoutSecrets(value: JsonValue, key = '', depth = 0): JsonValue {
   return value;
 }
 
-// SAFETY: workspace export records are schema-derived and hold only JSON-compatible values.
 function asJsonDocument<T>(value: T): JsonObject {
+  // SAFETY: workspace export records are schema-derived and hold only JSON-compatible values.
   return value as JsonObject;
 }
 
@@ -403,11 +403,11 @@ interface ZipMemberInput {
   readonly object?: StoredObject;
 }
 
-function encodeJson(value: unknown): Uint8Array {
+function encodeJson<T>(value: T): Uint8Array {
   return encoder.encode(`${stableStringify(value)}\n`);
 }
 
-function serializedJsonByteLength(value: unknown): number {
+function serializedJsonByteLength<T>(value: T): number {
   return encoder.encode(stableStringify(value)).byteLength;
 }
 
@@ -459,7 +459,7 @@ export function createWorkspaceZipStream(
   let zipEnded = false;
   let zipFinal = false;
   let cancelled = false;
-  let failure: unknown;
+  let failure: Error | undefined;
   let queuedBytes = 0;
   const queue: Uint8Array[] = [];
 
@@ -534,7 +534,7 @@ export function createWorkspaceZipStream(
       try {
         await advance();
       } catch (error) {
-        failure = error;
+        failure = error instanceof Error ? error : new Error(String(error));
         zip?.terminate();
       }
     }
@@ -581,7 +581,7 @@ export async function prepareWorkspaceExport(
     options.maxMetadataBytes,
   );
   let materializedRecordBytes = 0;
-  const reserveRecordBytes = (value: unknown): void => {
+  const reserveRecordBytes = <T>(value: T): void => {
     materializedRecordBytes += serializedJsonByteLength(value);
     if (materializedRecordBytes > options.maxMetadataBytes) {
       throw new WorkspaceExportLimitError('metadata-bytes');
@@ -613,7 +613,7 @@ export async function prepareWorkspaceExport(
     if (user) users.push(...take([user]));
   }
   reserveRecordBytes({ users, memberships });
-  const projectRecords: Record<string, unknown>[] = [];
+  const projectRecords: JsonObject[] = [];
   const allSceneRevisions: Awaited<
     ReturnType<ControlPlaneRepository['listSceneRevisions']>
   >[number][] = [];
@@ -638,7 +638,7 @@ export async function prepareWorkspaceExport(
           workspaceId: options.workspaceId,
           projectId: project.id,
           limit: pageLimit,
-          ...(studioCursor ? { before: studioCursor } : {}),
+          before: studioCursor,
         }),
       );
       studioHeads.push(...page);
@@ -657,7 +657,7 @@ export async function prepareWorkspaceExport(
             projectId: project.id,
             sceneId: head.id,
             limit: pageLimit,
-            ...(beforeRevision ? { beforeRevision } : {}),
+            beforeRevision,
           }),
         );
         studioVersions.push(...page);
@@ -731,7 +731,7 @@ export async function prepareWorkspaceExport(
     const releases = [];
     const domains = [];
     const grants = [];
-    const shareLinks: Record<string, unknown>[] = [];
+    const shareLinks: JsonObject[] = [];
     for (const channel of channels) {
       releases.push(
         ...take(
@@ -765,14 +765,16 @@ export async function prepareWorkspaceExport(
       for (const grant of channelGrants) {
         const links = take(await options.repository.listPrivateShareLinks(grant.id, limit()));
         shareLinks.push(
-          ...links.map((link) => ({
-            id: link.id,
-            grantId: link.grantId,
-            createdBy: link.createdBy,
-            createdAt: link.createdAt,
-            expiresAt: link.expiresAt,
-            revokedAt: link.revokedAt,
-          })),
+          ...links.map((link) =>
+            asJsonDocument({
+              id: link.id,
+              grantId: link.grantId,
+              createdBy: link.createdBy,
+              createdAt: link.createdAt,
+              expiresAt: link.expiresAt,
+              revokedAt: link.revokedAt ?? '',
+            }),
+          ),
         );
       }
     }
@@ -806,8 +808,8 @@ export async function prepareWorkspaceExport(
         privateShareLinks: shareLinks,
       },
     };
-    reserveRecordBytes(projectRecord);
-    projectRecords.push(projectRecord);
+    reserveRecordBytes(asJsonDocument(projectRecord));
+    projectRecords.push(asJsonDocument(projectRecord));
   }
 
   const finalizedUploads = take(

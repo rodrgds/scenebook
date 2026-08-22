@@ -96,14 +96,14 @@ export class VerificationScheduleWorker {
   start(): void {
     if (this.timer) return;
     this.timer = setInterval(() => {
-      void this.runOnce().catch((error: unknown) => {
+      void this.runOnce().catch((error) => {
         this.options.logger.error('Verification scheduler iteration failed', {
           error: describeError(error),
         });
       });
     }, this.options.intervalMs);
     this.timer.unref();
-    void this.runOnce().catch((error: unknown) => {
+    void this.runOnce().catch((error) => {
       this.options.logger.error('Verification scheduler startup iteration failed', {
         error: describeError(error),
       });

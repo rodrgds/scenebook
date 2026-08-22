@@ -897,13 +897,13 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     let response: Response;
     try {
-      const headers: Record<string, string> = {
+      const headers = new Headers({
         accept: 'application/vnd.github+json',
         authorization: `Bearer ${input.token ?? (await this.appJwt())}`,
         'x-github-api-version': '2022-11-28',
         'user-agent': 'scenebook-control-plane',
-      };
-      if (input.body) headers['content-type'] = 'application/json; charset=UTF-8';
+      });
+      if (input.body) headers.set('content-type', 'application/json; charset=UTF-8');
       response = await this.fetchImpl(`${this.origin}${path}`, {
         method: input.method ?? 'GET',
         redirect: 'error',
@@ -1357,7 +1357,7 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
       signal: input.signal,
     });
     const repository = encodeRepository(input.repository);
-    const matching = [] as z.infer<typeof CheckRunResponseSchema>[];
+    const matching: z.infer<typeof CheckRunResponseSchema>[] = [];
     let exhausted = false;
     const maxPages = 20;
     for (let page = 1; page <= maxPages; page += 1) {
