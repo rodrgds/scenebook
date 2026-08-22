@@ -87,6 +87,7 @@ import type {
   ChannelRecord,
   CustomDomainDesiredState,
   CustomDomainProvisioningObservation,
+  CustomDomainProvisioningRecord,
   CustomDomainRecord,
   IdentityApiTokenRecord,
   IdentityScope,
@@ -2173,7 +2174,7 @@ export function createControlPlaneApp(
         workspaceId: requiredParam(context, 'workspaceId'),
         projectId: requiredParam(context, 'projectId'),
         limit: limit + 1,
-        ...(before ? { before } : {}),
+        before,
       });
       const page = records.slice(0, limit);
       const last = page.at(-1);
@@ -2221,7 +2222,7 @@ export function createControlPlaneApp(
         projectId: requiredParam(context, 'projectId'),
         sceneId: requiredParam(context, 'sceneId'),
         limit: limit + 1,
-        ...(beforeRevision ? { beforeRevision } : {}),
+        beforeRevision,
       });
       const page = records.slice(0, limit);
       return context.json({
@@ -2274,7 +2275,7 @@ export function createControlPlaneApp(
         workspaceId,
         projectId,
         writes: body.writes,
-        ...(body.project ? { project: body.project } : {}),
+        project: body.project,
         actorId: actor(context),
         now: now().toISOString(),
       });
@@ -2543,7 +2544,7 @@ export function createControlPlaneApp(
               externalId,
               commitSha: input.commitSha,
               status: input.status,
-              ...(input.conclusion ? { conclusion: input.conclusion } : {}),
+              conclusion: input.conclusion,
               title: input.title,
               summary: input.summary,
               detailsUrl: new URL('/console', dependencies.publicBaseUrl).toString(),
@@ -2615,7 +2616,7 @@ export function createControlPlaneApp(
       buildArtifactHash: build.artifactHash,
       reviewIdentity,
       status,
-      ...(conclusion ? { conclusion } : {}),
+      conclusion,
       title:
         status === 'in_progress'
           ? 'Scenebook verification is awaiting review'
@@ -2663,7 +2664,7 @@ export function createControlPlaneApp(
     let inFlight: Promise<void> | undefined;
     let watchdog: ReturnType<typeof setTimeout>;
 
-    const lose = (error?: unknown): GitHubSourceError => {
+    const lose = <T>(error?: T): GitHubSourceError => {
       const value =
         error instanceof GitHubSourceError && error.code === 'github_lease_lost'
           ? error
@@ -2752,7 +2753,7 @@ export function createControlPlaneApp(
     change: Awaited<ReturnType<typeof dependencies.repository.getGitHubSourceChange>>,
   ) => {
     if (!change) throw new RepositoryNotFoundError('GitHub source change not found');
-    return {
+    const safe: JsonObject = {
       id: change.id,
       status: change.status,
       baseCommitSha: change.baseCommitSha,
@@ -2762,15 +2763,20 @@ export function createControlPlaneApp(
       attempts: change.attempts,
       createdAt: change.createdAt,
       updatedAt: change.updatedAt,
-      ...(change.headCommitSha ? { headCommitSha: change.headCommitSha } : {}),
-      ...(change.headBlobSha ? { headBlobSha: change.headBlobSha } : {}),
-      ...(change.pullRequestNumber
-        ? { pullRequestNumber: change.pullRequestNumber, pullRequestUrl: change.pullRequestUrl }
-        : {}),
-      ...(change.issueNumber ? { issueNumber: change.issueNumber, issueUrl: change.issueUrl } : {}),
-      ...(change.failureCode ? { failureCode: change.failureCode } : {}),
       evidenceBinding: change.evidenceBinding,
     };
+    if (change.headCommitSha) safe['headCommitSha'] = change.headCommitSha;
+    if (change.headBlobSha) safe['headBlobSha'] = change.headBlobSha;
+    if (change.pullRequestNumber !== null && change.pullRequestNumber !== undefined) {
+      safe['pullRequestNumber'] = change.pullRequestNumber;
+      safe['pullRequestUrl'] = change.pullRequestUrl ?? '';
+    }
+    if (change.issueNumber !== null && change.issueNumber !== undefined) {
+      safe['issueNumber'] = change.issueNumber;
+      safe['issueUrl'] = change.issueUrl ?? '';
+    }
+    if (change.failureCode) safe['failureCode'] = change.failureCode;
+    return safe;
   };
 
   app.post(
@@ -2857,9 +2863,7 @@ export function createControlPlaneApp(
           githubRepositoryId: value.githubRepositoryId,
           defaultBranch: value.defaultBranch,
           version: value.version,
-          createdAt: value.createdAt,
-          updatedAt: value.updatedAt,
-          ...(value.revokedAt ? { revokedAt: value.revokedAt } : {}),
+          revokedAt: value.revokedAt,
         })),
       });
     },
@@ -3068,7 +3072,7 @@ export function createControlPlaneApp(
           operations: body.operations,
           title: body.title,
           createReviewIssue: body.createReviewIssue,
-          ...(Object.keys(evidenceBinding).length > 0 ? { evidence: evidenceBinding } : {}),
+          evidence: Object.keys(evidenceBinding).length > 0 ? evidenceBinding : undefined,
           signal: heartbeat.signal,
           assertLease: heartbeat.assertLease,
         });
@@ -3082,7 +3086,8 @@ export function createControlPlaneApp(
         });
         await heartbeat.stop();
       } catch (error) {
-        let reportedError: unknown = heartbeat.error() ?? error;
+        let reportedError =
+          heartbeat.error() ?? (error instanceof Error ? error : new Error(String(error)));
         await heartbeat.stop();
         let failureCode =
           reportedError instanceof GitHubSourceError ? reportedError.code : 'unexpected';
@@ -3141,7 +3146,8 @@ export function createControlPlaneApp(
           };
           if (completed.headCommitSha) detail['headCommitSha'] = completed.headCommitSha;
           if (completed.headBlobSha) detail['headBlobSha'] = completed.headBlobSha;
-          if (completed.pullRequestNumber) detail['pullRequestNumber'] = completed.pullRequestNumber;
+          if (completed.pullRequestNumber)
+            detail['pullRequestNumber'] = completed.pullRequestNumber;
           if (completed.issueNumber) detail['issueNumber'] = completed.issueNumber;
           return detail;
         })(),
@@ -3536,10 +3542,10 @@ export function createControlPlaneApp(
       targetType: 'verification-runner',
       targetId: value.id,
       metadata: {
-          projectId,
-          scheduleIds: [...value.scheduleIds],
-          expiresAt: value.expiresAt,
-        },
+        projectId,
+        scheduleIds: [...value.scheduleIds],
+        expiresAt: value.expiresAt,
+      },
     });
     return context.json({ runner: runnerResponse(value), credential: credential.token }, 201);
   });
@@ -3704,6 +3710,7 @@ export function createControlPlaneApp(
         outcome: 'verified' as const,
         buildId: build.id,
         buildArtifactHash: build.artifactHash,
+        // SAFETY: the artifact schema above restricts status to the Release build statuses.
         buildStatus: artifact.status as 'passed' | 'changed' | 'failed' | 'blocked' | 'cancelled',
       };
     } else {
@@ -3792,14 +3799,16 @@ export function createControlPlaneApp(
         action: 'scene.revision-created',
         targetType: 'scene-revision',
         targetId: value.id,
-        metadata: {
-          sceneId: value.sceneId,
-          revision,
-          ...(ingestionKey ? { idempotencyKey: ingestionKey } : {}),
-          ...(upload
-            ? { uploadId: upload.id, repository: upload.repository, commit: upload.commit }
-            : {}),
-        },
+        metadata: (() => {
+          const detail: JsonObject = { sceneId: value.sceneId, revision };
+          if (ingestionKey) detail['idempotencyKey'] = ingestionKey;
+          if (upload) {
+            detail['uploadId'] = upload.id;
+            detail['repository'] = upload.repository;
+            detail['commit'] = upload.commit;
+          }
+          return detail;
+        })(),
       });
       return context.json({ revision: value }, 201);
     },
@@ -3898,6 +3907,7 @@ export function createControlPlaneApp(
         'Review subject must resolve to the exact persisted artifact revision',
       );
     if (body.review.subject.kind === 'run') {
+      // SAFETY: the kind check above proves the fetched evidence is a Run record.
       const run = subject as VerificationRunRecord;
       const baseline = body.review.baseline
         ? await dependencies.repository.getVerificationBaseline(
@@ -3945,6 +3955,7 @@ export function createControlPlaneApp(
         );
       }
     } else if (body.review.subject.kind === 'build') {
+      // SAFETY: the kind check above proves the fetched evidence is a Build record.
       const build = subject as VerificationBuildRecord;
       const expectedState =
         build.build.summary.blocked > 0
@@ -4168,7 +4179,7 @@ export function createControlPlaneApp(
         metadata: {
           commentId,
           previousResolvedAt: body.expectedResolvedAt ?? '',
-          ...(resolvedAt === undefined ? {} : { resolvedAt }),
+          resolvedAt: resolvedAt ?? '',
         },
       });
       return context.json(value);
@@ -4857,15 +4868,15 @@ export function createControlPlaneApp(
         subjectId = baseline.id;
         subjectRevision = baseline.artifactHash;
       }
-      const approval = {
+      const baseApproval = {
         id: approvalId,
         kind: body.kind,
         decision: body.decision,
         actorId,
         createdAt: now().toISOString(),
         revision: subjectRevision,
-        ...(body.reason ? { reason: body.reason } : {}),
-      } as const;
+      };
+      const approval = body.reason ? { ...baseApproval, reason: body.reason } : baseApproval;
       const artifactRevision = canonicalJsonHash({ subjectKind, subjectId, approval });
       const requestHash = canonicalJsonHash({ body, actorId });
       const value = await dependencies.repository.recordReviewApproval({
@@ -5116,6 +5127,7 @@ export function createControlPlaneApp(
       context.header('content-disposition', `attachment; filename="${parsedHash.data}"`);
       context.header('content-type', mediaTypes[0]!);
       context.header('content-length', String(bytes.byteLength));
+      // SAFETY: bytes is a full Uint8Array copy and satisfies the BodyInit contract.
       return new Response(bytes as BodyInit, { status: 200, headers: context.res.headers });
     },
   );
@@ -5162,6 +5174,7 @@ export function createControlPlaneApp(
     context.header('content-disposition', `inline; filename="${hash.data}"`);
     context.header('content-type', mediaTypes[0]!);
     context.header('content-length', String(bytes.byteLength));
+    // SAFETY: bytes is a full Uint8Array copy and satisfies the BodyInit contract.
     return new Response(bytes as BodyInit, {
       status: 200,
       headers: context.res.headers,
@@ -5215,10 +5228,10 @@ export function createControlPlaneApp(
       targetType: 'channel',
       targetId: value.id,
       metadata: {
-          slug: value.slug,
-          kind: value.kind,
-          webhookIds: [...value.webhookIds],
-        },
+        slug: value.slug,
+        kind: value.kind,
+        webhookIds: [...value.webhookIds],
+      },
     });
     return context.json({ channel: await channelWithHostedUrl(value), analyticsToken }, 201);
   });
@@ -5361,19 +5374,20 @@ export function createControlPlaneApp(
       throw provisionerError;
     }
     const status = customDomainStatusFromObservation(observation);
+    const provisioning: CustomDomainProvisioningRecord = {
+      operationKey: observation.operationKey,
+      operationId: observation.operationId,
+      desiredState: observation.desiredState,
+      certificate: observation.certificate,
+      routing: observation.routing,
+      requestedAt: current.provisioning.requestedAt,
+      observedAt: now().toISOString(),
+      failureCode: observation.failureCode,
+    };
     const value = await updateCustomDomain(current, {
       status,
-      provisioning: {
-        operationKey: observation.operationKey,
-        operationId: observation.operationId,
-        desiredState: observation.desiredState,
-        certificate: observation.certificate,
-        routing: observation.routing,
-        requestedAt: current.provisioning.requestedAt,
-        observedAt: now().toISOString(),
-        ...(observation.failureCode ? { failureCode: observation.failureCode } : {}),
-      },
-      ...(status === 'removed' ? { removedAt: now().toISOString() } : {}),
+      provisioning,
+      removedAt: status === 'removed' ? now().toISOString() : undefined,
     });
     const action =
       status === 'active'
@@ -5625,7 +5639,7 @@ export function createControlPlaneApp(
           challengeName: current.dnsProof.challengeName,
           challengeValue: current.dnsProof.challengeValue,
           checkedAt: timestamp,
-          ...(verified ? { verifiedAt: timestamp } : {}),
+          verifiedAt: verified ? timestamp : undefined,
         },
       });
       await auditCustomDomainReconciliation(
@@ -6029,27 +6043,34 @@ export function createControlPlaneApp(
           (candidate) => candidate.sceneId === sceneEvidence.sceneId,
         );
         const status = runStatus(run);
-        promotionScenes.push({
+        let sceneEvidenceRecord: ReleasePromotionSceneEvidence = {
           sceneId: sceneEvidence.sceneId,
           runId: run.id,
           runArtifactHash: run.artifactHash,
-          ...(baseline
-            ? { baselineId: baseline.id, baselineArtifactHash: baseline.artifactHash }
-            : {}),
-          ...(visualApproval
-            ? {
-                visualApprovalId: visualApproval.id,
-                visualApprovalArtifactHash: visualApproval.artifactHash,
-              }
-            : {}),
-          ...(editorialApproval
-            ? {
-                editorialApprovalId: editorialApproval.id,
-                editorialApprovalArtifactHash: editorialApproval.artifactHash,
-              }
-            : {}),
-        });
-        readiness.push({
+        };
+        if (baseline) {
+          sceneEvidenceRecord = {
+            ...sceneEvidenceRecord,
+            baselineId: baseline.id,
+            baselineArtifactHash: baseline.artifactHash,
+          };
+        }
+        if (visualApproval) {
+          sceneEvidenceRecord = {
+            ...sceneEvidenceRecord,
+            visualApprovalId: visualApproval.id,
+            visualApprovalArtifactHash: visualApproval.artifactHash,
+          };
+        }
+        if (editorialApproval) {
+          sceneEvidenceRecord = {
+            ...sceneEvidenceRecord,
+            editorialApprovalId: editorialApproval.id,
+            editorialApprovalArtifactHash: editorialApproval.artifactHash,
+          };
+        }
+        promotionScenes.push(sceneEvidenceRecord);
+        let ready: SceneReadiness = {
           sceneId: sceneEvidence.sceneId,
           criticality: revision.scene.criticality,
           status,
@@ -6072,11 +6093,14 @@ export function createControlPlaneApp(
               baseline.artifactHash,
             ),
           localizationComplete: revision.scene.locales.every((locale) => locale.complete),
-          ...(status === 'passed' || status === 'changed'
-            ? { candidateRevision: run.sourceRevision }
-            : {}),
-          ...(previousScene ? { previousReleaseRevision: previousScene.sourceRevision } : {}),
-        });
+        };
+        if (status === 'passed' || status === 'changed') {
+          ready = { ...ready, candidateRevision: run.sourceRevision };
+        }
+        if (previousScene) {
+          ready = { ...ready, previousReleaseRevision: previousScene.sourceRevision };
+        }
+        readiness.push(ready);
       }
 
       const policy = evaluateChannelPolicy(channel.policy, readiness);
@@ -6087,11 +6111,11 @@ export function createControlPlaneApp(
             scenes: policy.scenes.map((scene) => ({
               sceneId: scene.sceneId,
               action: scene.action,
-              ...(scene.revision ? { revision: scene.revision } : {}),
+              ...(scene.revision === undefined ? {} : { revision: scene.revision }),
               reasons: scene.reasons.map((reason) => ({ ...reason })),
             })),
             blockers: policy.blockers.map((reason) => ({ ...reason })),
-            ...(policy.evaluatedAt ? { evaluatedAt: policy.evaluatedAt } : {}),
+            ...(policy.evaluatedAt === undefined ? {} : { evaluatedAt: policy.evaluatedAt }),
           },
         });
       }
@@ -7521,7 +7545,7 @@ export function createControlPlaneApp(
           'analytics_privacy_rejected',
           'Analytics properties may not contain personal or secret data',
         );
-      const inserted = await dependencies.repository.ingestAnalytics({
+      let event: AnalyticsEventRecord = {
         schemaVersion: body.schemaVersion,
         id: body.id,
         workspaceId: scope.workspaceId,
@@ -7532,24 +7556,27 @@ export function createControlPlaneApp(
         type: body.type,
         occurredAt: body.occurredAt,
         properties: body.properties,
-        ...(body.stepId ? { stepId: body.stepId } : {}),
-        ...(body.anonymousId
-          ? {
-              anonymousIdHash: dependencies.hasher.hash(
-                body.anonymousId,
-                `analytics-anonymous:${scope.workspaceId}`,
-              ),
-            }
-          : {}),
-        ...(body.sessionId
-          ? {
-              sessionIdHash: dependencies.hasher.hash(
-                body.sessionId,
-                `analytics-session:${scope.workspaceId}`,
-              ),
-            }
-          : {}),
-      });
+      };
+      if (body.stepId) event = { ...event, stepId: body.stepId };
+      if (body.anonymousId) {
+        event = {
+          ...event,
+          anonymousIdHash: dependencies.hasher.hash(
+            body.anonymousId,
+            `analytics-anonymous:${scope.workspaceId}`,
+          ),
+        };
+      }
+      if (body.sessionId) {
+        event = {
+          ...event,
+          sessionIdHash: dependencies.hasher.hash(
+            body.sessionId,
+            `analytics-session:${scope.workspaceId}`,
+          ),
+        };
+      }
+      const inserted = await dependencies.repository.ingestAnalytics(event);
       return context.json({ accepted: inserted }, inserted ? 202 : 200);
     },
   );
