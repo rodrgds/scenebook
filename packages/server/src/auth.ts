@@ -8,7 +8,14 @@ import {
   type KeyObject,
 } from 'node:crypto';
 
-import { decodeProtectedHeader, SignJWT, jwtVerify } from 'jose';
+import {
+  decodeProtectedHeader,
+  SignJWT,
+  jwtVerify,
+  type JWTPayload,
+  type JWTHeaderParameters,
+  type ProtectedHeaderParameters,
+} from 'jose';
 
 import type {
   IdentityScope,
@@ -38,40 +45,43 @@ export const ALL_IDENTITY_SCOPES = [
   'audit:read',
 ] as const satisfies readonly IdentityScope[];
 
-const ROLE_SCOPES: Readonly<Record<WorkspaceRole, ReadonlySet<IdentityScope>>> = {
-  owner: new Set(ALL_IDENTITY_SCOPES),
-  editor: new Set([
-    'workspace:read',
-    'project:read',
-    'project:write',
-    'review:read',
-    'review:write',
-    'channel:read',
-    'channel:write',
-    'release:write',
-    'schedule:read',
-    'schedule:write',
-    'analytics:read',
-  ]),
-  reviewer: new Set([
-    'workspace:read',
-    'project:read',
-    'review:read',
-    'review:write',
-    'channel:read',
-    'schedule:read',
-  ]),
-  viewer: new Set([
-    'workspace:read',
-    'project:read',
-    'review:read',
-    'channel:read',
-    'schedule:read',
-  ]),
-};
+const ROLE_SCOPES = new Map<WorkspaceRole, ReadonlySet<IdentityScope>>([
+  ['owner', new Set(ALL_IDENTITY_SCOPES)],
+  [
+    'editor',
+    new Set([
+      'workspace:read',
+      'project:read',
+      'project:write',
+      'review:read',
+      'review:write',
+      'channel:read',
+      'channel:write',
+      'release:write',
+      'schedule:read',
+      'schedule:write',
+      'analytics:read',
+    ]),
+  ],
+  [
+    'reviewer',
+    new Set([
+      'workspace:read',
+      'project:read',
+      'review:read',
+      'review:write',
+      'channel:read',
+      'schedule:read',
+    ]),
+  ],
+  [
+    'viewer',
+    new Set(['workspace:read', 'project:read', 'review:read', 'channel:read', 'schedule:read']),
+  ],
+]);
 
 export function roleAllows(role: WorkspaceRole, scope: IdentityScope): boolean {
-  return ROLE_SCOPES[role].has(scope);
+  return ROLE_SCOPES.get(role)?.has(scope) ?? false;
 }
 
 export interface SessionClaims {
@@ -172,27 +182,55 @@ async function verifyToken(
   return result.payload;
 }
 
-function sessionClaims(payload: Awaited<ReturnType<typeof verifyToken>>): SessionClaims {
-  if (
-    typeof payload.sub !== 'string' ||
-    typeof payload.jti !== 'string' ||
-    typeof payload.session_id !== 'string' ||
-    payload.session_id !== payload.jti ||
-    typeof payload.exp !== 'number'
-  ) {
+function isIdentityTokenHeader(
+  header: ProtectedHeaderParameters,
+): header is ProtectedHeaderParameters & { kid: string } {
+  return header.alg === 'EdDSA' && header.typ === 'JWT' && typeof header.kid === 'string';
+}
+
+interface SessionTokenPayload extends JWTPayload {
+  sub: string;
+  jti: string;
+  session_id: string;
+  exp: number;
+}
+
+function isSessionTokenPayload(payload: JWTPayload): payload is SessionTokenPayload {
+  return (
+    typeof payload.sub === 'string' &&
+    typeof payload.jti === 'string' &&
+    typeof payload.session_id === 'string' &&
+    payload.session_id === payload.jti &&
+    typeof payload.exp === 'number'
+  );
+}
+
+interface PrivateShareTokenPayload extends JWTPayload {
+  sub: string;
+  jti: string;
+  grant_id: string;
+  exp: number;
+}
+
+function isPrivateShareTokenPayload(payload: JWTPayload): payload is PrivateShareTokenPayload {
+  return (
+    typeof payload.sub === 'string' &&
+    typeof payload.jti === 'string' &&
+    typeof payload.grant_id === 'string' &&
+    payload.sub === payload.grant_id &&
+    typeof payload.exp === 'number'
+  );
+}
+
+function sessionClaims(payload: JWTPayload): SessionClaims {
+  if (!isSessionTokenPayload(payload)) {
     throw new Error('Session token has invalid claims');
   }
   return { sessionId: payload.jti, userId: payload.sub, expiresAt: payload.exp };
 }
 
-function privateShareClaims(payload: Awaited<ReturnType<typeof verifyToken>>): PrivateShareClaims {
-  if (
-    typeof payload.sub !== 'string' ||
-    typeof payload.jti !== 'string' ||
-    typeof payload.grant_id !== 'string' ||
-    payload.sub !== payload.grant_id ||
-    typeof payload.exp !== 'number'
-  ) {
+function privateShareClaims(payload: JWTPayload): PrivateShareClaims {
+  if (!isPrivateShareTokenPayload(payload)) {
     throw new Error('Private-share token has invalid claims');
   }
   return {
@@ -202,15 +240,23 @@ function privateShareClaims(payload: Awaited<ReturnType<typeof verifyToken>>): P
   };
 }
 
+function isVerifierOptionsObject(
+  options: string | IdentityTokenVerifierOptions,
+): options is IdentityTokenVerifierOptions {
+  return typeof options !== 'string';
+}
+
 /** Verification-only publication capability. It contains no signing or API-token hashing key. */
 export class IdentityTokenVerifier {
   private readonly keys = new Map<string, KeyObject>();
 
   constructor(options: string | IdentityTokenVerifierOptions) {
-    const activeVerificationPublicKey =
-      typeof options === 'string' ? options : options.activeVerificationPublicKey;
-    const previousVerificationPublicKeys =
-      typeof options === 'string' ? [] : (options.previousVerificationPublicKeys ?? []);
+    const activeVerificationPublicKey = isVerifierOptionsObject(options)
+      ? options.activeVerificationPublicKey
+      : options;
+    const previousVerificationPublicKeys = isVerifierOptionsObject(options)
+      ? (options.previousVerificationPublicKeys ?? [])
+      : [];
     if (previousVerificationPublicKeys.length > MAX_PREVIOUS_IDENTITY_VERIFICATION_KEYS) {
       throw new Error(
         `At most ${MAX_PREVIOUS_IDENTITY_VERIFICATION_KEYS} previous identity verification keys are allowed`,
@@ -227,18 +273,19 @@ export class IdentityTokenVerifier {
   }
 
   private async verify(token: string, audience: string, nowSeconds: number) {
-    let header;
+    let header: ProtectedHeaderParameters;
     try {
       header = decodeProtectedHeader(token);
     } catch {
       throw new Error('Identity token has invalid protected headers');
     }
-    if (header.alg !== 'EdDSA' || header.typ !== 'JWT' || typeof header.kid !== 'string') {
+    if (!isIdentityTokenHeader(header)) {
       throw new Error('Identity token has invalid protected headers');
     }
-    const key = this.keys.get(header.kid);
+    const { kid } = header;
+    const key = this.keys.get(kid);
     if (!key) throw new Error('Identity token uses an unknown verification key');
-    return verifyToken(token, key, 'EdDSA', audience, nowSeconds, header.kid);
+    return verifyToken(token, key, 'EdDSA', audience, nowSeconds, kid);
   }
 
   async verifySession(
@@ -260,17 +307,35 @@ export class IdentityTokenVerifier {
   }
 }
 
+function identityProtectedHeader(keys: TokenKeys): JWTHeaderParameters {
+  const header: JWTHeaderParameters = { alg: keys.algorithm, typ: 'JWT' };
+  if (keys.keyId) header.kid = keys.keyId;
+  return header;
+}
+
+function isJwkCoordinate(value: string | undefined): value is string {
+  return typeof value === 'string';
+}
+
+function isServiceOptionsObject(
+  options: string | IdentityTokenServiceOptions,
+): options is IdentityTokenServiceOptions {
+  return typeof options !== 'string';
+}
+
 export class IdentityTokenService {
   private readonly apiTokenHashSecret: string;
   private readonly keys: TokenKeys;
   private readonly asymmetricVerifier?: IdentityTokenVerifier;
 
   constructor(options: string | IdentityTokenServiceOptions) {
-    const apiTokenHashSecret = typeof options === 'string' ? options : options.apiTokenHashSecret;
+    const apiTokenHashSecret = isServiceOptionsObject(options)
+      ? options.apiTokenHashSecret
+      : options;
     if (apiTokenHashSecret.length < 32)
       throw new Error('Identity-token secret must contain at least 32 characters');
     this.apiTokenHashSecret = apiTokenHashSecret;
-    if (typeof options === 'string') {
+    if (!isServiceOptionsObject(options)) {
       const key = new TextEncoder().encode(options);
       this.keys = { algorithm: 'HS256', signingKey: key, verificationKey: key };
       return;
@@ -279,9 +344,10 @@ export class IdentityTokenService {
     const verificationKey = ed25519PublicKey(options.verificationPublicKey);
     const derived = signingKey.export({ format: 'jwk' }).x;
     const configured = verificationKey.export({ format: 'jwk' }).x;
+    if (!isJwkCoordinate(derived) || !isJwkCoordinate(configured)) {
+      throw new Error('Identity signing and verification keys do not form a pair');
+    }
     if (
-      typeof derived !== 'string' ||
-      typeof configured !== 'string' ||
       derived.length !== configured.length ||
       !timingSafeEqual(Buffer.from(derived), Buffer.from(configured))
     ) {
@@ -307,7 +373,7 @@ export class IdentityTokenService {
       .digest('hex');
   }
 
-  createApiToken(id: string): { readonly token: string; readonly tokenHash: string } {
+  createApiToken(id: string) {
     const token = `sbk_pat.${id}.${randomBytes(32).toString('base64url')}`;
     return { token, tokenHash: this.digest(token, 'identity-api-token') };
   }
@@ -330,11 +396,7 @@ export class IdentityTokenService {
     nowSeconds = Math.floor(Date.now() / 1_000),
   ): Promise<string> {
     return new SignJWT({ session_id: session.id })
-      .setProtectedHeader({
-        alg: this.keys.algorithm,
-        typ: 'JWT',
-        ...(this.keys.keyId ? { kid: this.keys.keyId } : {}),
-      })
+      .setProtectedHeader(identityProtectedHeader(this.keys))
       .setIssuer(ISSUER)
       .setAudience(SESSION_AUDIENCE)
       .setSubject(session.userId)
@@ -368,11 +430,7 @@ export class IdentityTokenService {
     nowSeconds = Math.floor(Date.now() / 1_000),
   ): Promise<string> {
     return new SignJWT({ grant_id: link.grantId })
-      .setProtectedHeader({
-        alg: this.keys.algorithm,
-        typ: 'JWT',
-        ...(this.keys.keyId ? { kid: this.keys.keyId } : {}),
-      })
+      .setProtectedHeader(identityProtectedHeader(this.keys))
       .setIssuer(ISSUER)
       .setAudience(SHARE_AUDIENCE)
       .setSubject(link.grantId)
