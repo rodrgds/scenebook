@@ -1167,7 +1167,8 @@ export function createControlPlaneApp(
     projectId: string,
     release: ReleasePublicationSubject,
     provenance:
-      { readonly repository: string; readonly commit: string } | { readonly uploadId: string },
+      | { readonly repository: string; readonly commit: string }
+      | { readonly uploadId: string },
   ): Promise<ArtifactUploadRecord> => {
     const upload =
       'uploadId' in provenance

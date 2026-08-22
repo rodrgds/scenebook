@@ -133,4 +133,3 @@ export async function loadConfig(cwd: string, explicit?: string): Promise<Loaded
     ...(sidecar ? { projectPath: sidecar.path } : {}),
   };
 }
-

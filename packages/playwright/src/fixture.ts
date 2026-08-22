@@ -13,7 +13,8 @@ import type {
 const FIXTURE_FILE = fileURLToPath(import.meta.url);
 
 function sceneDefinitionLocation():
-  { readonly file: string; readonly line: number; readonly column: number } | undefined {
+  | { readonly file: string; readonly line: number; readonly column: number }
+  | undefined {
   for (const frame of new Error().stack?.split('\n').slice(1) ?? []) {
     const match = frame.match(/\((.+):(\d+):(\d+)\)$/u) ?? frame.match(/at (.+):(\d+):(\d+)$/u);
     if (!match) continue;

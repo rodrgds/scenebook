@@ -3,7 +3,12 @@ import { lstat, open, realpath, type FileHandle } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
 export type SafeFileReadFailure =
-  'missing' | 'unsafe-path' | 'symlink' | 'not-regular' | 'size' | 'changed';
+  | 'missing'
+  | 'unsafe-path'
+  | 'symlink'
+  | 'not-regular'
+  | 'size'
+  | 'changed';
 
 export class SafeFileReadError extends Error {
   constructor(

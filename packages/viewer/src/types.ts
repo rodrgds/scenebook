@@ -69,7 +69,13 @@ export interface SceneCta {
   id: string;
   label: string;
   kind?:
-    'open-product' | 'read-docs' | 'restart' | 'view-scene' | 'book-call' | 'external' | 'form';
+    | 'open-product'
+    | 'read-docs'
+    | 'restart'
+    | 'view-scene'
+    | 'book-call'
+    | 'external'
+    | 'form';
   href?: string;
   event?: string;
   variant?: 'primary' | 'secondary';

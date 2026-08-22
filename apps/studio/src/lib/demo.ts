@@ -337,4 +337,3 @@ export const catalogScenes: CatalogScene[] = [
     sample: true,
   },
 ];
-

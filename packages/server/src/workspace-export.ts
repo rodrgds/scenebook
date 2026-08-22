@@ -20,7 +20,12 @@ const ZIP_EPOCH = new Date('1980-01-01T00:00:00.000Z');
 export class WorkspaceExportLimitError extends Error {
   constructor(
     readonly kind:
-      'records' | 'assets' | 'bytes' | 'metadata-bytes' | 'total-bytes' | 'concurrent-change',
+      | 'records'
+      | 'assets'
+      | 'bytes'
+      | 'metadata-bytes'
+      | 'total-bytes'
+      | 'concurrent-change',
   ) {
     super(
       kind === 'concurrent-change'

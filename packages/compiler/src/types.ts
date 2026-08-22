@@ -174,7 +174,13 @@ export interface NormalizedCta {
   readonly id: string;
   readonly variant: 'primary' | 'secondary';
   readonly kind:
-    'open-product' | 'read-docs' | 'restart' | 'view-scene' | 'book-call' | 'external' | 'form';
+    | 'open-product'
+    | 'read-docs'
+    | 'restart'
+    | 'view-scene'
+    | 'book-call'
+    | 'external'
+    | 'form';
   readonly label: string;
   readonly url?: string;
   readonly targetSceneId?: string;
@@ -329,7 +335,11 @@ export interface PublicationDistribution {
 }
 
 export type PublicationSelectionMode =
-  'all-scenes' | 'project' | 'channel' | 'collection' | 'channel-collection';
+  | 'all-scenes'
+  | 'project'
+  | 'channel'
+  | 'collection'
+  | 'channel-collection';
 
 export interface PublicationSelection {
   readonly mode: PublicationSelectionMode;

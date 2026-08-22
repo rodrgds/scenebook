@@ -512,10 +512,19 @@ export interface ChannelRecord {
 export type CustomDomainDesiredState = 'active' | 'disabled' | 'removed';
 
 export type CustomDomainCertificateState =
-  'not-requested' | 'pending' | 'ready' | 'failed' | 'removed';
+  | 'not-requested'
+  | 'pending'
+  | 'ready'
+  | 'failed'
+  | 'removed';
 
 export type CustomDomainRoutingState =
-  'not-requested' | 'pending' | 'ready' | 'disabled' | 'failed' | 'removed';
+  | 'not-requested'
+  | 'pending'
+  | 'ready'
+  | 'disabled'
+  | 'failed'
+  | 'removed';
 
 /** A provider observation, never a caller-authored activation assertion. */
 export interface CustomDomainProvisioningObservation {

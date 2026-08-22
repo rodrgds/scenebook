@@ -41,8 +41,7 @@ export interface StoredSceneRecord {
   revision: number;
 }
 
-type ScenePayloadSlot =
-  'step-image' | 'portable-asset' | 'portable-sidecar' | 'run-evidence-asset';
+type ScenePayloadSlot = 'step-image' | 'portable-asset' | 'portable-sidecar' | 'run-evidence-asset';
 
 export interface ScenePayloadReference {
   slot: ScenePayloadSlot;

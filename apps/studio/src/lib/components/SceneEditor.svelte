@@ -25,7 +25,14 @@
   import Icon from './Icon.svelte';
 
   type CanvasTool =
-    'select' | 'hotspot' | 'callout' | 'spotlight' | 'arrow' | 'mask' | 'blur' | 'cursor';
+    | 'select'
+    | 'hotspot'
+    | 'callout'
+    | 'spotlight'
+    | 'arrow'
+    | 'mask'
+    | 'blur'
+    | 'cursor';
   type Aspect = '16:9' | '4:3' | '1:1' | '9:16';
   type CursorStyle = NonNullable<EditorStep['cursor']['style']>;
   type MobilePane = 'steps' | 'canvas' | 'inspector';
