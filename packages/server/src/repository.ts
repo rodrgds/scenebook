@@ -21,6 +21,8 @@ import type {
   ReviewApprovalRecord,
   ReviewRecord,
   SceneRevisionRecord,
+  StudioProjectDocument,
+  StudioSceneDocument,
   VerificationBaselineRecord,
   VerificationBuildRecord,
   VerificationJobRecord,
@@ -90,6 +92,71 @@ export interface ControlPlaneRepository {
     now: string;
   }): Promise<ProjectRecord>;
   getProject(workspaceId: string, id: string): Promise<ProjectRecord | undefined>;
+  listStudioSceneDocuments(input: {
+    workspaceId: string;
+    projectId: string;
+    limit: number;
+    before?: { savedAt: number; sceneId: string };
+  }): Promise<readonly StudioSceneDocument[]>;
+  getStudioSceneDocument(
+    workspaceId: string,
+    projectId: string,
+    sceneId: string,
+  ): Promise<StudioSceneDocument | undefined>;
+  listStudioSceneVersions(input: {
+    workspaceId: string;
+    projectId: string;
+    sceneId: string;
+    limit: number;
+    beforeRevision?: number;
+  }): Promise<readonly StudioSceneDocument[]>;
+  getStudioSceneVersion(
+    workspaceId: string,
+    projectId: string,
+    sceneId: string,
+    revision: number,
+  ): Promise<StudioSceneDocument | undefined>;
+  studioPayloadIsReferenced(
+    workspaceId: string,
+    projectId: string,
+    sha256: string,
+    mediaType: string,
+  ): Promise<boolean>;
+  putStudioWorkspace(input: {
+    workspaceId: string;
+    projectId: string;
+    writes: readonly {
+      expectedRevision: number;
+      record: StudioSceneDocument;
+    }[];
+    project?: {
+      expectedRevision: number;
+      document: Omit<StudioProjectDocument, 'revision'>;
+    };
+    actorId: string;
+    now: string;
+  }): Promise<{
+    records: readonly StudioSceneDocument[];
+    project?: StudioProjectDocument;
+  }>;
+  deleteStudioSceneDocument(input: {
+    workspaceId: string;
+    projectId: string;
+    sceneId: string;
+    expectedRevision: number;
+  }): Promise<boolean>;
+  getStudioProjectDocument(
+    workspaceId: string,
+    projectId: string,
+  ): Promise<StudioProjectDocument | undefined>;
+  putStudioProjectDocument(input: {
+    workspaceId: string;
+    projectId: string;
+    expectedRevision: number;
+    document: Omit<StudioProjectDocument, 'revision'>;
+    actorId: string;
+    now: string;
+  }): Promise<StudioProjectDocument>;
 
   createUser(input: {
     id: string;

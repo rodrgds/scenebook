@@ -1061,6 +1061,115 @@ describe('control-plane HTTP API', () => {
     ).toBe(400);
   });
 
+  it('persists hosted Studio drafts in PostgreSQL-shaped state and media in immutable storage', async () => {
+    const { app } = await fixture();
+    await bootstrap(app);
+    const bytes = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+XwO0GQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    const digest = sha256(bytes);
+    const assetPath = `/v1/admin/workspaces/workspace-1/projects/project-1/studio/assets/${digest}?byteLength=${bytes.byteLength}`;
+    const uploaded = await app.request(assetPath, {
+      method: 'PUT',
+      headers: {
+        authorization: `Bearer ${ADMIN}`,
+        'content-type': 'image/png',
+        'idempotency-key': 'studio-pixel-1',
+      },
+      body: bytes,
+    });
+    expect(uploaded.status).toBe(200);
+    const unreferencedRead = await app.request(
+      `/v1/admin/workspaces/workspace-1/projects/project-1/studio/assets/${digest}?mediaType=image%2Fpng`,
+      { headers: { authorization: `Bearer ${ADMIN}` } },
+    );
+    expect(unreferencedRead.status).toBe(404);
+
+    const record = {
+      id: 'hosted-scene',
+      scene: { version: 1, id: 'hosted-scene', title: 'Hosted scene', steps: [] },
+      savedAt: 1_721_476_800_000,
+      revision: 1,
+      storageVersion: 4,
+      payloadRefs: [
+        {
+          slot: 'step-image',
+          key: 'step-1',
+          sha256: digest,
+          mediaType: 'image/png',
+          byteLength: bytes.byteLength,
+          representation: 'binary-data-uri',
+        },
+      ],
+    } as const;
+    const scenesPath = '/v1/admin/workspaces/workspace-1/projects/project-1/studio/scenes';
+    const saved = await app.request(scenesPath, {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${ADMIN}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ writes: [{ expectedRevision: 0, record }] }),
+    });
+    expect(saved.status).toBe(200);
+    expect(await saved.json()).toMatchObject({ records: [{ id: 'hosted-scene', revision: 1 }] });
+
+    const listed = await app.request(`${scenesPath}?limit=1`, {
+      headers: { authorization: `Bearer ${ADMIN}` },
+    });
+    expect(await listed.json()).toMatchObject({
+      records: [{ id: 'hosted-scene', revision: 1 }],
+      nextCursor: null,
+    });
+    const version = await app.request(`${scenesPath}/hosted-scene/versions/1`, {
+      headers: { authorization: `Bearer ${ADMIN}` },
+    });
+    expect(await version.json()).toMatchObject({ record: { id: 'hosted-scene', revision: 1 } });
+
+    const project = {
+      schemaVersion: 1,
+      id: 'project-1',
+      name: 'Product',
+      slug: 'product',
+      defaultLocale: 'en',
+      locales: ['en'],
+      repositories: [],
+      environments: [],
+      productVariants: [],
+      captureProfiles: [],
+      runTargets: [],
+      collections: [],
+      channels: [],
+      public: { seo: { index: false, follow: false }, attribution: true, remix: true },
+      metadata: { source: 'scenebook-studio' },
+    };
+    const projectPath = '/v1/admin/workspaces/workspace-1/projects/project-1/studio/project';
+    const projectSave = await app.request(projectPath, {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${ADMIN}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ expectedRevision: 0, document: { project, savedAt: record.savedAt } }),
+    });
+    expect(projectSave.status).toBe(200);
+    expect(await projectSave.json()).toMatchObject({ document: { revision: 1, project } });
+
+    const loadedAsset = await app.request(
+      `/v1/admin/workspaces/workspace-1/projects/project-1/studio/assets/${digest}?mediaType=image%2Fpng`,
+      { headers: { authorization: `Bearer ${ADMIN}` } },
+    );
+    expect(loadedAsset.status).toBe(200);
+    expect(Buffer.from(await loadedAsset.arrayBuffer())).toEqual(bytes);
+
+    const conflict = await app.request(scenesPath, {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${ADMIN}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ writes: [{ expectedRevision: 0, record }] }),
+    });
+    expect(conflict.status).toBe(409);
+    const deleted = await app.request(`${scenesPath}/hosted-scene?expectedRevision=1`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${ADMIN}` },
+    });
+    expect(deleted.status).toBe(204);
+  });
+
   it('lists tenant-scoped control-plane resources for first-party operator clients', async () => {
     const { app } = await fixture();
     await bootstrap(app);

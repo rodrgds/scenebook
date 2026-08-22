@@ -25,6 +25,36 @@ export interface ProjectRecord {
   readonly createdAt: string;
 }
 
+/**
+ * Mutable creator-working state for the hosted Studio. This is deliberately
+ * separate from canonical Scene revisions and immutable Run/Release evidence:
+ * the browser compacts media into content-addressed payload references before
+ * this document reaches PostgreSQL.
+ */
+export interface StudioSceneDocument {
+  readonly id: string;
+  readonly scene: Readonly<Record<string, unknown>>;
+  readonly savedAt: number;
+  readonly revision: number;
+  readonly storageVersion: 4;
+  readonly payloadRefs: readonly StudioPayloadReference[];
+}
+
+export interface StudioPayloadReference {
+  readonly slot: 'step-image' | 'portable-asset' | 'portable-sidecar' | 'run-evidence-asset';
+  readonly key: string;
+  readonly sha256: string;
+  readonly mediaType: string;
+  readonly byteLength: number;
+  readonly representation: 'utf8' | 'binary-data-uri';
+}
+
+export interface StudioProjectDocument {
+  readonly project: Readonly<Record<string, unknown>>;
+  readonly revision: number;
+  readonly savedAt: number;
+}
+
 export type WorkspaceRole = 'owner' | 'editor' | 'reviewer' | 'viewer';
 
 export type IdentityScope =

@@ -77,6 +77,25 @@ Assets are addressed by SHA-256 plus their canonical media identity and are immu
 
 The local implementation uses filesystem storage behind the same interfaces expected by S3-compatible object storage. Hosted metadata belongs in PostgreSQL; browser execution stays in customer CI by default.
 
+Studio has two explicit persistence modes. Local mode stores working Scenes, project configuration,
+and bounded version history in IndexedDB. Connected mode stores the same compact working-document
+layer in PostgreSQL with optimistic revisions and keeps payload bytes in private S3-compatible
+object storage. The working-document layer is not canonical Scene evidence: saving a hosted draft
+does not create a verified Scene revision, Baseline, approval, or Release.
+
+Before a connected save, the browser moves embedded payloads out of the document, addresses them by
+SHA-256 plus media type, and irreversibly flattens authored opaque masks into uploaded screenshots.
+The server validates the compact document, streams and verifies each object, and commits the draft
+only after every payload is finalized for the same Workspace and Project. Draft revisions keep those
+objects protected from retention. Published media is still produced only by the compiler and
+promotion pipeline.
+
+PostgreSQL is the hosted default rather than SQLite because collaboration, upload admission,
+retention, promotion, and the read-only gateway rely on transactions, advisory locks, concurrent
+claiming, row-level compare-and-swap, and database-enforced append-only guards. MinIO is bundled for
+an easy local S3 implementation; any compatible service can replace it through the same object-store
+configuration.
+
 ## Publishing
 
 A Channel is a destination plus policy. A Release is immutable approved content. The CLI resolves Project, Channel, and Collection source into a typed publication plan; the compiler validates that plan against supplied portable Scenes without reading project files. Default plans preserve Collection and entry order and include ungrouped Scenes, while Channel plans filter to ordered `collectionIds`. The resolved selection and policy are recorded in the manifest and per-Scene evidence.

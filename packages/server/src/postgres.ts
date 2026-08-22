@@ -8,6 +8,7 @@ import {
   BaselineSchema,
   BuildArtifactSchema,
   PrivacySummarySchema,
+  ProjectSchema,
   ReleaseSchema,
   ReviewCommentSchema,
   ReviewDecisionSchema,
@@ -42,6 +43,8 @@ import type {
   ReviewApprovalRecord,
   ReviewRecord,
   SceneRevisionRecord,
+  StudioProjectDocument,
+  StudioSceneDocument,
   VerificationBaselineRecord,
   VerificationBuildRecord,
   VerificationExecutionContract,
@@ -76,6 +79,7 @@ import {
   CustomDomainProvisioningRecordSchema,
   normalizeCustomDomainHostname,
 } from './custom-domains.js';
+import { StudioSceneDocumentSchema } from './api-schemas.js';
 
 type ReviewComment = Review['comments'][number];
 type ReviewDecision = Review['decisions'][number];
@@ -93,6 +97,19 @@ interface WorkspaceRow {
 
 interface ProjectRow extends WorkspaceRow {
   workspace_id: string;
+}
+
+interface StudioSceneRow {
+  scene_id: string;
+  revision: string | number;
+  saved_at: string | number;
+  document_json: unknown;
+}
+
+interface StudioProjectRow {
+  revision: string | number;
+  saved_at: string | number;
+  document_json: unknown;
 }
 
 interface UserRow {
@@ -595,6 +612,26 @@ function project(row: ProjectRow): ProjectRecord {
     slug: row.slug,
     name: row.name,
     createdAt: iso(row.created_at),
+  };
+}
+
+function studioScene(row: StudioSceneRow): StudioSceneDocument {
+  const value = StudioSceneDocumentSchema.parse(row.document_json);
+  if (
+    value.id !== row.scene_id ||
+    value.revision !== Number(row.revision) ||
+    value.savedAt !== Number(row.saved_at)
+  ) {
+    throw new Error('Hosted Studio Scene row conflicts with its validated document');
+  }
+  return value;
+}
+
+function studioProject(row: StudioProjectRow): StudioProjectDocument {
+  return {
+    project: ProjectSchema.parse(row.document_json),
+    revision: Number(row.revision),
+    savedAt: Number(row.saved_at),
   };
 }
 
@@ -1236,6 +1273,342 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository, D
       [workspaceId, limit],
     );
     return result.rows.map(project);
+  }
+
+  async listStudioSceneDocuments(
+    input: Parameters<ControlPlaneRepository['listStudioSceneDocuments']>[0],
+  ): ReturnType<ControlPlaneRepository['listStudioSceneDocuments']> {
+    const result = await this.pool.query<StudioSceneRow>(
+      `SELECT scene_id,revision,saved_at,document_json
+         FROM studio_scene_documents
+        WHERE workspace_id=$1 AND project_id=$2
+          AND ($3::bigint IS NULL OR (saved_at,scene_id)<($3::bigint,$4::text))
+        ORDER BY saved_at DESC,scene_id DESC
+        LIMIT $5`,
+      [
+        input.workspaceId,
+        input.projectId,
+        input.before?.savedAt ?? null,
+        input.before?.sceneId ?? '',
+        input.limit,
+      ],
+    );
+    return result.rows.map(studioScene);
+  }
+
+  async getStudioSceneDocument(
+    workspaceId: string,
+    projectId: string,
+    sceneId: string,
+  ): Promise<StudioSceneDocument | undefined> {
+    const row = (
+      await this.pool.query<StudioSceneRow>(
+        `SELECT scene_id,revision,saved_at,document_json
+           FROM studio_scene_documents
+          WHERE workspace_id=$1 AND project_id=$2 AND scene_id=$3`,
+        [workspaceId, projectId, sceneId],
+      )
+    ).rows[0];
+    return row ? studioScene(row) : undefined;
+  }
+
+  async listStudioSceneVersions(
+    input: Parameters<ControlPlaneRepository['listStudioSceneVersions']>[0],
+  ): ReturnType<ControlPlaneRepository['listStudioSceneVersions']> {
+    const result = await this.pool.query<StudioSceneRow>(
+      `SELECT scene_id,revision,saved_at,document_json
+         FROM studio_scene_versions
+        WHERE workspace_id=$1 AND project_id=$2 AND scene_id=$3
+          AND ($4::bigint IS NULL OR revision<$4)
+        ORDER BY revision DESC
+        LIMIT $5`,
+      [
+        input.workspaceId,
+        input.projectId,
+        input.sceneId,
+        input.beforeRevision ?? null,
+        input.limit,
+      ],
+    );
+    return result.rows.map(studioScene);
+  }
+
+  async getStudioSceneVersion(
+    workspaceId: string,
+    projectId: string,
+    sceneId: string,
+    revisionNumber: number,
+  ): Promise<StudioSceneDocument | undefined> {
+    const row = (
+      await this.pool.query<StudioSceneRow>(
+        `SELECT scene_id,revision,saved_at,document_json
+           FROM studio_scene_versions
+          WHERE workspace_id=$1 AND project_id=$2 AND scene_id=$3 AND revision=$4`,
+        [workspaceId, projectId, sceneId, revisionNumber],
+      )
+    ).rows[0];
+    return row ? studioScene(row) : undefined;
+  }
+
+  async studioPayloadIsReferenced(
+    workspaceId: string,
+    projectId: string,
+    sha256: string,
+    mediaType: string,
+  ): Promise<boolean> {
+    const result = await this.pool.query<{ referenced: boolean }>(
+      `SELECT EXISTS(
+         SELECT 1 FROM studio_scene_versions scene
+          WHERE scene.workspace_id=$1 AND scene.project_id=$2
+            AND jsonb_path_exists(
+              scene.document_json,
+              '$.payloadRefs[*] ? (@.sha256 == $sha && @.mediaType == $media)'::jsonpath,
+              $3::jsonb
+            )
+       ) AS referenced`,
+      [workspaceId, projectId, JSON.stringify({ sha: sha256, media: mediaType })],
+    );
+    return result.rows[0]?.referenced ?? false;
+  }
+
+  private async assertStudioPayloadsActive(
+    client: PoolClient,
+    workspaceId: string,
+    projectId: string,
+    records: readonly StudioSceneDocument[],
+  ): Promise<void> {
+    const references = new Map<string, { sha256: string; mediaType: string; byteLength: number }>();
+    for (const record of records) {
+      for (const reference of record.payloadRefs) {
+        const identity = artifactObjectIdentity(reference.sha256, reference.mediaType);
+        const existing = references.get(identity);
+        if (existing && existing.byteLength !== reference.byteLength) {
+          throw new RepositoryConflictError('Hosted Studio payload lengths conflict');
+        }
+        references.set(identity, {
+          sha256: reference.sha256,
+          mediaType: reference.mediaType,
+          byteLength: reference.byteLength,
+        });
+      }
+    }
+    if (references.size === 0) return;
+    const missing = (
+      await client.query<{ sha256: string; media_type: string }>(
+        `WITH requested AS (
+           SELECT * FROM jsonb_to_recordset($3::jsonb)
+             AS item(sha256 text,media_type text,byte_length bigint)
+         )
+         SELECT requested.sha256,requested.media_type
+           FROM requested
+          WHERE NOT EXISTS (
+            SELECT 1
+              FROM artifact_uploads upload
+              JOIN artifact_objects object ON object.upload_id=upload.id
+              LEFT JOIN evidence_object_lifecycle lifecycle ON
+                lifecycle.workspace_id=upload.workspace_id
+                AND lifecycle.sha256=object.sha256
+                AND lifecycle.media_type=object.media_type
+             WHERE upload.workspace_id=$1 AND upload.project_id=$2
+               AND upload.repository='scenebook-studio'
+               AND upload.status='finalized' AND object.status='finalized'
+               AND object.final_key IS NOT NULL
+               AND object.sha256=requested.sha256
+               AND object.media_type=requested.media_type
+               AND object.byte_length=requested.byte_length
+               AND (lifecycle.status IS NULL OR lifecycle.status='active')
+          )
+          LIMIT 1`,
+        [
+          workspaceId,
+          projectId,
+          JSON.stringify(
+            [...references.values()].map((reference) => ({
+              sha256: reference.sha256,
+              media_type: reference.mediaType,
+              byte_length: reference.byteLength,
+            })),
+          ),
+        ],
+      )
+    ).rows[0];
+    if (missing) {
+      throw new RepositoryConflictError(
+        `Hosted Studio payload is unavailable: ${missing.sha256}:${missing.media_type}`,
+      );
+    }
+  }
+
+  async putStudioWorkspace(
+    input: Parameters<ControlPlaneRepository['putStudioWorkspace']>[0],
+  ): ReturnType<ControlPlaneRepository['putStudioWorkspace']> {
+    return transaction(this.pool, async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+        `scenebook-evidence-retention:${input.workspaceId}`,
+      ]);
+      const project = await client.query('SELECT 1 FROM projects WHERE workspace_id=$1 AND id=$2', [
+        input.workspaceId,
+        input.projectId,
+      ]);
+      if (!project.rows[0]) throw new RepositoryNotFoundError('Project not found');
+      const orderedWrites = [...input.writes].sort((left, right) =>
+        left.record.id.localeCompare(right.record.id),
+      );
+      await this.assertStudioPayloadsActive(
+        client,
+        input.workspaceId,
+        input.projectId,
+        orderedWrites.map((write) => write.record),
+      );
+      const records: StudioSceneDocument[] = [];
+      for (const write of orderedWrites) {
+        const current = (
+          await client.query<{ revision: string | number }>(
+            `SELECT revision FROM studio_scene_documents
+              WHERE workspace_id=$1 AND project_id=$2 AND scene_id=$3 FOR UPDATE`,
+            [input.workspaceId, input.projectId, write.record.id],
+          )
+        ).rows[0];
+        const actualRevision = current ? Number(current.revision) : 0;
+        if (
+          actualRevision !== write.expectedRevision ||
+          write.record.revision !== write.expectedRevision + 1
+        ) {
+          throw new RepositoryConflictError(
+            `Hosted Studio Scene revision conflict: ${write.record.id}:${actualRevision}`,
+          );
+        }
+        await client.query(
+          `INSERT INTO studio_scene_documents(
+             workspace_id,project_id,scene_id,revision,saved_at,document_json,updated_by,updated_at
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           ON CONFLICT (workspace_id,project_id,scene_id) DO UPDATE SET
+             revision=EXCLUDED.revision,saved_at=EXCLUDED.saved_at,
+             document_json=EXCLUDED.document_json,updated_by=EXCLUDED.updated_by,
+             updated_at=EXCLUDED.updated_at`,
+          [
+            input.workspaceId,
+            input.projectId,
+            write.record.id,
+            write.record.revision,
+            write.record.savedAt,
+            write.record,
+            input.actorId,
+            input.now,
+          ],
+        );
+        await client.query(
+          `INSERT INTO studio_scene_versions(
+             workspace_id,project_id,scene_id,revision,saved_at,document_json,created_by,created_at
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [
+            input.workspaceId,
+            input.projectId,
+            write.record.id,
+            write.record.revision,
+            write.record.savedAt,
+            write.record,
+            input.actorId,
+            input.now,
+          ],
+        );
+        await client.query(
+          `DELETE FROM studio_scene_versions
+            WHERE workspace_id=$1 AND project_id=$2 AND scene_id=$3
+              AND revision NOT IN (
+                SELECT revision FROM studio_scene_versions
+                 WHERE workspace_id=$1 AND project_id=$2 AND scene_id=$3
+                 ORDER BY revision DESC LIMIT 100
+              )`,
+          [input.workspaceId, input.projectId, write.record.id],
+        );
+        records.push(write.record);
+      }
+      let projectDocument: StudioProjectDocument | undefined;
+      if (input.project) {
+        if (input.project.document.project.id !== input.projectId) {
+          throw new RepositoryConflictError('Hosted Studio Project id does not match the route');
+        }
+        const current = (
+          await client.query<{ revision: string | number }>(
+            `SELECT revision FROM studio_project_documents
+              WHERE workspace_id=$1 AND project_id=$2 FOR UPDATE`,
+            [input.workspaceId, input.projectId],
+          )
+        ).rows[0];
+        const actualRevision = current ? Number(current.revision) : 0;
+        if (actualRevision !== input.project.expectedRevision) {
+          throw new RepositoryConflictError(
+            `Hosted Studio Project revision conflict: ${actualRevision}`,
+          );
+        }
+        projectDocument = {
+          ...input.project.document,
+          revision: input.project.expectedRevision + 1,
+        };
+        await client.query(
+          `INSERT INTO studio_project_documents(
+             workspace_id,project_id,revision,saved_at,document_json,updated_by,updated_at
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7)
+           ON CONFLICT (workspace_id,project_id) DO UPDATE SET
+             revision=EXCLUDED.revision,saved_at=EXCLUDED.saved_at,
+             document_json=EXCLUDED.document_json,updated_by=EXCLUDED.updated_by,
+             updated_at=EXCLUDED.updated_at`,
+          [
+            input.workspaceId,
+            input.projectId,
+            projectDocument.revision,
+            projectDocument.savedAt,
+            projectDocument.project,
+            input.actorId,
+            input.now,
+          ],
+        );
+      }
+      return { records, ...(projectDocument ? { project: projectDocument } : {}) };
+    });
+  }
+
+  async deleteStudioSceneDocument(
+    input: Parameters<ControlPlaneRepository['deleteStudioSceneDocument']>[0],
+  ): Promise<boolean> {
+    return transaction(this.pool, async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+        `scenebook-evidence-retention:${input.workspaceId}`,
+      ]);
+      const deleted = await client.query(
+        `DELETE FROM studio_scene_documents
+          WHERE workspace_id=$1 AND project_id=$2 AND scene_id=$3 AND revision=$4`,
+        [input.workspaceId, input.projectId, input.sceneId, input.expectedRevision],
+      );
+      return deleted.rowCount === 1;
+    });
+  }
+
+  async getStudioProjectDocument(
+    workspaceId: string,
+    projectId: string,
+  ): Promise<StudioProjectDocument | undefined> {
+    const row = (
+      await this.pool.query<StudioProjectRow>(
+        `SELECT revision,saved_at,document_json FROM studio_project_documents
+          WHERE workspace_id=$1 AND project_id=$2`,
+        [workspaceId, projectId],
+      )
+    ).rows[0];
+    return row ? studioProject(row) : undefined;
+  }
+
+  async putStudioProjectDocument(
+    input: Parameters<ControlPlaneRepository['putStudioProjectDocument']>[0],
+  ): Promise<StudioProjectDocument> {
+    const result = await this.putStudioWorkspace({
+      ...input,
+      writes: [],
+      project: { expectedRevision: input.expectedRevision, document: input.document },
+    });
+    if (!result.project) throw new Error('Could not save hosted Studio Project');
+    return result.project;
   }
 
   async createUser(input: {
@@ -3865,6 +4238,10 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository, D
             WHERE scene.workspace_id=$1
               AND jsonb_path_exists(scene.source_json,$4::jsonpath,$5::jsonb)
          ) OR EXISTS(
+           SELECT 1 FROM studio_scene_versions scene
+            WHERE scene.workspace_id=$1
+              AND jsonb_path_exists(scene.document_json,$4::jsonpath,$5::jsonb)
+         ) OR EXISTS(
            SELECT 1 FROM verification_baselines b
             WHERE b.workspace_id=$1
               AND jsonb_path_exists(b.artifact_json,$4::jsonpath,$5::jsonb)
@@ -4010,7 +4387,7 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository, D
             : disposition === 'protected'
               ? activeUpload.rows[0]
                 ? 'matching active upload exists'
-                : 'immutable evidence or Release reference exists'
+                : 'hosted Studio, immutable evidence, or Release reference exists'
               : 'grace elapsed and no protected reference or active upload exists';
         evaluations.push({
           ...evidenceObjectLifecycle(candidate),

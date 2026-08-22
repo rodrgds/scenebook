@@ -10,6 +10,7 @@ import {
   NormalizedRectSchema,
   PrivacySummarySchema,
   ProducerSchema,
+  ProjectSchema,
   ReleasePublicationSchema,
   ReleaseSceneSchema,
   ReviewSchema,
@@ -81,6 +82,140 @@ export const CreateIdentityApiTokenRequestSchema = z
   });
 
 export const CreateUserSessionRequestSchema = z.object({}).strict();
+
+export const StudioPayloadReferenceSchema = z
+  .object({
+    slot: z.enum(['step-image', 'portable-asset', 'portable-sidecar', 'run-evidence-asset']),
+    key: z.string().min(1).max(1_024),
+    sha256: Sha256Schema,
+    mediaType: z.enum(ALLOWED_OBJECT_MEDIA_TYPES),
+    byteLength: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    representation: z.enum(['utf8', 'binary-data-uri']),
+  })
+  .strict();
+
+const StudioSceneJsonSchema = z
+  .record(z.string(), JsonValueSchema)
+  .superRefine((scene, context) => {
+    if (scene.version !== 1) {
+      context.addIssue({ code: 'custom', message: 'Studio Scene version must be 1' });
+    }
+    if (!IdSchema.safeParse(scene.id).success) {
+      context.addIssue({ code: 'custom', message: 'Studio Scene id is invalid', path: ['id'] });
+    }
+    const visit = (value: unknown, path: PropertyKey[]): void => {
+      if (typeof value === 'string') {
+        if (/^(?:blob|data):/iu.test(value)) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Embedded media must be stored as a payload reference',
+            path,
+          });
+        }
+        return;
+      }
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => visit(item, [...path, index]));
+        return;
+      }
+      if (value && typeof value === 'object') {
+        for (const [key, item] of Object.entries(value)) visit(item, [...path, key]);
+      }
+    };
+    visit(scene, []);
+  });
+
+export const StudioSceneDocumentSchema = z
+  .object({
+    id: IdSchema,
+    scene: StudioSceneJsonSchema,
+    savedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    revision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    storageVersion: z.literal(4),
+    payloadRefs: z.array(StudioPayloadReferenceSchema).max(50_000),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.scene.id !== value.id) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Studio Scene id must match its document id',
+        path: ['scene', 'id'],
+      });
+    }
+    const slots = new Set<string>();
+    for (const [index, reference] of value.payloadRefs.entries()) {
+      const slot = `${reference.slot}\0${reference.key}`;
+      if (slots.has(slot)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Studio payload slots must be unique',
+          path: ['payloadRefs', index],
+        });
+      }
+      slots.add(slot);
+    }
+  });
+
+export const PutStudioWorkspaceRequestSchema = z
+  .object({
+    writes: z
+      .array(
+        z
+          .object({
+            expectedRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+            record: StudioSceneDocumentSchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100),
+    project: z
+      .object({
+        expectedRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+        document: z
+          .object({
+            project: ProjectSchema,
+            savedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+          })
+          .strict(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const ids = new Set<string>();
+    for (const [index, write] of value.writes.entries()) {
+      if (write.record.revision !== write.expectedRevision + 1) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Studio Scene revision must advance by exactly one',
+          path: ['writes', index, 'record', 'revision'],
+        });
+      }
+      if (ids.has(write.record.id)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Studio Scene batch ids must be unique',
+          path: ['writes', index, 'record', 'id'],
+        });
+      }
+      ids.add(write.record.id);
+    }
+  });
+
+export const PutStudioProjectRequestSchema = z
+  .object({
+    expectedRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    document: z
+      .object({
+        project: ProjectSchema,
+        savedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+      })
+      .strict(),
+  })
+  .strict();
 
 export const CreatePortalGrantRequestSchema = z
   .object({

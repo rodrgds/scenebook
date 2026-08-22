@@ -9,7 +9,7 @@ The portable Scene is yours: ordinary YAML, MDX, Playwright, and content-address
 ## What is included
 
 - Privacy-first Chrome MV3 recorder with portable `.scene.zip` export, plus isolated Playwright codegen with pre-persistence fixture replacement, deterministic diagnostics, and an unapplied exact Step patch
-- Creator-focused Studio with catalog, visual Step editor, preview, health, version, and publishing views
+- Creator-focused Studio with catalog, visual Step editor, preview, health, version, and publishing views; browser-local by default with an explicit self-hosted workspace mode
 - Accessible, responsive `<scenebook-player>` web component with keyboard navigation, transcript, branching, CTAs, and host events
 - Versioned Zod + JSON/YAML Scene, Project, Run, Review, Baseline, Channel, and Release schemas
 - Content-addressed immutable asset storage, safe path handling, canonical serialization, and atomic release writes
@@ -63,6 +63,14 @@ by the current Channel on a distinct origin. The administrative control plane ma
 that archive through explicit GitHub OIDC, but it never serves generated active pages. Public
 projects default to `noindex,nofollow` and no analytics; see [Publishing](./docs/publishing.md) before
 enabling canonical URLs, indexing, public lifecycle analytics, or remix downloads.
+
+The self-host deployment uses PostgreSQL for tenant metadata, hosted Studio drafts, optimistic
+revision history, evidence, and Release pointers. Media is immutable and content-addressed in an
+S3-compatible store; the bundled Compose stack provisions MinIO with separate write, read-only
+gateway, and delete-only retention identities. SQLite is intentionally not the hosted default: the
+control plane needs concurrent multi-user compare-and-swap writes, advisory locks, append-only
+evidence guards, and a separate least-privilege gateway process. Local Studio use still needs none
+of these services.
 
 ## The three truth layers
 

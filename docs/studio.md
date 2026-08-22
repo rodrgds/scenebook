@@ -2,11 +2,28 @@
 
 Studio is the creator-facing, local-first editor. Its default tabs are Edit, Preview, Health, Versions, and Publish; execution details stay under Health.
 
-## Local data and recovery
+## Workspace storage and recovery
 
-Scenes and projects are stored in the browser's IndexedDB. Unsaved edits also enter a small local recovery journal. Studio does not upload either store. Export a portable Scene or project archive before clearing site data or moving browsers.
+Studio starts in local mode. Scenes and projects are stored in the browser's IndexedDB, and unsaved
+edits enter a small local recovery journal. Nothing is uploaded in this mode. Export a portable
+Scene or project archive before clearing site data or moving browsers.
 
-Every save is compare-and-swapped against the revision the editor loaded. If another tab saves first, Studio rejects the stale write, preserves it in crash recovery, and asks the author to reload; immutable revision-history keys are never overwritten.
+A self-hosted deployment can be connected from Project settings with an Owner or Editor personal
+API token scoped to `workspace:read`, `project:read`, and `project:write`. Studio exchanges that
+token once for a shorter browser Session, clears the token field, and keeps the Session only in
+`sessionStorage`. The selected Workspace and Project identifiers are remembered without a
+credential. Disconnecting returns to the untouched local workspace.
+
+Connected mode persists compact working documents and their bounded version history in PostgreSQL.
+Embedded screenshots and retained portable payloads are private, content-addressed objects in the
+configured S3-compatible store. Opaque masks are irreversibly applied before screenshot bytes leave
+the browser, and attached Run screenshots must already have privacy-clear evidence. Saving remains
+compare-and-swap: a stale tab conflicts instead of replacing a newer revision. Server-backed drafts
+remain authored working state, not passing Run evidence or a Release.
+
+Every save is compare-and-swapped against the revision the editor loaded. If another tab or
+collaborator saves first, Studio rejects the stale write, preserves it in crash recovery, and asks
+the author to reload; revision-history keys are never overwritten.
 
 Imports validate the versioned schema, archive paths, entry counts, expanded size, media type, and content hashes. Conflicts can be renamed, replaced, or skipped explicitly. Referenced narrative, theme, locale, and replay sidecars are required in ZIP imports, retained byte-for-byte in JSON-portable browser storage, and restored on ZIP re-export; extension replay drafts receive the same treatment. Re-export also preserves checks, automation metadata, and assets that Studio does not edit.
 

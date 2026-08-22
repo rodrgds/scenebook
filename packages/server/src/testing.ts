@@ -25,6 +25,8 @@ import type {
   ReviewApprovalRecord,
   ReviewRecord,
   SceneRevisionRecord,
+  StudioProjectDocument,
+  StudioSceneDocument,
   VerificationBaselineRecord,
   VerificationBuildRecord,
   VerificationJobRecord,
@@ -95,6 +97,9 @@ function structuredAssetIdentities(value: unknown): readonly {
 export class MemoryControlPlaneRepository implements ControlPlaneRepository {
   readonly workspaces = new Map<string, WorkspaceRecord>();
   readonly projects = new Map<string, ProjectRecord>();
+  readonly studioScenes = new Map<string, StudioSceneDocument>();
+  readonly studioSceneVersions = new Map<string, StudioSceneDocument[]>();
+  readonly studioProjects = new Map<string, StudioProjectDocument>();
   readonly users = new Map<string, UserRecord>();
   readonly memberships = new Map<string, WorkspaceMembershipRecord>();
   readonly identityApiTokens = new Map<string, IdentityApiTokenRecord>();
@@ -218,6 +223,206 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
   async getProject(workspaceId: string, id: string): Promise<ProjectRecord | undefined> {
     const value = this.projects.get(id);
     return value?.workspaceId === workspaceId ? clone(value) : undefined;
+  }
+
+  private studioSceneKey(workspaceId: string, projectId: string, sceneId: string): string {
+    return `${workspaceId}\0${projectId}\0${sceneId}`;
+  }
+
+  private studioProjectKey(workspaceId: string, projectId: string): string {
+    return `${workspaceId}\0${projectId}`;
+  }
+
+  async listStudioSceneDocuments(
+    input: Parameters<ControlPlaneRepository['listStudioSceneDocuments']>[0],
+  ): ReturnType<ControlPlaneRepository['listStudioSceneDocuments']> {
+    return [...this.studioScenes.entries()]
+      .filter(([key]) => key.startsWith(`${input.workspaceId}\0${input.projectId}\0`))
+      .map(([, value]) => value)
+      .filter(
+        (value) =>
+          !input.before ||
+          value.savedAt < input.before.savedAt ||
+          (value.savedAt === input.before.savedAt && value.id < input.before.sceneId),
+      )
+      .sort((left, right) => right.savedAt - left.savedAt || right.id.localeCompare(left.id))
+      .slice(0, input.limit)
+      .map(clone);
+  }
+
+  async getStudioSceneDocument(
+    workspaceId: string,
+    projectId: string,
+    sceneId: string,
+  ): Promise<StudioSceneDocument | undefined> {
+    const value = this.studioScenes.get(this.studioSceneKey(workspaceId, projectId, sceneId));
+    return value ? clone(value) : undefined;
+  }
+
+  async listStudioSceneVersions(
+    input: Parameters<ControlPlaneRepository['listStudioSceneVersions']>[0],
+  ): ReturnType<ControlPlaneRepository['listStudioSceneVersions']> {
+    return (
+      this.studioSceneVersions.get(
+        this.studioSceneKey(input.workspaceId, input.projectId, input.sceneId),
+      ) ?? []
+    )
+      .filter((value) => !input.beforeRevision || value.revision < input.beforeRevision)
+      .sort((left, right) => right.revision - left.revision)
+      .slice(0, input.limit)
+      .map(clone);
+  }
+
+  async getStudioSceneVersion(
+    workspaceId: string,
+    projectId: string,
+    sceneId: string,
+    revision: number,
+  ): Promise<StudioSceneDocument | undefined> {
+    const value = this.studioSceneVersions
+      .get(this.studioSceneKey(workspaceId, projectId, sceneId))
+      ?.find((candidate) => candidate.revision === revision);
+    return value ? clone(value) : undefined;
+  }
+
+  async studioPayloadIsReferenced(
+    workspaceId: string,
+    projectId: string,
+    sha256: string,
+    mediaType: string,
+  ): Promise<boolean> {
+    return [...this.studioSceneVersions.entries()].some(
+      ([key, versions]) =>
+        key.startsWith(`${workspaceId}\0${projectId}\0`) &&
+        versions.some((version) =>
+          version.payloadRefs.some(
+            (reference) => reference.sha256 === sha256 && reference.mediaType === mediaType,
+          ),
+        ),
+    );
+  }
+
+  private hasStudioPayload(
+    workspaceId: string,
+    projectId: string,
+    reference: StudioSceneDocument['payloadRefs'][number],
+  ): boolean {
+    const available = [...this.uploads.values()].some(
+      (upload) =>
+        upload.workspaceId === workspaceId &&
+        upload.projectId === projectId &&
+        upload.repository === 'scenebook-studio' &&
+        upload.status === 'finalized' &&
+        upload.objects.some(
+          (object) =>
+            object.status === 'finalized' &&
+            object.sha256 === reference.sha256 &&
+            object.mediaType === reference.mediaType &&
+            object.byteLength === reference.byteLength &&
+            Boolean(object.finalKey),
+        ),
+    );
+    const lifecycle = this.evidenceObjectLifecycle.get(
+      `${workspaceId}\0${artifactObjectIdentity(reference.sha256, reference.mediaType)}`,
+    );
+    return available && (!lifecycle || lifecycle.status === 'active');
+  }
+
+  async putStudioWorkspace(
+    input: Parameters<ControlPlaneRepository['putStudioWorkspace']>[0],
+  ): ReturnType<ControlPlaneRepository['putStudioWorkspace']> {
+    const project = this.projects.get(input.projectId);
+    if (!project || project.workspaceId !== input.workspaceId) {
+      throw new RepositoryNotFoundError('Project not found');
+    }
+    for (const write of input.writes) {
+      const key = this.studioSceneKey(input.workspaceId, input.projectId, write.record.id);
+      const actualRevision = this.studioScenes.get(key)?.revision ?? 0;
+      if (
+        actualRevision !== write.expectedRevision ||
+        write.record.revision !== write.expectedRevision + 1
+      ) {
+        throw new RepositoryConflictError(
+          `Hosted Studio Scene revision conflict: ${write.record.id}:${actualRevision}`,
+        );
+      }
+      if (
+        write.record.payloadRefs.some(
+          (reference) => !this.hasStudioPayload(input.workspaceId, input.projectId, reference),
+        )
+      ) {
+        throw new RepositoryConflictError('Hosted Studio payload is unavailable');
+      }
+    }
+    let nextProject: StudioProjectDocument | undefined;
+    if (input.project) {
+      if (input.project.document.project.id !== input.projectId) {
+        throw new RepositoryConflictError('Hosted Studio Project id does not match the route');
+      }
+      const key = this.studioProjectKey(input.workspaceId, input.projectId);
+      const actualRevision = this.studioProjects.get(key)?.revision ?? 0;
+      if (actualRevision !== input.project.expectedRevision) {
+        throw new RepositoryConflictError(
+          `Hosted Studio Project revision conflict: ${actualRevision}`,
+        );
+      }
+      nextProject = {
+        ...clone(input.project.document),
+        revision: input.project.expectedRevision + 1,
+      };
+    }
+    for (const write of input.writes) {
+      const key = this.studioSceneKey(input.workspaceId, input.projectId, write.record.id);
+      const value = clone(write.record);
+      this.studioScenes.set(key, value);
+      this.studioSceneVersions.set(
+        key,
+        [value, ...(this.studioSceneVersions.get(key) ?? [])]
+          .sort((left, right) => right.revision - left.revision)
+          .slice(0, 100),
+      );
+    }
+    if (nextProject) {
+      this.studioProjects.set(
+        this.studioProjectKey(input.workspaceId, input.projectId),
+        clone(nextProject),
+      );
+    }
+    return {
+      records: input.writes.map(({ record }) => clone(record)),
+      ...(nextProject ? { project: clone(nextProject) } : {}),
+    };
+  }
+
+  async deleteStudioSceneDocument(
+    input: Parameters<ControlPlaneRepository['deleteStudioSceneDocument']>[0],
+  ): Promise<boolean> {
+    const key = this.studioSceneKey(input.workspaceId, input.projectId, input.sceneId);
+    const current = this.studioScenes.get(key);
+    if (!current || current.revision !== input.expectedRevision) return false;
+    this.studioScenes.delete(key);
+    this.studioSceneVersions.delete(key);
+    return true;
+  }
+
+  async getStudioProjectDocument(
+    workspaceId: string,
+    projectId: string,
+  ): Promise<StudioProjectDocument | undefined> {
+    const value = this.studioProjects.get(this.studioProjectKey(workspaceId, projectId));
+    return value ? clone(value) : undefined;
+  }
+
+  async putStudioProjectDocument(
+    input: Parameters<ControlPlaneRepository['putStudioProjectDocument']>[0],
+  ): Promise<StudioProjectDocument> {
+    const result = await this.putStudioWorkspace({
+      ...input,
+      writes: [],
+      project: { expectedRevision: input.expectedRevision, document: input.document },
+    });
+    if (!result.project) throw new Error('Could not save hosted Studio Project');
+    return result.project;
   }
 
   async createUser(input: {
@@ -2019,6 +2224,9 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
     for (const scene of this.revisions.values()) {
       if (scene.workspaceId === value.workspaceId && hasAsset(scene.scene)) return true;
     }
+    for (const [key, versions] of this.studioSceneVersions) {
+      if (key.startsWith(`${value.workspaceId}\0`) && versions.some(hasAsset)) return true;
+    }
     for (const baseline of this.verificationBaselines.values()) {
       if (baseline.workspaceId !== value.workspaceId) continue;
       if (hasAsset(baseline.baseline)) return true;
@@ -2108,7 +2316,7 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
           : disposition === 'protected'
             ? activeUpload
               ? 'matching active upload exists'
-              : 'immutable evidence or Release reference exists'
+              : 'hosted Studio, immutable evidence, or Release reference exists'
             : 'grace elapsed and no protected reference or active upload exists';
       evaluations.push({ ...candidate, projectIds, disposition, reason });
       if (disposition !== 'eligible') continue;

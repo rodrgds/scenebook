@@ -56,6 +56,8 @@ import {
   FinalizeUploadRequestSchema,
   OidcExchangeRequestSchema,
   PutWorkspaceMembershipRequestSchema,
+  PutStudioProjectRequestSchema,
+  PutStudioWorkspaceRequestSchema,
   PromoteReleaseRequestSchema,
   RecordReviewApprovalRequestSchema,
   RecordVerificationBaselineRequestSchema,
@@ -99,7 +101,11 @@ import type {
 import type { ServerConfig } from './config.js';
 import { HttpError, readJsonBody, readLimitedStream } from './http.js';
 import type { Logger } from './logger.js';
-import { ObjectMediaPolicyError, ObjectMediaStreamValidator } from './media-policy.js';
+import {
+  isAllowedObjectMediaType,
+  ObjectMediaPolicyError,
+  ObjectMediaStreamValidator,
+} from './media-policy.js';
 import { artifactObjectIdentity } from './object-identity.js';
 import { renderOperatorConsole } from './operator-console.js';
 import { MetricsRegistry } from './metrics.js';
@@ -174,6 +180,8 @@ export type AppEnvironment = { Variables: AppVariables };
 type AppContext = Context<AppEnvironment>;
 const CTA_EMAIL_VALUE_SCHEMA = z.string().trim().email().max(320);
 const MAX_EVIDENCE_IMAGE_RESPONSE_BYTES = 32 * 1024 * 1024;
+const MAX_STUDIO_ASSET_RESPONSE_BYTES = 32 * 1024 * 1024;
+const MAX_STUDIO_DOCUMENT_BYTES = 8 * 1024 * 1024;
 const CreatePublicationLoginHandoffRequestSchema = z.object({}).strict();
 const ConsumePublicationLoginHandoffRequestSchema = z
   .object({
@@ -539,6 +547,33 @@ function numberQuery(context: AppContext, name: string, fallback: number, maximu
     );
   }
   return value;
+}
+
+function studioSceneCursor(
+  value: string | undefined,
+): { savedAt: number; sceneId: string } | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as unknown;
+    if (!parsed || typeof parsed !== 'object') throw new Error('invalid cursor');
+    const candidate = parsed as { savedAt?: unknown; sceneId?: unknown };
+    if (
+      !Number.isSafeInteger(candidate.savedAt) ||
+      Number(candidate.savedAt) < 0 ||
+      !IdSchema.safeParse(candidate.sceneId).success
+    ) {
+      throw new Error('invalid cursor');
+    }
+    return { savedAt: Number(candidate.savedAt), sceneId: String(candidate.sceneId) };
+  } catch {
+    throw new HttpError(400, 'invalid_cursor', 'Hosted Studio catalog cursor is invalid');
+  }
+}
+
+function encodeStudioSceneCursor(value: { savedAt: number; id: string }): string {
+  return Buffer.from(JSON.stringify({ savedAt: value.savedAt, sceneId: value.id })).toString(
+    'base64url',
+  );
 }
 
 function requiredParam(context: AppContext, name: string): string {
@@ -2061,6 +2096,223 @@ export function createControlPlaneApp(
     if (!value) throw new RepositoryNotFoundError('Project not found');
     return context.json({ project: value });
   });
+
+  app.get(
+    '/v1/admin/workspaces/:workspaceId/projects/:projectId/studio/scenes',
+    async (context) => {
+      const limit = numberQuery(context, 'limit', 24, 50);
+      const before = studioSceneCursor(context.req.query('cursor'));
+      const records = await dependencies.repository.listStudioSceneDocuments({
+        workspaceId: requiredParam(context, 'workspaceId'),
+        projectId: requiredParam(context, 'projectId'),
+        limit: limit + 1,
+        ...(before ? { before } : {}),
+      });
+      const page = records.slice(0, limit);
+      const last = page.at(-1);
+      return context.json({
+        records: page,
+        nextCursor:
+          records.length > limit && last
+            ? encodeStudioSceneCursor({ savedAt: last.savedAt, id: last.id })
+            : null,
+      });
+    },
+  );
+
+  app.get(
+    '/v1/admin/workspaces/:workspaceId/projects/:projectId/studio/scenes/:sceneId',
+    async (context) => {
+      const record = await dependencies.repository.getStudioSceneDocument(
+        requiredParam(context, 'workspaceId'),
+        requiredParam(context, 'projectId'),
+        requiredParam(context, 'sceneId'),
+      );
+      if (!record) throw new RepositoryNotFoundError('Hosted Studio Scene not found');
+      return context.json({ record });
+    },
+  );
+
+  app.get(
+    '/v1/admin/workspaces/:workspaceId/projects/:projectId/studio/scenes/:sceneId/versions',
+    async (context) => {
+      const before = context.req.query('beforeRevision');
+      const beforeRevision = before === undefined ? undefined : Number(before);
+      if (
+        beforeRevision !== undefined &&
+        (!Number.isSafeInteger(beforeRevision) || beforeRevision < 1)
+      ) {
+        throw new HttpError(
+          400,
+          'invalid_revision_cursor',
+          'Hosted Studio revision cursor is invalid',
+        );
+      }
+      const limit = numberQuery(context, 'limit', 24, 50);
+      const records = await dependencies.repository.listStudioSceneVersions({
+        workspaceId: requiredParam(context, 'workspaceId'),
+        projectId: requiredParam(context, 'projectId'),
+        sceneId: requiredParam(context, 'sceneId'),
+        limit: limit + 1,
+        ...(beforeRevision ? { beforeRevision } : {}),
+      });
+      const page = records.slice(0, limit);
+      return context.json({
+        records: page,
+        nextRevision:
+          records.length > limit && page.length ? (page.at(-1)?.revision ?? null) : null,
+      });
+    },
+  );
+
+  app.get(
+    '/v1/admin/workspaces/:workspaceId/projects/:projectId/studio/scenes/:sceneId/versions/:revision',
+    async (context) => {
+      const revision = Number(requiredParam(context, 'revision'));
+      if (!Number.isSafeInteger(revision) || revision < 1) {
+        throw new HttpError(400, 'invalid_revision', 'Hosted Studio revision is invalid');
+      }
+      const record = await dependencies.repository.getStudioSceneVersion(
+        requiredParam(context, 'workspaceId'),
+        requiredParam(context, 'projectId'),
+        requiredParam(context, 'sceneId'),
+        revision,
+      );
+      if (!record) throw new RepositoryNotFoundError('Hosted Studio Scene revision not found');
+      return context.json({ record });
+    },
+  );
+
+  app.put(
+    '/v1/admin/workspaces/:workspaceId/projects/:projectId/studio/scenes',
+    async (context) => {
+      const workspaceId = requiredParam(context, 'workspaceId');
+      const projectId = requiredParam(context, 'projectId');
+      const body = await json(context, PutStudioWorkspaceRequestSchema, MAX_STUDIO_DOCUMENT_BYTES);
+      if (body.project && body.project.document.project.id !== projectId) {
+        throw new HttpError(
+          422,
+          'project_mismatch',
+          'Hosted Studio Project id must match the route',
+        );
+      }
+      if (scanStructuredValue(body, { blockAt: 'high', now }).status === 'blocked') {
+        throw new HttpError(
+          422,
+          'privacy_blocked',
+          'Hosted Studio working state contains sensitive material that cannot be persisted',
+        );
+      }
+      const value = await dependencies.repository.putStudioWorkspace({
+        workspaceId,
+        projectId,
+        writes: body.writes,
+        ...(body.project ? { project: body.project } : {}),
+        actorId: actor(context),
+        now: now().toISOString(),
+      });
+      await audit(context, {
+        workspaceId,
+        actorId: actor(context),
+        action: 'studio.scenes-saved',
+        targetType: 'studio-project',
+        targetId: projectId,
+        metadata: {
+          sceneIds: value.records.map((record) => record.id),
+          revisions: value.records.map((record) => record.revision),
+          projectUpdated: Boolean(value.project),
+        },
+      });
+      return context.json(value);
+    },
+  );
+
+  app.delete(
+    '/v1/admin/workspaces/:workspaceId/projects/:projectId/studio/scenes/:sceneId',
+    async (context) => {
+      const expectedRevision = Number(context.req.query('expectedRevision'));
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
+        throw new HttpError(
+          400,
+          'expected_revision_required',
+          'A valid expectedRevision query is required',
+        );
+      }
+      const workspaceId = requiredParam(context, 'workspaceId');
+      const sceneId = requiredParam(context, 'sceneId');
+      const deleted = await dependencies.repository.deleteStudioSceneDocument({
+        workspaceId,
+        projectId: requiredParam(context, 'projectId'),
+        sceneId,
+        expectedRevision,
+      });
+      if (!deleted) {
+        throw new RepositoryConflictError('Hosted Studio Scene changed before deletion');
+      }
+      await audit(context, {
+        workspaceId,
+        actorId: actor(context),
+        action: 'studio.scene-deleted',
+        targetType: 'studio-scene',
+        targetId: sceneId,
+        metadata: { expectedRevision },
+      });
+      return context.body(null, 204);
+    },
+  );
+
+  app.get(
+    '/v1/admin/workspaces/:workspaceId/projects/:projectId/studio/project',
+    async (context) => {
+      const workspaceId = requiredParam(context, 'workspaceId');
+      const projectId = requiredParam(context, 'projectId');
+      const [document, project] = await Promise.all([
+        dependencies.repository.getStudioProjectDocument(workspaceId, projectId),
+        dependencies.repository.getProject(workspaceId, projectId),
+      ]);
+      if (!project) throw new RepositoryNotFoundError('Project not found');
+      return context.json({ document: document ?? null, project });
+    },
+  );
+
+  app.put(
+    '/v1/admin/workspaces/:workspaceId/projects/:projectId/studio/project',
+    async (context) => {
+      const workspaceId = requiredParam(context, 'workspaceId');
+      const projectId = requiredParam(context, 'projectId');
+      const body = await json(context, PutStudioProjectRequestSchema, MAX_STUDIO_DOCUMENT_BYTES);
+      if (body.document.project.id !== projectId) {
+        throw new HttpError(
+          422,
+          'project_mismatch',
+          'Hosted Studio Project id must match the route',
+        );
+      }
+      if (scanStructuredValue(body, { blockAt: 'high', now }).status === 'blocked') {
+        throw new HttpError(
+          422,
+          'privacy_blocked',
+          'Hosted Studio Project settings contain sensitive material that cannot be persisted',
+        );
+      }
+      const document = await dependencies.repository.putStudioProjectDocument({
+        workspaceId,
+        projectId,
+        ...body,
+        actorId: actor(context),
+        now: now().toISOString(),
+      });
+      await audit(context, {
+        workspaceId,
+        actorId: actor(context),
+        action: 'studio.project-saved',
+        targetType: 'studio-project',
+        targetId: projectId,
+        metadata: { revision: document.revision },
+      });
+      return context.json({ document });
+    },
+  );
 
   app.post(
     '/v1/admin/workspaces/:workspaceId/projects/:projectId/repositories',
@@ -4599,6 +4851,207 @@ export function createControlPlaneApp(
       );
       if (!value) throw new RepositoryNotFoundError('Review approval not found');
       return context.json({ approval: value });
+    },
+  );
+
+  app.put(
+    '/v1/admin/workspaces/:workspaceId/projects/:projectId/studio/assets/:hash',
+    async (context) => {
+      const parsedHash = Sha256Schema.safeParse(requiredParam(context, 'hash'));
+      if (!parsedHash.success) {
+        throw new HttpError(400, 'invalid_asset_hash', 'Asset hash must be a SHA-256 digest');
+      }
+      const mediaType = context.req.header('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+      if (!mediaType || !isAllowedObjectMediaType(mediaType)) {
+        throw new HttpError(
+          415,
+          'invalid_asset_media_type',
+          'Hosted Studio asset Content-Type is not supported',
+        );
+      }
+      const byteLength = Number(context.req.query('byteLength'));
+      const maximumStudioAssetBytes = Math.min(
+        dependencies.maxObjectBytes,
+        MAX_STUDIO_ASSET_RESPONSE_BYTES,
+      );
+      if (
+        !Number.isSafeInteger(byteLength) ||
+        byteLength < 1 ||
+        byteLength > maximumStudioAssetBytes
+      ) {
+        throw new HttpError(
+          413,
+          'invalid_asset_length',
+          `Hosted Studio asset length must be between 1 and ${maximumStudioAssetBytes} bytes`,
+        );
+      }
+      try {
+        new ObjectMediaStreamValidator(mediaType, byteLength);
+      } catch (error) {
+        if (error instanceof ObjectMediaPolicyError) {
+          throw new HttpError(413, 'object_media_limit', error.message);
+        }
+        throw error;
+      }
+      const workspaceId = requiredParam(context, 'workspaceId');
+      const projectId = requiredParam(context, 'projectId');
+      const suppliedKey = idempotencyKey(context);
+      const objectSpec = { sha256: parsedHash.data, mediaType, byteLength };
+      const timestamp = now();
+      let upload = await dependencies.repository.beginUpload({
+        id: makeId('upload'),
+        workspaceId,
+        projectId,
+        repository: 'scenebook-studio',
+        commit: parsedHash.data,
+        ref: 'refs/scenebook/studio',
+        idempotencyKey: `studio:${projectId}:${suppliedKey}`,
+        requestHash: canonicalJsonHash({ schemaVersion: 1, object: objectSpec }),
+        objects: [objectSpec],
+        now: timestamp.toISOString(),
+        expiresAt: new Date(timestamp.getTime() + 15 * 60_000).toISOString(),
+        limits: dependencies.uploadLimits,
+      });
+      if (upload.status !== 'finalized') {
+        if (upload.status === 'expired') {
+          throw new HttpError(410, 'upload_expired', 'Hosted Studio asset upload expired');
+        }
+        const reservation = uploadAdmission.acquire(workspaceId, byteLength);
+        let staged: StoredObject;
+        try {
+          staged = await dependencies.objectStore.putStagedStream(
+            upload.id,
+            parsedHash.data,
+            readLimitedStream(context.req.raw, byteLength),
+            byteLength,
+            mediaType,
+          );
+        } catch (error) {
+          if (error instanceof ObjectMediaPolicyError) {
+            throw new HttpError(415, 'unsafe_object_media', error.message);
+          }
+          if (error instanceof ObjectIntegrityError) {
+            throw new HttpError(
+              422,
+              error.kind === 'digest' ? 'object_digest_mismatch' : 'object_length_mismatch',
+              error.message,
+            );
+          }
+          throw error;
+        } finally {
+          reservation.release();
+        }
+        upload = await dependencies.repository.markObjectStaged(
+          upload.id,
+          parsedHash.data,
+          mediaType,
+          staged.key,
+          now().toISOString(),
+        );
+        const promoted = await dependencies.objectStore.promote(staged, workspaceId);
+        const manifest = {
+          schemaVersion: 1 as const,
+          objects: [objectSpec],
+          metadata: { kind: 'studio-asset', projectId },
+        };
+        upload = await dependencies.repository.finalizeUpload(
+          upload.id,
+          canonicalJsonHash(manifest),
+          [promoted],
+          now().toISOString(),
+        );
+        await dependencies.objectStore.deleteStaged(staged).catch((error) => {
+          dependencies.logger.warn('Finalized Studio staging object cleanup failed', {
+            uploadId: upload.id,
+            sha256: parsedHash.data,
+            mediaType,
+            error,
+          });
+        });
+      }
+      const object = await dependencies.repository.getFinalizedObject(
+        workspaceId,
+        projectId,
+        parsedHash.data,
+        mediaType,
+      );
+      if (!object || object.byteLength !== byteLength) {
+        throw new HttpError(
+          503,
+          'studio_asset_unavailable',
+          'Hosted Studio asset was not available after finalization',
+        );
+      }
+      await audit(context, {
+        workspaceId,
+        actorId: actor(context),
+        action: 'studio.asset-finalized',
+        targetType: 'studio-asset',
+        targetId: parsedHash.data,
+        metadata: { projectId, mediaType, byteLength, uploadId: upload.id },
+      });
+      return context.json({ asset: object });
+    },
+  );
+
+  app.get(
+    '/v1/admin/workspaces/:workspaceId/projects/:projectId/studio/assets/:hash',
+    async (context) => {
+      const parsedHash = Sha256Schema.safeParse(requiredParam(context, 'hash'));
+      if (!parsedHash.success) {
+        throw new HttpError(400, 'invalid_asset_hash', 'Asset hash must be a SHA-256 digest');
+      }
+      const mediaTypes = new URL(context.req.url).searchParams.getAll('mediaType');
+      if (mediaTypes.length !== 1 || !isAllowedObjectMediaType(mediaTypes[0] ?? '')) {
+        throw new HttpError(
+          400,
+          'invalid_asset_media_type',
+          'Hosted Studio assets require exactly one supported mediaType',
+        );
+      }
+      const workspaceId = requiredParam(context, 'workspaceId');
+      const projectId = requiredParam(context, 'projectId');
+      if (
+        !(await dependencies.repository.studioPayloadIsReferenced(
+          workspaceId,
+          projectId,
+          parsedHash.data,
+          mediaTypes[0]!,
+        ))
+      ) {
+        throw new RepositoryNotFoundError('Hosted Studio asset not found');
+      }
+      const object = await dependencies.repository.getFinalizedObject(
+        workspaceId,
+        projectId,
+        parsedHash.data,
+        mediaTypes[0]!,
+      );
+      if (!object) throw new RepositoryNotFoundError('Hosted Studio asset not found');
+      if (object.byteLength > MAX_STUDIO_ASSET_RESPONSE_BYTES) {
+        throw new HttpError(
+          413,
+          'studio_asset_too_large',
+          'Hosted Studio asset exceeds the interactive editor size limit',
+        );
+      }
+      let bytes: Uint8Array;
+      try {
+        bytes = await dependencies.objectStore.read(object);
+      } catch {
+        throw new HttpError(
+          503,
+          'studio_asset_unavailable',
+          'The hosted Studio asset failed storage verification',
+        );
+      }
+      context.header('cache-control', 'private, max-age=31536000, immutable');
+      context.header('content-security-policy', "default-src 'none'; sandbox");
+      context.header('cross-origin-resource-policy', 'same-origin');
+      context.header('content-disposition', `attachment; filename="${parsedHash.data}"`);
+      context.header('content-type', mediaTypes[0]!);
+      context.header('content-length', String(bytes.byteLength));
+      return new Response(bytes as BodyInit, { status: 200, headers: context.res.headers });
     },
   );
 

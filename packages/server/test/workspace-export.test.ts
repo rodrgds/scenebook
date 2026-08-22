@@ -53,13 +53,14 @@ async function upload(
   id: string,
   mediaType: string,
   bytes: Uint8Array,
+  sourceRepository = 'acme/product',
 ) {
   const object = { sha256: sha256(bytes), byteLength: bytes.byteLength, mediaType };
   await repository.beginUpload({
     id,
     workspaceId: 'workspace-1',
     projectId: 'project-1',
-    repository: 'acme/product',
+    repository: sourceRepository,
     commit: 'a'.repeat(40),
     ref: 'refs/heads/main',
     idempotencyKey: id,
@@ -104,6 +105,7 @@ describe('portable workspace export', () => {
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+XwO0GQAAAABJRU5ErkJggg==',
         'base64',
       ),
+      'scenebook-studio',
     );
     const withheld = await upload(
       repository,
@@ -161,6 +163,34 @@ describe('portable workspace export', () => {
       updatedAt: NOW,
       version: 1,
     });
+    await repository.putStudioWorkspace({
+      workspaceId: 'workspace-1',
+      projectId: 'project-1',
+      writes: [
+        {
+          expectedRevision: 0,
+          record: {
+            id: 'hosted-studio-scene',
+            scene: { id: 'hosted-studio-scene', version: 1, title: 'Hosted working draft' },
+            savedAt: Date.parse(NOW),
+            revision: 1,
+            storageVersion: 4,
+            payloadRefs: [
+              {
+                slot: 'step-image',
+                key: 'step-1',
+                sha256: screenshot.sha256,
+                mediaType: screenshot.mediaType,
+                byteLength: screenshot.byteLength,
+                representation: 'binary-data-uri',
+              },
+            ],
+          },
+        },
+      ],
+      actorId: 'owner-1',
+      now: NOW,
+    });
 
     const value = await prepareWorkspaceExport({
       repository,
@@ -198,6 +228,8 @@ describe('portable workspace export', () => {
     expect(records).not.toContain('finalKey');
     expect(records).toContain('github-installation-1');
     expect(records).toContain('12345');
+    expect(records).toContain('hosted-studio-scene');
+    expect(records).toContain('Hosted working draft');
   });
 
   it('exports a restorable graph for Scene assets, State screenshots, and every Release publication object', async () => {

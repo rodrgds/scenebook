@@ -1,19 +1,38 @@
 # Self-hosting Scenebook
 
-This deployment separates PostgreSQL, MinIO, the Node control plane, the static Studio, the first-party publication gateway, and the optional operator-mounted static export. The control plane performs checksummed migrations under a PostgreSQL advisory lock during startup. Only the gateway serves active files selected by a hosted Channel pointer, and it runs on a different origin with SELECT access only to masked publication-specific database views plus read-only finalized-object storage.
+This deployment separates PostgreSQL, MinIO, the Node control plane, the connected static Studio,
+the first-party publication gateway, and the optional operator-mounted static export. The control
+plane performs checksummed migrations under a PostgreSQL advisory lock during startup. Only the
+gateway serves active files selected by a hosted Channel pointer, and it runs on a different origin
+with SELECT access only to masked publication-specific database views plus read-only finalized-object
+storage.
 
 ## Prerequisites
 
 - Docker Engine 26 or newer with Compose v2
+- OpenSSL for the first-boot secret generator
 - A TLS-terminating reverse proxy or load balancer
 - Separate public HTTPS origins for the control plane and publication gateway
+- An HTTPS Studio origin whose `/v1/*` traffic reaches the bundled same-origin proxy
 - A GitHub Actions workflow configured to request an OIDC token with audience `scenebook`
 
 ## First boot
 
-1. Copy `.env.example` to `.env`. Generate every secret independently; do not reuse the database, MinIO, operator, upload-token, identity-token, gateway-session, gateway-exchange, Runner-token, analytics, provisioner, webhook, or encryption secrets. `SCENEBOOK_IDENTITY_TOKEN_SECRET` is a control-plane-only HMAC key for opaque personal API-token digests. Human Sessions and private shares use `SCENEBOOK_IDENTITY_SIGNING_PRIVATE_KEY`; only `SCENEBOOK_IDENTITY_VERIFICATION_PUBLIC_KEY` reaches the gateway. `SCENEBOOK_GATEWAY_SESSION_SECRET` signs only short-lived HttpOnly publication Sessions; `SCENEBOOK_GATEWAY_EXCHANGE_SECRET` authenticates only the gateway's one-time handoff consumption request.
+1. Generate `.env` with independent secrets and an Ed25519 identity keypair:
+
+   ```sh
+   cd deploy
+   ./scripts/init-env.sh https://control.example.com https://stories.example.com
+   ```
+
+   The script refuses to overwrite an existing `.env`, writes with a restrictive umask, and never
+   reuses a database, MinIO, operator, upload-token, identity-token, gateway-session,
+   gateway-exchange, Runner-token, analytics, or encryption secret. Review `.env.example` when
+   enabling GitHub App, webhook, custom-domain, or non-default limit settings. Store the generated
+   file in the deployment secret manager; do not commit it.
+
 2. URL-encode the PostgreSQL password inside `SCENEBOOK_DATABASE_URL`. Keep `SCENEBOOK_GATEWAY_POSTGRES_PASSWORD` URL-safe; Compose creates or rotates a `scenebook_gateway` login whose transactions are read-only. It can select only masked publication/auth/domain views in the `publication_gateway` schema. It cannot select base tables, API-token hashes, analytics, audit, CTA ciphertext, uploads, or future tables by default.
-3. Set `SCENEBOOK_PUBLIC_URL` to the final control-plane HTTPS origin and `SCENEBOOK_PUBLICATION_URL` to a distinct gateway HTTPS origin. Set the gateway-only `SCENEBOOK_CONTROL_PLANE_INTERNAL_URL` to the control-plane origin on the private service network. Keep ports loopback-only and publish them only through the reverse proxy. Route the control-plane hostname to `4310`, the publication hostname and provisioned custom domains to `4320`, never route a publication hostname to `4310`, and block `/v1/internal/*` at every public edge.
+3. Set `SCENEBOOK_PUBLIC_URL` to the final control-plane HTTPS origin and `SCENEBOOK_PUBLICATION_URL` to a distinct gateway HTTPS origin. Set the gateway-only `SCENEBOOK_CONTROL_PLANE_INTERNAL_URL` to the control-plane origin on the private service network. Keep ports loopback-only and publish them only through the reverse proxy. Route the control-plane hostname to `4310`, a Studio hostname to `8080`, and the publication hostname and provisioned custom domains to `4320`. The Studio nginx service proxies its same-origin `/v1/*` requests to the private control plane; do not expose MinIO or PostgreSQL. Never route a publication hostname to `4310`, and block `/v1/internal/*` at every public edge.
 4. Start and verify the deployment:
 
    ```sh
@@ -74,8 +93,10 @@ advisory lock and rejects approval unless every referenced object remains active
 
 Workspace Owners can download `GET /v1/admin/workspaces/:workspaceId/export`. The response is a
 streamed, private, no-store ZIP with content-addressed `manifest.json`, complete bounded metadata,
-and a hashed `restoration.json` object map. The exporter walks every immutable object referenced by
-Scene assets and State screenshots, Run attachments/traces/states, Baselines, Release outputs, and
+and a hashed `restoration.json` object map. Hosted Studio Project documents, Scene heads, bounded
+version history, and payload references are included with the administrative metadata. The exporter
+walks every object referenced by hosted Studio drafts, Scene assets and State screenshots, Run
+attachments/traces/states, Baselines, Release outputs, and
 all three Release publication objects (`archive`, `inventory`, and `compilerManifest`). Referenced
 objects are omitted only under an explicit immutable-record privacy status; the restoration plan
 records the exact missing references and marks the snapshot non-restorable. A missing, deleted,
@@ -271,7 +292,61 @@ POST /v1/operator/workspaces/:workspaceId/users/:userId/api-tokens
 
 The last request specifies a name, unique `scopes`, optional `projectId`/`channelId`, and `expiresAt`. Supported scopes are `workspace:read`, `workspace:admin`, `project:read`, `project:write`, `review:read`, `review:write`, `channel:read`, `channel:write`, `release:write`, `schedule:read`, `schedule:write`, `runner:admin`, `analytics:read`, and `audit:read`. Roles cap those scopes: Owners can use all; Editors can create/edit/publish, coordinate schedules, and read analytics but cannot manage membership, Runner credentials, or audit; Reviewers and Viewers can inspect schedules but cannot mutate them. Only Owners can administer Runner credentials. Project- or Channel-bound credentials fail closed outside that exact scope.
 
+For a first local deployment, the following creates one synthetic Workspace, Project, Owner, and
+30-day Project-bound Studio token. Run it from `deploy` after the readiness checks, replace the
+example identity, and copy only the final response's `credential` value into Studio:
+
+```sh
+CONTROL=http://127.0.0.1:4310
+ADMIN_TOKEN=$(sed -n 's/^SCENEBOOK_ADMIN_TOKEN=//p' .env)
+EXPIRY=$(docker compose exec -T cloud node -e \
+  "console.log(new Date(Date.now() + 30 * 86400000).toISOString())")
+
+curl --fail-with-body -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d \
+  '{"id":"workspace_acme","slug":"acme","name":"Acme"}' \
+  "$CONTROL/v1/admin/workspaces"
+curl --fail-with-body -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d \
+  '{"id":"project_demo","slug":"demo","name":"Demo"}' \
+  "$CONTROL/v1/admin/workspaces/workspace_acme/projects"
+curl --fail-with-body -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d \
+  '{"id":"user_admin","email":"owner@example.invalid","displayName":"Workspace owner"}' \
+  "$CONTROL/v1/operator/users"
+curl --fail-with-body -X PUT -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d \
+  '{"userId":"user_admin","role":"owner"}' \
+  "$CONTROL/v1/operator/workspaces/workspace_acme/memberships"
+curl --fail-with-body -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d \
+  "{\"name\":\"Hosted Studio\",\"scopes\":[\"workspace:read\",\"project:read\",\"project:write\"],\"projectId\":\"project_demo\",\"expiresAt\":\"$EXPIRY\"}" \
+  "$CONTROL/v1/operator/workspaces/workspace_acme/users/user_admin/api-tokens"
+```
+
+The example uses deterministic IDs so rerunning a creation request returns a conflict instead of
+silently creating duplicates. The personal token is not stored in `.env`; save it in the User's
+password manager and revoke it from the operator API if it is exposed.
+
 Exchange a personal API token for a shorter signed Session with `POST /v1/auth/sessions` and `{}`. Inspect the current identity at `GET /v1/auth/me`; revoke the current Session with `DELETE /v1/auth/sessions/current`. Session authorization is copied from the source token, cannot outlive it, and does not broaden its scope. The source token is rechecked on every Session request, so revoking a compromised personal token immediately invalidates every Session derived from it. A User may list, create, or revoke their own non-escalating tokens at `GET/POST/DELETE /v1/admin/workspaces/:workspaceId/api-tokens...`; an Owner lists and manages memberships under the corresponding `/v1/admin/.../memberships` routes. Operator routes can list the same records, disable a User globally, and recover a tenant when no Owner remains. List responses never include stored credential hashes.
+
+### Connect the hosted Studio
+
+Open the Studio origin on port `8080`, then open **Project settings → Workspace storage**. Paste an
+Owner or Editor personal API token with `workspace:read`, `project:read`, and `project:write`. Studio
+exchanges it for a shorter Session, clears the token input, and lets the User choose an accessible
+Project. The Session exists only in that browser tab; reconnect after closing the tab. The operator
+token must never be pasted into Studio.
+
+Local and hosted workspaces remain separate. Connecting does not upload the browser's existing local
+library; import a reviewed portable Scene or project archive after connecting when a migration is
+intended. Disconnecting restores the previous local Project selection without deleting either side.
+
+Hosted Scene working documents, Project configuration, and the last 100 saved revisions live in
+PostgreSQL. Embedded media is removed from JSON, irreversibly masked where opaque masks are authored,
+stream-verified, and finalized as private content-addressed objects in MinIO before the database save
+commits. A stale save or delete conflicts instead of overwriting another collaborator. These records
+are still drafts: they do not create passing evidence, approvals, or Releases.
 
 Configure maximum lifetimes with `SCENEBOOK_SESSION_TTL_SECONDS`, `SCENEBOOK_API_TOKEN_MAX_TTL_SECONDS`, and `SCENEBOOK_SHARE_LINK_MAX_TTL_SECONDS`. Generate the Ed25519 pair as base64-encoded DER:
 
@@ -569,7 +644,12 @@ Take a backup before upgrading. Never edit an applied SQL migration; add a new n
 
 ## Backup and restore
 
-The backup script requires a new destination beneath an existing parent. It briefly stops `cloud` only when that service was already running, mirrors an exact logical snapshot of the `scenebook` bucket, dumps PostgreSQL, writes per-file checksums, and restores the prior cloud running state. The read-only gateway can keep serving the last stable pointer during backup:
+The backup script requires a new destination beneath an existing parent. It briefly stops `cloud`
+only when that service was already running, mirrors an exact logical snapshot of the `scenebook`
+bucket, dumps PostgreSQL, writes per-file checksums, and restores the prior cloud running state. The
+snapshot includes hosted Studio drafts, Project settings, version history, and their object payloads
+alongside evidence and Releases. The read-only gateway can keep serving the last stable pointer
+during backup:
 
 ```sh
 ./scripts/backup.sh /srv/backups/scenebook/$(date -u +%Y%m%dT%H%M%SZ)

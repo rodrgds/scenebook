@@ -481,4 +481,16 @@ describe('checksummed migrations', () => {
     expect(ctaSql).toContain('cta_submissions_cta_id_guard');
     expect(ctaSql).toContain('cta_submissions_subject_cta_idx');
   });
+
+  it('separates hosted Studio drafts from immutable Scene and evidence truth', async () => {
+    const studioSql = await readFile(
+      new URL('../migrations/0014_hosted_studio.sql', import.meta.url),
+      'utf8',
+    );
+    expect(studioSql).toContain('studio_scene_documents');
+    expect(studioSql).toContain('studio_scene_versions');
+    expect(studioSql).toContain('studio_project_documents');
+    expect(studioSql).toContain('document_json jsonb NOT NULL');
+    expect(studioSql).toContain('ON DELETE CASCADE');
+  });
 });

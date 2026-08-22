@@ -344,6 +344,94 @@ async function bootstrap(app: ReturnType<typeof createControlPlaneApp>): Promise
   return ((await channel.json()) as { analyticsToken: string }).analyticsToken;
 }
 
+async function proveHostedStudioContract(
+  app: ReturnType<typeof createControlPlaneApp>,
+  repository: PostgresControlPlaneRepository,
+): Promise<void> {
+  const bytes = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+XwO0GQAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  const digest = sha256(bytes);
+  const base = '/v1/admin/workspaces/workspace-1/projects/project-1/studio';
+  const uploaded = await app.request(`${base}/assets/${digest}?byteLength=${bytes.byteLength}`, {
+    method: 'PUT',
+    headers: {
+      authorization: `Bearer ${ADMIN_TOKEN}`,
+      'content-type': 'image/png',
+      'idempotency-key': 'hosted-studio-integration-image',
+    },
+    body: bytes,
+  });
+  await expectStatus(uploaded, 200);
+  const document = (revision: number) => ({
+    id: 'hosted-studio-scene',
+    scene: {
+      id: 'hosted-studio-scene',
+      version: 1,
+      title: revision === 1 ? 'Hosted Studio scene' : 'Hosted Studio scene updated',
+      steps: [],
+    },
+    savedAt: NOW.getTime() + revision,
+    revision,
+    storageVersion: 4,
+    payloadRefs: [
+      {
+        slot: 'step-image',
+        key: 'step-1',
+        sha256: digest,
+        mediaType: 'image/png',
+        byteLength: bytes.byteLength,
+        representation: 'binary-data-uri',
+      },
+    ],
+  });
+  await expectStatus(
+    await app.request(`${base}/scenes`, {
+      ...admin({ writes: [{ expectedRevision: 0, record: document(1) }] }),
+      method: 'PUT',
+    }),
+    200,
+  );
+  await expectStatus(
+    await app.request(`${base}/scenes`, {
+      ...admin({ writes: [{ expectedRevision: 1, record: document(2) }] }),
+      method: 'PUT',
+    }),
+    200,
+  );
+  await expectStatus(
+    await app.request(`${base}/scenes`, {
+      ...admin({ writes: [{ expectedRevision: 0, record: document(1) }] }),
+      method: 'PUT',
+    }),
+    409,
+  );
+  const versions = await app.request(`${base}/scenes/hosted-studio-scene/versions`, {
+    headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+  });
+  await expectStatus(versions, 200);
+  expect(
+    ((await versions.json()) as { records: Array<{ revision: number }> }).records.map(
+      (record) => record.revision,
+    ),
+  ).toEqual([2, 1]);
+  const asset = await app.request(`${base}/assets/${digest}?mediaType=image%2Fpng`, {
+    headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+  });
+  await expectStatus(asset, 200);
+  expect(new Uint8Array(await asset.arrayBuffer())).toEqual(new Uint8Array(bytes));
+  expect(
+    (
+      await repository.pool.query<{ versions: string; heads: string }>(
+        `SELECT
+           (SELECT count(*)::text FROM studio_scene_versions) AS versions,
+           (SELECT count(*)::text FROM studio_scene_documents) AS heads`,
+      )
+    ).rows[0],
+  ).toEqual({ versions: '2', heads: '1' });
+}
+
 async function proveCustomDomainRepositoryContract(
   repository: PostgresControlPlaneRepository,
 ): Promise<void> {
@@ -615,6 +703,7 @@ describe('real PostgreSQL and MinIO release backend', () => {
         id: (prefix) => `${prefix}-${randomUUID()}`,
       });
       const analyticsToken = await bootstrap(app);
+      await proveHostedStudioContract(app, repository);
       await proveCustomDomainRepositoryContract(repository);
 
       const { scene, run, build } = await writeReporterArtifactFixture({

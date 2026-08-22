@@ -192,9 +192,14 @@ interface ReferencedAssetPolicy {
   readonly allowedReferences: Set<string>;
   readonly privacyExclusions: Set<string>;
   publicRelease: boolean;
+  privateStudio: boolean;
 }
 
 function collectReferencedAssetPolicies(records: {
+  readonly studioScenes: readonly {
+    projectId: string;
+    record: Awaited<ReturnType<ControlPlaneRepository['listStudioSceneVersions']>>[number];
+  }[];
   readonly scenes: readonly Awaited<
     ReturnType<ControlPlaneRepository['listSceneRevisions']>
   >[number][];
@@ -229,6 +234,7 @@ function collectReferencedAssetPolicies(records: {
         allowedReferences: new Set<string>(),
         privacyExclusions: new Set<string>(),
         publicRelease: false,
+        privateStudio: false,
       } satisfies ReferencedAssetPolicy);
     policy.projectIds.add(projectId);
     if (publicRelease || privacyStatus === 'clear') policy.allowedReferences.add(source);
@@ -236,6 +242,18 @@ function collectReferencedAssetPolicies(records: {
     if (publicRelease) policy.publicRelease = true;
     policies.set(identity, policy);
   };
+  for (const value of records.studioScenes) {
+    for (const referenceValue of value.record.payloadRefs) {
+      const identity = assetIdentity(referenceValue);
+      reference(
+        referenceValue,
+        value.projectId,
+        `studio:${value.record.id}:revision:${value.record.revision}:${referenceValue.slot}:${referenceValue.key}`,
+        'clear',
+      );
+      policies.get(identity)!.privateStudio = true;
+    }
+  }
   for (const revision of records.scenes) {
     for (const asset of revision.scene.assets) {
       reference(
@@ -587,9 +605,54 @@ export async function prepareWorkspaceExport(
     ReturnType<ControlPlaneRepository['listVerificationBaselines']>
   >[number][] = [];
   const allReleases: Awaited<ReturnType<ControlPlaneRepository['listReleases']>>[number][] = [];
+  const allStudioScenes: Array<{
+    projectId: string;
+    record: Awaited<ReturnType<ControlPlaneRepository['listStudioSceneVersions']>>[number];
+  }> = [];
 
   for (const project of projects) {
     const limit = (): number => Math.min(remaining + 1, options.maxRecords + 1);
+    const studioHeads = [];
+    let studioCursor: { savedAt: number; sceneId: string } | undefined;
+    while (remaining >= 0) {
+      const pageLimit = Math.min(limit(), 50);
+      const page = take(
+        await options.repository.listStudioSceneDocuments({
+          workspaceId: options.workspaceId,
+          projectId: project.id,
+          limit: pageLimit,
+          ...(studioCursor ? { before: studioCursor } : {}),
+        }),
+      );
+      studioHeads.push(...page);
+      if (page.length < pageLimit || page.length === 0) break;
+      const last = page.at(-1)!;
+      studioCursor = { savedAt: last.savedAt, sceneId: last.id };
+    }
+    const studioVersions = [];
+    for (const head of studioHeads) {
+      let beforeRevision: number | undefined;
+      while (remaining >= 0) {
+        const pageLimit = Math.min(limit(), 50);
+        const page = take(
+          await options.repository.listStudioSceneVersions({
+            workspaceId: options.workspaceId,
+            projectId: project.id,
+            sceneId: head.id,
+            limit: pageLimit,
+            ...(beforeRevision ? { beforeRevision } : {}),
+          }),
+        );
+        studioVersions.push(...page);
+        if (page.length < pageLimit || page.length === 0) break;
+        beforeRevision = page.at(-1)!.revision;
+      }
+    }
+    const studioProjectDocument = await options.repository.getStudioProjectDocument(
+      options.workspaceId,
+      project.id,
+    );
+    if (studioProjectDocument) take([studioProjectDocument]);
     const heads = take(
       await options.repository.listSceneHeads(options.workspaceId, project.id, limit()),
     );
@@ -700,8 +763,14 @@ export async function prepareWorkspaceExport(
     allBaselines.push(...baselines);
     allReleases.push(...releases);
     allSceneRevisions.push(...revisions);
+    allStudioScenes.push(...studioVersions.map((record) => ({ projectId: project.id, record })));
     const projectRecord = {
       project,
+      studio: {
+        projectDocument: studioProjectDocument ?? null,
+        sceneHeads: studioHeads,
+        sceneVersions: studioVersions,
+      },
       repositoryBindings: repositories,
       githubInstallationBindings: githubInstallationBindings.map(safeGitHubInstallationBinding),
       verification: {
@@ -751,6 +820,7 @@ export async function prepareWorkspaceExport(
     throw new WorkspaceExportLimitError('concurrent-change');
   }
   const referenced = collectReferencedAssetPolicies({
+    studioScenes: allStudioScenes,
     scenes: allSceneRevisions,
     runs: allRuns,
     baselines: allBaselines,
@@ -869,7 +939,9 @@ export async function prepareWorkspaceExport(
       disposition: 'included',
       reason: policy.publicRelease
         ? 'required by an immutable published Release'
-        : 'referenced by privacy-clear immutable workspace records',
+        : policy.privateStudio
+          ? 'referenced by private hosted Studio working state'
+          : 'referenced by privacy-cleared workspace records',
       object,
     });
   }
