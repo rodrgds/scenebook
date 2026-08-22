@@ -45,12 +45,13 @@ export function scheduleFreshness(
     const warningAt = staleAt.getTime() - Math.min(schedule.intervalSeconds * 1_000, 86_400_000);
     status = now.getTime() >= warningAt ? 'due-soon' : 'fresh';
   }
-  return {
+  const result: VerificationFreshness = {
     status,
     targetSeconds: schedule.freshnessTargetSeconds,
-    ...(last ? { lastSuccessfulAt: last.toISOString() } : {}),
     staleAt: staleAt.toISOString(),
   };
+  if (last) return { ...result, lastSuccessfulAt: last.toISOString() };
+  return result;
 }
 
 export function nextScheduleOccurrence(

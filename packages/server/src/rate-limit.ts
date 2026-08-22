@@ -304,12 +304,12 @@ export class PerClientRateLimiter {
     const aggregate = this.aggregate.consume(clientKey);
     if (!aggregate.allowed) return { ...aggregate, aggregate, limitedBy: 'aggregate' };
     const operation = this.operations.consume(`${clientKey}\0${operationScope}`);
-    return {
+    const decision: ClientRateLimitDecision = {
       ...operation,
       aggregate,
       operation,
-      ...(operation.allowed ? {} : { limitedBy: 'operation' as const }),
     };
+    return operation.allowed ? decision : { ...decision, limitedBy: 'operation' as const };
   }
 
   prune(): void {

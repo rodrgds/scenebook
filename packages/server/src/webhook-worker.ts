@@ -56,15 +56,18 @@ export class WebhookWorker {
             6 * 60 * 60 * 1_000,
             1_000 * 2 ** Math.max(0, delivery.attempts - 1),
           );
-          await this.options.repository.completeWebhookDelivery({
+          const report: Parameters<
+            ControlPlaneRepository['completeWebhookDelivery']
+          >[0] = {
             id: delivery.id,
             succeeded: false,
             terminal,
             error: error instanceof Error ? error.message : 'Unknown webhook failure',
-            ...(!terminal
-              ? { nextAttemptAt: new Date(this.now().getTime() + delay).toISOString() }
-              : {}),
-          });
+          };
+          if (!terminal) {
+            report.nextAttemptAt = new Date(this.now().getTime() + delay).toISOString();
+          }
+          await this.options.repository.completeWebhookDelivery(report);
           this.options.logger.warn('Webhook delivery failed', {
             deliveryId: delivery.id,
             webhookId: delivery.webhookId,
