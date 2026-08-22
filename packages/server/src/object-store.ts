@@ -412,9 +412,9 @@ export class FileSystemFinalObjectDeleter implements FinalObjectDeleter {
 export interface S3ObjectStoreOptions {
   readonly bucket: string;
   readonly region: string;
-  readonly endpoint?: string;
-  readonly accessKeyId?: string;
-  readonly secretAccessKey?: string;
+  endpoint?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
   readonly forcePathStyle?: boolean;
 }
 

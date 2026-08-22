@@ -285,7 +285,7 @@ export interface ControlPlaneAppDependencies {
   readonly githubSource?: GitHubSourceClient;
   readonly githubChangeLeaseSeconds?: number;
   readonly githubCheckReconcileTimeoutMs?: number;
-  readonly evidenceRetention?: EvidenceRetentionWorker;
+  evidenceRetention?: EvidenceRetentionWorker;
   readonly workspaceExport?: {
     readonly maxRecords: number;
     readonly maxAssets: number;

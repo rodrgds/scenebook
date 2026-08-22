@@ -11,6 +11,7 @@ import {
   S3FinalObjectDeleter,
   S3ObjectStore,
   type FinalObjectDeleter,
+  type S3ObjectStoreOptions,
   type ImmutableObjectStore,
 } from './object-store.js';
 import { RemoteGitHubOidcVerifier } from './oidc.js';
@@ -33,16 +34,19 @@ export async function createControlPlaneRuntime(config: ServerConfig = loadServe
   if (config.objectStore.kind === 'filesystem') {
     objectStore = new FileSystemObjectStore(config.objectStore.root);
   } else {
-    objectStore = new S3ObjectStore({
+    const s3Options: S3ObjectStoreOptions = {
       bucket: config.objectStore.bucket,
       region: config.objectStore.region,
-      ...(config.objectStore.endpoint ? { endpoint: config.objectStore.endpoint } : {}),
-      ...(config.objectStore.accessKeyId ? { accessKeyId: config.objectStore.accessKeyId } : {}),
-      ...(config.objectStore.secretAccessKey
-        ? { secretAccessKey: config.objectStore.secretAccessKey }
-        : {}),
       forcePathStyle: config.objectStore.forcePathStyle,
-    });
+    };
+    if (config.objectStore.endpoint) s3Options.endpoint = config.objectStore.endpoint;
+    if (config.objectStore.accessKeyId) {
+      s3Options.accessKeyId = config.objectStore.accessKeyId;
+    }
+    if (config.objectStore.secretAccessKey) {
+      s3Options.secretAccessKey = config.objectStore.secretAccessKey;
+    }
+    objectStore = new S3ObjectStore(s3Options);
   }
   let finalDeleter: FinalObjectDeleter | undefined;
   if (config.evidenceRetention.enabled) {
@@ -58,7 +62,7 @@ export async function createControlPlaneRuntime(config: ServerConfig = loadServe
       finalDeleter = new S3FinalObjectDeleter({
         bucket: config.objectStore.bucket,
         region: config.objectStore.region,
-        ...(config.objectStore.endpoint ? { endpoint: config.objectStore.endpoint } : {}),
+        endpoint: config.objectStore.endpoint,
         accessKeyId: config.evidenceRetention.deleteCredential.accessKeyId,
         secretAccessKey: config.evidenceRetention.deleteCredential.secretAccessKey,
         forcePathStyle: config.objectStore.forcePathStyle,
@@ -108,7 +112,7 @@ export async function createControlPlaneRuntime(config: ServerConfig = loadServe
           timeoutMs: config.githubApp.timeoutMs,
         })
       : new DisabledGitHubSourceClient();
-  const app = createControlPlaneApp({
+  const appOptions: Parameters<typeof createControlPlaneApp>[0] = {
     repository,
     objectStore,
     oidcVerifier: new RemoteGitHubOidcVerifier(
@@ -148,9 +152,10 @@ export async function createControlPlaneRuntime(config: ServerConfig = loadServe
       config.githubApp.kind === 'enabled'
         ? Math.min(60_000, config.githubApp.timeoutMs * 4)
         : 60_000,
-    ...(evidenceRetention ? { evidenceRetention } : {}),
     workspaceExport: config.workspaceExport,
-  });
+  };
+  if (evidenceRetention) appOptions.evidenceRetention = evidenceRetention;
+  const app = createControlPlaneApp(appOptions);
   const webhookWorker = new WebhookWorker({ repository, dispatcher, secretBox, logger });
   const uploadGarbageCollector = new UploadGarbageCollector({
     repository,
