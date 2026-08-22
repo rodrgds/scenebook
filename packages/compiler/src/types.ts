@@ -1,6 +1,6 @@
 import type { Scene } from '@scenebook/schema';
 
-export const OUTPUT_FORMATS = [
+const OUTPUT_FORMATS = [
   'catalog',
   'standalone-html',
   'web-component',

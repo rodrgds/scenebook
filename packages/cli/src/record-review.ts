@@ -14,8 +14,8 @@ import {
 import { recordedSceneDirectory } from './record-scaffold.js';
 import { CliError } from './types.js';
 
-export const RECORDER_REVIEW_SCHEMA_VERSION = 1 as const;
-export const MAX_RECORDER_REVIEW_BYTES = 4 * 1024 * 1024;
+const RECORDER_REVIEW_SCHEMA_VERSION = 1 as const;
+const MAX_RECORDER_REVIEW_BYTES = 4 * 1024 * 1024;
 
 const ASSERTION_METHODS = new Set([
   'toBeAttached',
@@ -116,10 +116,10 @@ interface AstNode {
   readonly [key: string]: unknown;
 }
 
-export type RecorderFileOperation = 'create' | 'replace';
-export type RecorderReviewSeverity = 'info' | 'warning';
+type RecorderFileOperation = 'create' | 'replace';
+type RecorderReviewSeverity = 'info' | 'warning';
 
-export interface RecorderReviewFinding {
+interface RecorderReviewFinding {
   readonly id: string;
   readonly code: string;
   readonly severity: RecorderReviewSeverity;
@@ -130,7 +130,7 @@ export interface RecorderReviewFinding {
   readonly recommendation: string;
 }
 
-export interface RecorderStepSuggestion {
+interface RecorderStepSuggestion {
   readonly id: string;
   readonly kind: 'setup' | 'beat';
   readonly startLine: number;
@@ -141,7 +141,7 @@ export interface RecorderStepSuggestion {
   readonly patchIncluded: boolean;
 }
 
-export interface RecorderPatchEdit {
+interface RecorderPatchEdit {
   readonly kind: 'insert-before-line';
   readonly byteOffset: number;
   readonly line: number;

@@ -38,7 +38,7 @@ function color(scene: NormalizedScene, name: string, fallback: string): string {
   return fallback;
 }
 
-export function effectiveCrop(step: NormalizedStep): NormalizedRect {
+function effectiveCrop(step: NormalizedStep): NormalizedRect {
   const base = step.crop?.rect ?? { x: 0, y: 0, width: 1, height: 1 };
   const zoom = step.crop?.zoom ?? 1;
   if (zoom <= 1) return base;
@@ -112,7 +112,7 @@ export function mapPresentationRect(
   };
 }
 
-export function cursorPointAt(step: NormalizedStep, timeMs?: number): NormalizedPoint | undefined {
+function cursorPointAt(step: NormalizedStep, timeMs?: number): NormalizedPoint | undefined {
   const cursor = step.cursor;
   if (!cursor?.visible) return undefined;
   const path = cursor.path;

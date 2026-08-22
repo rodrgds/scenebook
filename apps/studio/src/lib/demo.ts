@@ -338,4 +338,3 @@ export const catalogScenes: CatalogScene[] = [
   },
 ];
 
-export { images as demoImages };

@@ -18,13 +18,13 @@ export type RunStatus = 'passed' | 'changed' | 'broken' | 'blocked' | 'stale';
 export type Capability = 'captured' | 'monitored' | 'verified';
 export type OutputKind = 'interactive' | 'guide' | 'motion' | 'social';
 
-export interface CropState {
+interface CropState {
   x: number;
   y: number;
   zoom: number;
 }
 
-export interface CursorState {
+interface CursorState {
   x: number;
   y: number;
   visible: boolean;
@@ -34,7 +34,7 @@ export interface CursorState {
   style?: 'default' | 'pointer' | 'dot';
 }
 
-export interface CursorKeyframe {
+interface CursorKeyframe {
   atMs: number;
   x: number;
   y: number;
@@ -54,21 +54,21 @@ export interface EditorAnnotation {
   color?: string;
 }
 
-export interface OutputVisibility {
+interface OutputVisibility {
   interactive: boolean;
   guide: boolean;
   motion: boolean;
   social: boolean;
 }
 
-export interface StepTranslation {
+interface StepTranslation {
   title?: string;
   instruction?: string;
   caption?: string;
   alt?: string;
 }
 
-export interface SceneTranslation {
+interface SceneTranslation {
   title?: string;
   description?: string;
   steps: Record<string, StepTranslation>;
@@ -284,7 +284,7 @@ export function normalizedPoint(value: number): number {
 
 const MIN_OVERLAY_SIZE = 0.01;
 
-export function boundedRect(
+function boundedRect(
   rect: Pick<Mask, 'x' | 'y' | 'width' | 'height'>,
   minimum = MIN_OVERLAY_SIZE,
 ): Pick<Mask, 'x' | 'y' | 'width' | 'height'> {

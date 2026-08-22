@@ -134,6 +134,3 @@ export async function loadConfig(cwd: string, explicit?: string): Promise<Loaded
   };
 }
 
-export function resolveProject(config: LoadedConfig): Project {
-  return config.project;
-}

@@ -11,7 +11,7 @@ export interface HostedWorkspaceBinding {
   localProjectId?: string;
 }
 
-export interface HostedProjectChoice {
+interface HostedProjectChoice {
   id: string;
   name: string;
   slug: string;

@@ -38,7 +38,7 @@ export type CapturedStep = CapturedState & {
   target?: TargetSnapshot;
 };
 
-export type DraftCheck = {
+type DraftCheck = {
   id: string;
   kind: 'visible';
   label: string;

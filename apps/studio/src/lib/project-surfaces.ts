@@ -3,7 +3,7 @@ import type { Channel, Project } from '@scenebook/schema';
 import { defaultProject } from './portable';
 import type { SceneSummary, SceneVersionSummary } from './scene-library';
 
-export const STUDIO_PRIVACY_METADATA_KEY = 'scenebookStudioPrivacy';
+const STUDIO_PRIVACY_METADATA_KEY = 'scenebookStudioPrivacy';
 
 export interface StudioPrivacyDefaults {
   blockAt: 'medium' | 'high' | 'blocking';
@@ -17,7 +17,7 @@ export const DEFAULT_STUDIO_PRIVACY: StudioPrivacyDefaults = {
   ocrBeforePublication: true,
 };
 
-export interface LocalWorkspaceSnapshot {
+interface LocalWorkspaceSnapshot {
   project: Project;
   projectPersisted: boolean;
   scenes: SceneSummary[];
@@ -97,13 +97,13 @@ export function effectiveLocalProject(
   return persisted ? structuredClone(persisted) : defaultProject(scenes);
 }
 
-export function collectionSceneIds(project: Project): Set<string> {
+function collectionSceneIds(project: Project): Set<string> {
   return new Set(
     project.collections.flatMap((collection) => collection.entries.map((entry) => entry.sceneId)),
   );
 }
 
-export function channelSceneIds(project: Project, channel: Channel): string[] {
+function channelSceneIds(project: Project, channel: Channel): string[] {
   const collectionIds = new Set(channel.collectionIds);
   const selected = project.collections.filter((collection) => collectionIds.has(collection.id));
   return [

@@ -41,7 +41,7 @@ export interface StoredSceneRecord {
   revision: number;
 }
 
-export type ScenePayloadSlot =
+type ScenePayloadSlot =
   'step-image' | 'portable-asset' | 'portable-sidecar' | 'run-evidence-asset';
 
 export interface ScenePayloadReference {
@@ -61,7 +61,7 @@ export interface ScenePayloadRecord {
   bytes: ArrayBuffer;
 }
 
-export interface CompactStoredSceneRecord {
+interface CompactStoredSceneRecord {
   id: string;
   scene: EditorScene;
   savedAt: number;
@@ -127,7 +127,7 @@ export interface SceneSummary {
   sample: boolean;
 }
 
-export interface RunEvidenceSummary {
+interface RunEvidenceSummary {
   runId: string;
   runRevision: string;
   runTargetId: string;
@@ -1423,7 +1423,7 @@ export function upgradeStudioDatabaseSchema(
   }
 }
 
-export class IndexedDbSceneStorage implements SceneStorageBackend {
+class IndexedDbSceneStorage implements SceneStorageBackend {
   #database: Promise<IDBDatabase> | null = null;
 
   #open(): Promise<IDBDatabase> {
