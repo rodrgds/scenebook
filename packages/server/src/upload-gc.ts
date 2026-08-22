@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { Logger } from './logger.js';
+import { describeError, type Logger } from './logger.js';
 import type { MetricsRegistry } from './metrics.js';
 import { stagingObjectKey, type ImmutableObjectStore } from './object-store.js';
 import type { ControlPlaneRepository } from './repository.js';
@@ -124,7 +124,7 @@ export class UploadGarbageCollector {
           );
           this.options.logger.warn('Artifact upload garbage collection failed', {
             uploadId: upload.id,
-            error,
+            error: describeError(error),
           });
         }
       }

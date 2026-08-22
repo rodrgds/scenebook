@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { Logger } from './logger.js';
+import { describeError, type Logger } from './logger.js';
 import type { MetricsRegistry } from './metrics.js';
 import { immutableObjectKey, type FinalObjectDeleter } from './object-store.js';
 import type { ControlPlaneRepository } from './repository.js';
@@ -89,7 +89,7 @@ export class EvidenceRetentionWorker {
     await active.promise.catch((error) => {
       this.options.logger.warn('Active evidence retention pass stopped with an error', {
         workspaceId: active.workspaceId,
-        error,
+        error: describeError(error),
       });
     });
   }
@@ -175,7 +175,7 @@ export class EvidenceRetentionWorker {
         sha256: claim.sha256,
         mediaType: claim.mediaType,
         disposition,
-        error,
+        error: describeError(error),
       });
     });
   }
@@ -291,7 +291,7 @@ export class EvidenceRetentionWorker {
               sha256: deleting.sha256,
               mediaType: deleting.mediaType,
               released,
-              error,
+              error: describeError(error),
             });
             continue;
           }
@@ -362,7 +362,7 @@ export class EvidenceRetentionWorker {
               workspaceId: deleting.workspaceId,
               sha256: deleting.sha256,
               mediaType: deleting.mediaType,
-              error,
+              error: describeError(error),
             });
           }
           if (signal.aborted) break;

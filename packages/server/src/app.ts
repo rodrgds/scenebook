@@ -100,7 +100,7 @@ import type {
 } from './domain.js';
 import type { ServerConfig } from './config.js';
 import { HttpError, readJsonBody, readLimitedStream } from './http.js';
-import type { Logger } from './logger.js';
+import { describeError, type Logger } from './logger.js';
 import {
   isAllowedObjectMediaType,
   ObjectMediaPolicyError,
@@ -1585,7 +1585,7 @@ export function createControlPlaneApp(
       requestId,
       method: context.req.method,
       path: context.req.path,
-      error: error instanceof Error ? { name: error.name, message: error.message } : String(error),
+      error: describeError(error),
     });
     metrics.increment('scenebook_http_errors_total', 'Unhandled HTTP errors');
     return responseError(500, 'internal_error', 'An unexpected error occurred', requestId);
@@ -1601,7 +1601,7 @@ export function createControlPlaneApp(
       await Promise.all([dependencies.repository.health(), dependencies.objectStore.health()]);
       return context.json({ status: 'ready' });
     } catch (error) {
-      dependencies.logger.warn('Readiness check failed', { error });
+      dependencies.logger.warn('Readiness check failed', { error: describeError(error) });
       return context.json({ status: 'not-ready' }, 503);
     }
   });
@@ -4966,7 +4966,7 @@ export function createControlPlaneApp(
             uploadId: upload.id,
             sha256: parsedHash.data,
             mediaType,
-            error,
+            error: describeError(error),
           });
         });
       }
@@ -7172,7 +7172,7 @@ export function createControlPlaneApp(
         uploadId,
         promotedCount: promoted.length,
         objectCount: upload.objects.length,
-        error,
+        error: describeError(error),
       });
       throw new HttpError(
         503,
@@ -7193,7 +7193,7 @@ export function createControlPlaneApp(
             uploadId,
             sha256: object.sha256,
             mediaType: object.mediaType,
-            error,
+            error: describeError(error),
           });
         }),
       ),

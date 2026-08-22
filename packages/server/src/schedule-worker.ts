@@ -1,6 +1,6 @@
 import { sha256 } from '@scenebook/core';
 
-import type { Logger } from './logger.js';
+import { describeError, type Logger } from './logger.js';
 import type { MetricsRegistry } from './metrics.js';
 import type { ControlPlaneRepository } from './repository.js';
 
@@ -97,12 +97,16 @@ export class VerificationScheduleWorker {
     if (this.timer) return;
     this.timer = setInterval(() => {
       void this.runOnce().catch((error: unknown) => {
-        this.options.logger.error('Verification scheduler iteration failed', { error });
+        this.options.logger.error('Verification scheduler iteration failed', {
+          error: describeError(error),
+        });
       });
     }, this.options.intervalMs);
     this.timer.unref();
     void this.runOnce().catch((error: unknown) => {
-      this.options.logger.error('Verification scheduler startup iteration failed', { error });
+      this.options.logger.error('Verification scheduler startup iteration failed', {
+        error: describeError(error),
+      });
     });
   }
 

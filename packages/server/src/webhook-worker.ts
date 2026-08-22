@@ -1,4 +1,4 @@
-import type { Logger } from './logger.js';
+import { describeError, type Logger } from './logger.js';
 import type { ControlPlaneRepository } from './repository.js';
 import type { SecretBox } from './crypto.js';
 import type { WebhookDispatcher } from './webhook.js';
@@ -86,7 +86,9 @@ export class WebhookWorker {
       try {
         await this.runOnce();
       } catch (error) {
-        this.options.logger.error('Webhook worker iteration failed', { error });
+        this.options.logger.error('Webhook worker iteration failed', {
+          error: describeError(error),
+        });
       }
       if (!this.stopped) this.timer = setTimeout(() => void tick(), this.intervalMs);
     };
