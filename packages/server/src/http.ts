@@ -5,12 +5,7 @@ export class HttpError extends Error {
   readonly code: string;
   readonly details?: JsonObject;
 
-  constructor(
-    status: number,
-    code: string,
-    message: string,
-    details?: JsonObject,
-  ) {
+  constructor(status: number, code: string, message: string, details?: JsonObject) {
     super(message);
     this.name = 'HttpError';
     this.status = status;

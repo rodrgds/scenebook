@@ -42,6 +42,7 @@ async function fixture() {
   const app = createControlPlaneApp({
     repository,
     objectStore: new FileSystemObjectStore(root),
+    // SAFETY: this fixture already satisfies the asserted record shape.
     oidcVerifier: {
       verify: async () => {
         throw new Error('not used');
@@ -139,6 +140,7 @@ async function bootstrap(app: ReturnType<typeof createControlPlaneApp>) {
     }),
   );
   expect(response.status).toBe(201);
+  // SAFETY: the exercised route returns this JSON body shape.
   return ((await response.json()) as { repository: { id: string } }).repository.id;
 }
 
@@ -164,6 +166,7 @@ async function createSchedule(
     }),
   );
   expect(response.status).toBe(201);
+  // SAFETY: the exercised route returns this JSON body shape.
   return ((await response.json()) as { schedule: { id: string } }).schedule;
 }
 
@@ -178,6 +181,7 @@ async function createRunner(app: ReturnType<typeof createControlPlaneApp>) {
     }),
   );
   expect(response.status).toBe(201);
+  // SAFETY: the exercised route returns this JSON body shape.
   const value = (await response.json()) as {
     runner: Record<string, unknown>;
     credential: string;
@@ -192,6 +196,7 @@ describe('scheduled verification coordination', () => {
     vi.useFakeTimers();
     try {
       let passes = 0;
+      // SAFETY: this fixture already satisfies the asserted record shape.
       const repository = {
         requeueExpiredVerificationJobs: async () => {
           passes += 1;
@@ -237,6 +242,7 @@ describe('scheduled verification coordination', () => {
     expect(await worker.runOnce()).toEqual({ enqueued: 1, recovered: 0 });
     const claim = await app.request('/v1/runner/jobs/claim', request(credential, {}));
     expect(claim.status).toBe(200);
+    // SAFETY: the exercised route returns this JSON body shape.
     const job = ((await claim.json()) as { job: any }).job;
     expect(job.execution).toEqual({
       protocolVersion: 1,
@@ -382,6 +388,7 @@ describe('scheduled verification coordination', () => {
     );
     expect(first.status).toBe(201);
     expect(second.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     expect(((await first.json()) as any).job.id).toBe(((await second.json()) as any).job.id);
     expect(repository.verificationJobs.size).toBe(1);
 
@@ -426,6 +433,7 @@ describe('scheduled verification coordination', () => {
       request(ADMIN, {}),
     );
     expect(rotatedResponse.status).toBe(200);
+    // SAFETY: the exercised route returns this JSON body shape.
     const rotated = ((await rotatedResponse.json()) as { credential: string }).credential;
     expect((await app.request('/v1/runner/jobs/claim', request(credential, {}))).status).toBe(401);
     expect((await app.request('/v1/runner/jobs/claim', request(rotated, {}))).status).toBe(204);
@@ -474,6 +482,7 @@ describe('scheduled verification coordination', () => {
       }),
     );
     expect(tokenResponse.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     const token = ((await tokenResponse.json()) as { credential: string }).credential;
     expect(
       (

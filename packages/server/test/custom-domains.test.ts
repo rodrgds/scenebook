@@ -154,6 +154,7 @@ describe('custom-domain ingress observations', () => {
       timeoutMs: 1_000,
       now: () => new Date('2026-07-21T12:00:00.000Z'),
       fetch: async (_url, init) => {
+        // SAFETY: this fixture already satisfies the asserted record shape.
         const request = JSON.parse(String(init?.body)) as { operationKey: string };
         expect(new Headers(init?.headers).get('idempotency-key')).toBe('operation-1');
         expect(request.operationKey).toBe('operation-1');

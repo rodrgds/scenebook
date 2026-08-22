@@ -663,6 +663,7 @@ describe('GitHub source patch constraints', () => {
       fetchImpl: async (url, init) => {
         const method = init?.method ?? 'GET';
         const body =
+          // SAFETY: this fixture already satisfies the asserted record shape.
           typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined;
         requests.push({
           url: String(url),
@@ -1054,6 +1055,7 @@ describe('GitHub source API', () => {
       }),
     );
     expect(bound.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     const installation = (await bound.json()) as { installation: { id: string; version: number } };
     expect(JSON.stringify(installation)).not.toContain('123456');
 
@@ -1085,6 +1087,7 @@ describe('GitHub source API', () => {
       authenticated(token, request, { 'idempotency-key': 'repair-invite-1' }),
     );
     expect(created.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     const createdBody = (await created.json()) as { change: { id: string } };
     expect(githubSource.changes).toBe(1);
     const replay = await app.request(
@@ -1131,6 +1134,7 @@ describe('GitHub source API', () => {
         installationId: '123456',
       }),
     );
+    // SAFETY: the exercised route returns this JSON body shape.
     const installation = (await bound.json()) as { installation: { id: string } };
     const request = {
       installationBindingId: installation.installation.id,
@@ -1152,6 +1156,7 @@ describe('GitHub source API', () => {
       authenticated(token, request, { 'idempotency-key': 'concurrent-change' }),
     );
     expect(concurrent.status).toBe(409);
+    // SAFETY: the exercised route returns this JSON body shape.
     expect((await concurrent.json()) as unknown).toMatchObject({
       error: { code: 'github_change_in_progress' },
     });
@@ -1164,6 +1169,7 @@ describe('GitHub source API', () => {
       authenticated(token, request, { 'idempotency-key': 'retry-change' }),
     );
     expect(failed.status).toBe(503);
+    // SAFETY: the exercised route returns this JSON body shape.
     expect((await failed.json()) as unknown).toMatchObject({
       error: { code: 'github_unavailable', details: { retryable: true } },
     });
@@ -1187,6 +1193,7 @@ describe('GitHub source API', () => {
         installationId: '123456',
       }),
     );
+    // SAFETY: the exercised route returns this JSON body shape.
     const installation = (await bound.json()) as { installation: { id: string } };
     const block = githubSource.blockNextChange();
     const pending = app.request(
@@ -1232,6 +1239,7 @@ describe('GitHub source API', () => {
         installationId: '123456',
       }),
     );
+    // SAFETY: the exercised route returns this JSON body shape.
     const installation = (await bound.json()) as { installation: { id: string; version: number } };
     const unsafe = await app.request(
       `${base}/source/read`,
@@ -1259,6 +1267,7 @@ describe('GitHub source API', () => {
       ),
     );
     expect(forged.status).toBe(422);
+    // SAFETY: the exercised route returns this JSON body shape.
     expect((await forged.json()) as unknown).toMatchObject({
       error: { code: 'evidence_binding_mismatch' },
     });

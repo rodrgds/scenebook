@@ -116,6 +116,7 @@ describe('final evidence retention', () => {
       'text/plain',
       'unused diagnostic evidence',
     );
+    // SAFETY: this fixture already satisfies the asserted record shape.
     repository.verificationBaselines.set('baseline-1', {
       workspaceId: 'workspace-1',
       projectId: 'project-1',
@@ -177,6 +178,7 @@ describe('final evidence retention', () => {
       'text/plain',
       'unreferenced Scene race object',
     );
+    // SAFETY: this fixture already satisfies the asserted record shape.
     await repository.createSceneRevision({
       id: 'scene-revision-protected',
       workspaceId: 'workspace-1',
@@ -215,6 +217,7 @@ describe('final evidence retention', () => {
       ]),
     );
     await expect(
+      // SAFETY: this fixture already satisfies the asserted record shape.
       repository.createSceneRevision({
         id: 'scene-revision-raced',
         workspaceId: 'workspace-1',
@@ -449,6 +452,7 @@ describe('final evidence retention', () => {
     expect(batch.claims).toHaveLength(1);
 
     await expect(
+      // SAFETY: this fixture already satisfies the asserted record shape.
       repository.recordVerificationRun({
         id: 'run-race',
         workspaceId: 'workspace-1',
@@ -492,6 +496,7 @@ describe('final evidence retention', () => {
       'text/plain',
       'reviewed Run bytes',
     );
+    // SAFETY: this fixture already satisfies the asserted record shape.
     repository.verificationRuns.set('run-review-race', {
       id: 'run-review-race',
       workspaceId: 'workspace-1',

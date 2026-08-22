@@ -328,6 +328,7 @@ describe('checksummed migrations', () => {
       },
       release() {},
     };
+    // SAFETY: this fixture already satisfies the asserted record shape.
     const pool = { connect: async () => client } as unknown as Pool;
     expect(await runMigrations(pool, directory)).toHaveLength(1);
     expect(await runMigrations(pool, directory)).toEqual([]);

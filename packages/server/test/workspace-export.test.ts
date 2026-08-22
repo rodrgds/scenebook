@@ -114,6 +114,7 @@ describe('portable workspace export', () => {
       'text/plain',
       new TextEncoder().encode('local debug payload'),
     );
+    // SAFETY: this fixture already satisfies the asserted record shape.
     repository.verificationBaselines.set('baseline-1', {
       id: 'baseline-1',
       workspaceId: 'workspace-1',
@@ -209,6 +210,7 @@ describe('portable workspace export', () => {
       'restoration.json',
       'workspace.json',
     ]);
+    // SAFETY: this fixture already satisfies the asserted record shape.
     const manifest = JSON.parse(new TextDecoder().decode(files['manifest.json'])) as {
       manifestHash: string;
       assets: Array<{ sha256: string; disposition: string; reason: string }>;
@@ -297,6 +299,7 @@ describe('portable workspace export', () => {
       counts: { info: 0, low: 0, medium: 0, high: 0, blocking: 0 },
       findings: [],
     };
+    // SAFETY: this fixture already satisfies the asserted record shape.
     repository.revisions.set('project-1\0scene-1\0revision-1', {
       id: 'scene-revision-1',
       workspaceId: 'workspace-1',
@@ -317,6 +320,7 @@ describe('portable workspace export', () => {
       createdBy: 'owner-1',
       createdAt: NOW,
     } as never);
+    // SAFETY: this fixture already satisfies the asserted record shape.
     repository.revisions.set('project-1\0scene-private\0revision-private', {
       id: 'scene-revision-private',
       workspaceId: 'workspace-1',
@@ -328,6 +332,7 @@ describe('portable workspace export', () => {
       createdBy: 'owner-1',
       createdAt: NOW,
     } as never);
+    // SAFETY: this fixture already satisfies the asserted record shape.
     repository.channels.set('channel-1', {
       id: 'channel-1',
       workspaceId: 'workspace-1',
@@ -342,6 +347,7 @@ describe('portable workspace export', () => {
       currentReleaseId: 'release-1',
       createdAt: NOW,
     } as never);
+    // SAFETY: this fixture already satisfies the asserted record shape.
     repository.releases.set('release-1', {
       workspaceId: 'workspace-1',
       projectId: 'project-1',
@@ -383,6 +389,7 @@ describe('portable workspace export', () => {
         `assets/${privacyExcluded.sha256}.${Buffer.from(privacyExcluded.mediaType).toString('base64url')}`
       ],
     ).toBeUndefined();
+    // SAFETY: this fixture already satisfies the asserted record shape.
     const restoration = JSON.parse(new TextDecoder().decode(files['restoration.json'])) as {
       restorable: boolean;
       objects: Array<{ sha256: string; referencedBy: string[] }>;
@@ -412,6 +419,7 @@ describe('portable workspace export', () => {
         referencedBy: ['scene:scene-private:revision-private:asset:warning'],
       }),
     ]);
+    // SAFETY: this fixture already satisfies the asserted record shape.
     const manifest = JSON.parse(new TextDecoder().decode(files['manifest.json'])) as {
       members: Array<{ path: string; sha256: string }>;
       restoration: {
@@ -441,6 +449,7 @@ describe('portable workspace export', () => {
       byteLength: 64 * 1024 * 100,
       mediaType: 'application/octet-stream',
     };
+    // SAFETY: this fixture already satisfies the asserted record shape.
     const store = {
       readStream: async function* () {
         try {

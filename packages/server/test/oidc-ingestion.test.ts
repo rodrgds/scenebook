@@ -173,6 +173,7 @@ async function bootstrap(app: TestApp): Promise<string> {
     }),
   });
   expect(exchange.status).toBe(200);
+  // SAFETY: the exercised route returns this JSON body shape.
   return ((await exchange.json()) as { token: string }).token;
 }
 
@@ -199,6 +200,7 @@ async function uploadEnvelope(
     body: JSON.stringify({ objects: [object] }),
   });
   expect(begin.status).toBe(201);
+  // SAFETY: the exercised route returns this JSON body shape.
   const uploadId = ((await begin.json()) as { upload: { id: string } }).upload.id;
   const put = await app.request(`/v1/uploads/${uploadId}/objects/${object.sha256}`, {
     method: 'PUT',
@@ -249,6 +251,7 @@ async function persistSceneAsAdmin(app: TestApp): Promise<string> {
     admin(sceneEnvelope()),
   );
   expect(response.status).toBe(201);
+  // SAFETY: the exercised route returns this JSON body shape.
   return ((await response.json()) as { revision: { revision: string } }).revision.revision;
 }
 
@@ -419,6 +422,7 @@ describe('OIDC artifact ingestion contract', () => {
       body: JSON.stringify({ objects: [jsonObject, plainObject] }),
     });
     expect(begin.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     const uploadId = ((await begin.json()) as { upload: { id: string } }).upload.id;
 
     const undeclaredMedia = await app.request(`/v1/uploads/${uploadId}/objects/${digest}`, {
@@ -556,6 +560,7 @@ describe('OIDC artifact ingestion contract', () => {
       artifactRequest(token, envelope, 'scene-valid', uploadId),
     );
     expect(first.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     const firstRecord = (await first.json()) as {
       revision: { id: string; revision: string; createdBy: string };
     };
@@ -726,6 +731,7 @@ describe('OIDC artifact ingestion contract', () => {
       artifactRequest(token, runBody, 'run-valid', runUpload),
     );
     expect(firstRun.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     const runRecord = (await firstRun.json()) as {
       run: { id: string; artifactHash: string; recordedBy: string };
     };
@@ -806,6 +812,7 @@ describe('OIDC artifact ingestion contract', () => {
       artifactRequest(token, buildBody, 'build-valid', buildUpload),
     );
     expect(firstBuild.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     const buildRecord = (await firstBuild.json()) as {
       build: { id: string; artifactHash: string; recordedBy: string };
     };

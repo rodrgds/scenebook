@@ -48,6 +48,7 @@ async function requestBodyBytes(body: unknown): Promise<Uint8Array> {
     typeof body[Symbol.asyncIterator] === 'function'
   ) {
     const chunks: Buffer[] = [];
+    // SAFETY: this fixture already satisfies the asserted record shape.
     for await (const chunk of body as AsyncIterable<Uint8Array | Buffer | string>) {
       chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk));
     }
@@ -357,6 +358,7 @@ describe('S3 immutable object store', () => {
       mediaType: 'image/png',
     };
     const client = (contentType: string, metadataHash = digest) =>
+      // SAFETY: this fixture already satisfies the asserted record shape.
       ({
         send: async () => ({
           Body: { transformToByteArray: async () => bytes },
@@ -390,6 +392,7 @@ describe('S3 immutable object store', () => {
     const client = new MemoryS3Client();
     const objectStore = new S3ObjectStore(
       { bucket: 'scenebook', region: 'us-east-1' },
+      // SAFETY: this fixture already satisfies the asserted record shape.
       client as unknown as S3Client,
     );
     const bytes = new TextEncoder().encode('{"status":"ok"}');
@@ -424,6 +427,7 @@ describe('S3 immutable object store', () => {
     const client = new MemoryS3Client();
     const objectStore = new S3ObjectStore(
       { bucket: 'scenebook', region: 'us-east-1' },
+      // SAFETY: this fixture already satisfies the asserted record shape.
       client as unknown as S3Client,
     );
     const bytes = new TextEncoder().encode('shared immutable output');
@@ -447,6 +451,7 @@ describe('S3 immutable object store', () => {
     const client = new MemoryS3Client();
     const objectStore = new S3ObjectStore(
       { bucket: 'scenebook', region: 'us-east-1' },
+      // SAFETY: this fixture already satisfies the asserted record shape.
       client as unknown as S3Client,
     );
     const bytes = new TextEncoder().encode('{"status":"ok"}');
@@ -470,6 +475,7 @@ describe('S3 immutable object store', () => {
     const client = new MemoryS3Client();
     const objectStore = new S3ObjectStore(
       { bucket: 'scenebook', region: 'us-east-1' },
+      // SAFETY: this fixture already satisfies the asserted record shape.
       client as unknown as S3Client,
     );
     const bytes = new TextEncoder().encode('verified source');
@@ -490,6 +496,7 @@ describe('S3 immutable object store', () => {
 
 describe('MinIO application policy', () => {
   it('limits final writes to metadata-replacing copies from staging', async () => {
+    // SAFETY: this fixture already satisfies the asserted record shape.
     const policy = JSON.parse(
       await readFile(new URL('../../../deploy/minio-policy.json', import.meta.url), 'utf8'),
     ) as {

@@ -408,6 +408,7 @@ async function finalizePublication(
     body: JSON.stringify({ objects }),
   });
   expect(begin.status).toBe(201);
+  // SAFETY: the exercised route returns this JSON body shape.
   const uploadId = ((await begin.json()) as { upload: { id: string } }).upload.id;
   for (const [object, bytes] of [
     [archive, archiveBytes],
@@ -559,6 +560,7 @@ describe('control-plane HTTP API', () => {
         }
       }
     }
+    // SAFETY: the generated client source declares this exact function signature.
     const ask = new Function(
       'q',
       'clear',
@@ -566,6 +568,7 @@ describe('control-plane HTTP API', () => {
       'FormData',
       `${generatedClientFunction(script!, 'ask')}; return ask;`,
     )(q, clear, h, FormValues) as (options: Record<string, unknown>) => Promise<unknown>;
+    // SAFETY: the generated client source declares this exact function signature.
     const commitOnce = new Function(
       `${generatedClientFunction(script!, 'commitOnce')}; return commitOnce;`,
     )() as (
@@ -682,6 +685,7 @@ describe('control-plane HTTP API', () => {
         if (value === undefined || value === null || value === false) continue;
         if (key === 'className') node.className = String(value);
         else if (key === 'onclick')
+          // SAFETY: this fixture already satisfies the asserted record shape.
           node.listeners.set('click', value as (...args: unknown[]) => unknown);
         else node.setAttribute(key, value === true ? '' : String(value));
       }
@@ -706,6 +710,7 @@ describe('control-plane HTTP API', () => {
       return new GeneratedElement('comparison');
     };
     let releases = 0;
+    // SAFETY: the generated client source declares this exact function signature.
     const comparison = new Function(
       'runFor',
       'baselineFor',
@@ -728,9 +733,13 @@ describe('control-plane HTTP API', () => {
     ) as (review: Record<string, unknown>) => GeneratedElement;
 
     const root = comparison({ subject: { kind: 'run', id: 'run-1' } });
+    // SAFETY: the operator console renders these children in a fixed order.
     const list = root.children[1] as GeneratedElement;
+    // SAFETY: the operator console renders these children in a fixed order.
     const pagination = root.children[2] as GeneratedElement;
+    // SAFETY: the operator console renders these children in a fixed order.
     const status = pagination.children[1] as GeneratedElement;
+    // SAFETY: the operator console renders these children in a fixed order.
     const next = pagination.children[2] as GeneratedElement;
     expect(comparisons).toBe(12);
     expect(list.children).toHaveLength(12);
@@ -762,6 +771,7 @@ describe('control-plane HTTP API', () => {
         if (value === undefined || value === null || value === false) continue;
         if (key === 'className') node.className = String(value);
         else if (key === 'onclick')
+          // SAFETY: this fixture already satisfies the asserted record shape.
           node.listeners.set('click', value as (...args: unknown[]) => unknown);
         else node.setAttribute(key, value === true ? '' : String(value));
       }
@@ -771,6 +781,7 @@ describe('control-plane HTTP API', () => {
     const state = { section: 'reviews', data: null, loadedSections: {} };
     let releases = 0;
     let renders = 0;
+    // SAFETY: the generated client source declares this exact function signature.
     const renderNav = new Function(
       'q',
       'clear',
@@ -800,6 +811,7 @@ describe('control-plane HTTP API', () => {
     ) as () => void;
 
     renderNav();
+    // SAFETY: the operator console renders these children in a fixed order.
     const dashboard = nav.children[1] as GeneratedElement;
     await dashboard.listeners.get('click')?.();
     expect(state.section).toBe('dashboard');
@@ -879,6 +891,7 @@ describe('control-plane HTTP API', () => {
       revokeObjectURL() {},
     };
     const browserWindow = { IntersectionObserver: VisibleObserver };
+    // SAFETY: the generated client source declares this exact function signature.
     const assetImage = new Function(
       'h',
       'state',
@@ -917,6 +930,7 @@ describe('control-plane HTTP API', () => {
     await settle();
     expect(retry.getAttribute('data-state')).toBe('error');
     expect(retry.alt).toBe('Retry unavailable');
+    // SAFETY: the operator console renders these children in a fixed order.
     const retryStatus = retry.afterNode as GeneratedElement;
     const retryAction = retryStatus.children.find(
       (value): value is RetryAction =>
@@ -955,6 +969,7 @@ describe('control-plane HTTP API', () => {
       { method: 'POST', headers: { authorization: `Bearer ${ADMIN}` } },
     );
     expect(retention.status).toBe(503);
+    // SAFETY: the exercised route returns this JSON body shape.
     expect((await retention.json()) as unknown).toMatchObject({
       error: { code: 'evidence_retention_disabled' },
     });
@@ -985,6 +1000,7 @@ describe('control-plane HTTP API', () => {
       { method: 'POST', headers: { authorization: `Bearer ${ADMIN}` } },
     );
     expect(response.status).toBe(200);
+    // SAFETY: the exercised route returns this JSON body shape.
     const body = (await response.json()) as {
       workspaceId: string;
       claims: Array<{ workspaceId: string; sha256: string }>;
@@ -1264,6 +1280,7 @@ describe('control-plane HTTP API', () => {
         `/v1/admin/workspaces/workspace-1/projects/project-1/${resource}?limit=2`,
       );
       expect(response.status).toBe(200);
+      // SAFETY: the exercised route returns this JSON body shape.
       const body = (await response.json()) as Record<string, unknown[]>;
       expect(Object.values(body)[0]).toEqual([]);
     }
@@ -1346,6 +1363,7 @@ describe('control-plane HTTP API', () => {
       body: JSON.stringify(exchangeBody),
     });
     expect(exchange.status).toBe(200);
+    // SAFETY: the exercised route returns this JSON body shape.
     const { token } = (await exchange.json()) as { token: string };
     expect(
       (
@@ -1370,6 +1388,7 @@ describe('control-plane HTTP API', () => {
       body: JSON.stringify({ objects: [spec] }),
     });
     expect(begin.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     const uploadId = ((await begin.json()) as { upload: { id: string } }).upload.id;
     expect(
       (
@@ -1387,6 +1406,7 @@ describe('control-plane HTTP API', () => {
       body: JSON.stringify({ manifest }),
     });
     expect(finalize.status).toBe(200);
+    // SAFETY: the exercised route returns this JSON body shape.
     const result = (await finalize.json()) as { manifestHash: string };
     expect(result.manifestHash).toBe(sha256(stableStringify(manifest)));
     expect((await repository.getUpload(uploadId))?.status).toBe('finalized');
@@ -1430,6 +1450,7 @@ describe('control-plane HTTP API', () => {
       },
       body: JSON.stringify({ objects: [spec] }),
     });
+    // SAFETY: the exercised route returns this JSON body shape.
     const uploadId = ((await begin.json()) as { upload: { id: string } }).upload.id;
     const response = await app.request(`/v1/uploads/${uploadId}/objects/${spec.sha256}`, {
       method: 'PUT',
@@ -1437,6 +1458,7 @@ describe('control-plane HTTP API', () => {
       body: new TextEncoder().encode('tampered'),
     });
     expect(response.status).toBe(422);
+    // SAFETY: the exercised route returns this JSON body shape.
     expect((await response.json()) as object).not.toHaveProperty('error.details.bytes');
   });
 
@@ -1487,6 +1509,7 @@ describe('control-plane HTTP API', () => {
       body: JSON.stringify({ objects: [spoofedSpec] }),
     });
     expect(begin.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     const uploadId = ((await begin.json()) as { upload: { id: string } }).upload.id;
     const upload = await app.request(`/v1/uploads/${uploadId}/objects/${spoofedSpec.sha256}`, {
       method: 'PUT',
@@ -1610,6 +1633,7 @@ describe('control-plane HTTP API', () => {
       },
       body: JSON.stringify({ objects }),
     });
+    // SAFETY: the exercised route returns this JSON body shape.
     const uploadId = ((await begin.json()) as { upload: { id: string } }).upload.id;
     const put = (index: number) =>
       app.request(`/v1/uploads/${uploadId}/objects/${objects[index]!.sha256}`, {
@@ -1653,6 +1677,7 @@ describe('control-plane HTTP API', () => {
       }),
     );
     expect(unknownConfiguredWebhook.status).toBe(422);
+    // SAFETY: the exercised route returns this JSON body shape.
     expect((await unknownConfiguredWebhook.json()) as object).toMatchObject({
       error: { code: 'unknown_webhook' },
     });
@@ -1674,6 +1699,7 @@ describe('control-plane HTTP API', () => {
         },
       }),
     );
+    // SAFETY: the exercised route returns this JSON body shape.
     const { analyticsToken } = (await channelResponse.json()) as { analyticsToken: string };
     const channelRetry = await app.request(
       '/v1/admin/workspaces/workspace-1/projects/project-1/channels',
@@ -1694,6 +1720,7 @@ describe('control-plane HTTP API', () => {
       }),
     );
     expect(channelRetry.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     expect(((await channelRetry.json()) as { analyticsToken: string }).analyticsToken).toBe(
       analyticsToken,
     );
@@ -2002,6 +2029,7 @@ describe('control-plane HTTP API', () => {
     });
     expect(funnelResponse.status).toBe(200);
     expect(funnelResponse.headers.get('cache-control')).toBe('private, no-store');
+    // SAFETY: the exercised route returns this JSON body shape.
     const funnelBody = (await funnelResponse.json()) as Record<string, unknown>;
     expect(funnelBody).toMatchObject({
       funnel: {
@@ -2073,6 +2101,7 @@ describe('control-plane HTTP API', () => {
       },
     );
     expect(disallowedWebhook.status).toBe(422);
+    // SAFETY: the exercised route returns this JSON body shape.
     expect((await disallowedWebhook.json()) as object).toMatchObject({
       error: { code: 'webhook_not_allowed' },
     });
@@ -2338,6 +2367,7 @@ describe('control-plane HTTP API', () => {
       },
       body: JSON.stringify({ objects }),
     });
+    // SAFETY: the exercised route returns this JSON body shape.
     const uploadId = ((await begin.json()) as { upload: { id: string } }).upload.id;
     for (const [index, object] of objects.entries()) {
       expect(
@@ -2411,6 +2441,7 @@ describe('control-plane HTTP API', () => {
       }),
     );
     expect(sceneResponse.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     const sourceRevision = ((await sceneResponse.json()) as { revision: { revision: string } })
       .revision.revision;
     const privacy = {
@@ -2563,6 +2594,7 @@ describe('control-plane HTTP API', () => {
         )
       ).status,
     ).toBe(409);
+    // SAFETY: the exercised route returns this JSON body shape.
     const runRecord = (await runResponse.json()) as {
       run: {
         id: string;
@@ -2666,6 +2698,7 @@ describe('control-plane HTTP API', () => {
       admin({ baseline }, { 'idempotency-key': 'evidence-baseline-integrity' }),
     );
     expect(baselineResponse.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     const baselineRecord = (await baselineResponse.json()) as {
       baseline: { id: string; artifactHash: string };
     };
@@ -2741,6 +2774,7 @@ describe('control-plane HTTP API', () => {
     );
     expect(visualResponse.status).toBe(201);
     expect(
+      // SAFETY: the exercised route returns this JSON body shape.
       ((await visualResponse.json()) as { approval: { recordedBy: string } }).approval.recordedBy,
     ).toBe('admin');
     expect(

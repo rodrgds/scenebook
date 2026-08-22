@@ -158,9 +158,7 @@ export async function hasExactCustomDomainDnsProof(
   }
   return records.some(
     (segments) =>
-      Array.isArray(segments) &&
-      isStringSegments(segments) &&
-      segments.join('') === challengeValue,
+      Array.isArray(segments) && isStringSegments(segments) && segments.join('') === challengeValue,
   );
 }
 
@@ -413,7 +411,10 @@ export class HttpCustomDomainProvisioner implements CustomDomainProvisioner {
                 responseHeaders.set(PROVISIONER_SIGNATURE_HEADER, String(signature));
               }
               resolve(
-                new Response(responseBody, { status: incoming.statusCode ?? 502, headers: responseHeaders }),
+                new Response(responseBody, {
+                  status: incoming.statusCode ?? 502,
+                  headers: responseHeaders,
+                }),
               );
             })
             .catch(reject);

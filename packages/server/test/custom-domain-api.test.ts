@@ -109,6 +109,7 @@ async function fixture(enabled = true) {
   const app = createControlPlaneApp({
     repository,
     objectStore: new FileSystemObjectStore(root),
+    // SAFETY: this fixture already satisfies the asserted record shape.
     oidcVerifier: {
       async verify() {
         throw new Error('unused');

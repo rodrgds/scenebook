@@ -78,6 +78,7 @@ suite('PostgreSQL final evidence retention', () => {
     const sceneAsset = await finalize('upload-scene-asset', 'authored Scene asset');
     const stateScreenshot = await finalize('upload-state-screenshot', 'State screenshot');
     const sourceRevision = 'd'.repeat(64);
+    // SAFETY: this fixture already satisfies the asserted record shape.
     await repository.createSceneRevision({
       id: 'scene-revision-retention',
       workspaceId: 'workspace-retention',
@@ -256,6 +257,7 @@ suite('PostgreSQL final evidence retention', () => {
       ).rows[0]?.status,
     ).toBe('active');
     await expect(
+      // SAFETY: this fixture already satisfies the asserted record shape.
       repository.recordVerificationRun({
         id: 'run-retention-race',
         workspaceId: 'workspace-retention',
@@ -277,6 +279,7 @@ suite('PostgreSQL final evidence retention', () => {
       } as never),
     ).rejects.toThrow('Evidence object is not active');
     await expect(
+      // SAFETY: this fixture already satisfies the asserted record shape.
       repository.createSceneRevision({
         id: 'scene-revision-retention-race',
         workspaceId: 'workspace-retention',

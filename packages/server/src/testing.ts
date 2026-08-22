@@ -2205,7 +2205,11 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
       if (scene.workspaceId === value.workspaceId && hasAsset(scene.scene)) return true;
     }
     for (const [key, versions] of this.studioSceneVersions) {
-      if (key.startsWith(`${value.workspaceId}\0`) && versions.some((version) => hasAsset(asJsonDocument(version)))) return true;
+      if (
+        key.startsWith(`${value.workspaceId}\0`) &&
+        versions.some((version) => hasAsset(asJsonDocument(version)))
+      )
+        return true;
     }
     for (const baseline of this.verificationBaselines.values()) {
       if (baseline.workspaceId !== value.workspaceId) continue;
@@ -2804,9 +2808,7 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
       projectId: input.projectId,
       idempotencyKey: input.idempotencyKey,
       requestHash: input.requestHash,
-      promotionEvidence: input.promotionEvidence
-        ? clone(input.promotionEvidence)
-        : undefined,
+      promotionEvidence: input.promotionEvidence ? clone(input.promotionEvidence) : undefined,
     };
     if (current.currentReleaseId) {
       const previous = this.releases.get(current.currentReleaseId);

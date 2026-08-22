@@ -49,6 +49,7 @@ async function fixture(
   const app = createControlPlaneApp({
     repository,
     objectStore: new FileSystemObjectStore(root),
+    // SAFETY: this fixture already satisfies the asserted record shape.
     oidcVerifier: {
       verify: async () => {
         throw new Error('not used');
@@ -156,6 +157,7 @@ async function createApiToken(
     }),
   );
   expect(response.status).toBe(201);
+  // SAFETY: the exercised route returns this JSON body shape.
   return (await response.json()) as { credential: string; token: { id: string } };
 }
 
@@ -243,6 +245,7 @@ describe('human identity and private portal authorization', () => {
       request(apiToken.credential, {}),
     );
     expect(sessionResponse.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     const session = (await sessionResponse.json()) as {
       credential: string;
       session: { id: string };
@@ -276,6 +279,7 @@ describe('human identity and private portal authorization', () => {
       '/v1/auth/sessions',
       request(apiToken.credential, {}),
     );
+    // SAFETY: the exercised route returns this JSON body shape.
     const liveSession = (await liveSessionResponse.json()) as { credential: string };
     expect(
       (
@@ -427,6 +431,7 @@ describe('human identity and private portal authorization', () => {
       request(editor.credential, { body: 'Verify the selected region.' }),
     );
     expect(commentResponse.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     const commentBody = (await commentResponse.json()) as {
       review: { comments: Array<{ id: string; resolvedAt?: string; resolvedBy?: string }> };
     };
@@ -437,6 +442,7 @@ describe('human identity and private portal authorization', () => {
       request(editor.credential, { status: 'resolved' }, 'PUT'),
     );
     expect(resolved.status).toBe(200);
+    // SAFETY: the exercised route returns this JSON body shape.
     const resolvedBody = (await resolved.json()) as typeof commentBody;
     expect(resolvedBody.review.comments[0]).toMatchObject({
       id: commentId,
@@ -498,6 +504,7 @@ describe('human identity and private portal authorization', () => {
       }),
     );
     expect(shareResponse.status).toBe(201);
+    // SAFETY: the exercised route returns this JSON body shape.
     const share = (await shareResponse.json()) as {
       credential: string;
       share: { id: string };
@@ -564,6 +571,7 @@ describe('human identity and private portal authorization', () => {
       '/v1/auth/sessions',
       request(portalApiToken.credential, {}),
     );
+    // SAFETY: the exercised route returns this JSON body shape.
     const portalSession = (await portalSessionResponse.json()) as { credential: string };
     expect(
       (
@@ -582,6 +590,7 @@ describe('human identity and private portal authorization', () => {
     const handoffResponse = await app.request(handoffPath, request(portalSession.credential, {}));
     expect(handoffResponse.status, await handoffResponse.clone().text()).toBe(201);
     expect(handoffResponse.headers.get('cache-control')).toBe('private, no-store');
+    // SAFETY: the exercised route returns this JSON body shape.
     const handoffBody = (await handoffResponse.json()) as { url: string; expiresAt: string };
     const handoffUrl = new URL(handoffBody.url);
     expect(handoffUrl.origin).toBe('https://publish.scenebook.example.com');

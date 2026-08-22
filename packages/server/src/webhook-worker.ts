@@ -56,9 +56,7 @@ export class WebhookWorker {
             6 * 60 * 60 * 1_000,
             1_000 * 2 ** Math.max(0, delivery.attempts - 1),
           );
-          const report: Parameters<
-            ControlPlaneRepository['completeWebhookDelivery']
-          >[0] = {
+          const report: Parameters<ControlPlaneRepository['completeWebhookDelivery']>[0] = {
             id: delivery.id,
             succeeded: false,
             terminal,

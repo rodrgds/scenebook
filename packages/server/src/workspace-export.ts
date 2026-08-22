@@ -132,9 +132,7 @@ function safeDomain(domain: CustomDomainRecord): JsonObject {
   return asJsonDocument(withoutSecrets(asJsonDocument(domain)));
 }
 
-function safeGitHubInstallationBinding(
-  binding: GitHubInstallationBindingRecord,
-): JsonObject {
+function safeGitHubInstallationBinding(binding: GitHubInstallationBindingRecord): JsonObject {
   const safe: JsonObject = {
     id: binding.id,
     workspaceId: binding.workspaceId,
@@ -175,9 +173,7 @@ function safeUpload(upload: ArtifactUploadRecord): JsonObject {
   return safe;
 }
 
-function safeAudit(
-  audit: AuditEventRecord & { sequence: number },
-): JsonObject {
+function safeAudit(audit: AuditEventRecord & { sequence: number }): JsonObject {
   const safe: JsonObject = {
     sequence: audit.sequence,
     id: audit.id,

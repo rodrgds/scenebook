@@ -728,9 +728,7 @@ function privateShareLink(row: PrivateShareLinkRow): PrivateShareLinkRecord {
   return record;
 }
 
-function publicationLoginHandoff(
-  row: PublicationLoginHandoffRow,
-): PublicationLoginHandoffRecord {
+function publicationLoginHandoff(row: PublicationLoginHandoffRow): PublicationLoginHandoffRecord {
   let record: PublicationLoginHandoffRecord = {
     id: row.id,
     tokenHash: row.token_hash,
@@ -1203,13 +1201,13 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository, D
 
   constructor(databaseUrlOrPool: string | Pool) {
     this.pool = isDatabaseConnectionString(databaseUrlOrPool)
-        ? new Pool({
-            connectionString: databaseUrlOrPool,
-            max: 20,
-            idleTimeoutMillis: 30_000,
-            connectionTimeoutMillis: 5_000,
-          })
-        : databaseUrlOrPool;
+      ? new Pool({
+          connectionString: databaseUrlOrPool,
+          max: 20,
+          idleTimeoutMillis: 30_000,
+          connectionTimeoutMillis: 5_000,
+        })
+      : databaseUrlOrPool;
   }
 
   async health(): Promise<void> {

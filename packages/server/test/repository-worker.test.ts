@@ -75,6 +75,7 @@ describe('repository and webhook worker semantics', () => {
       nextAttemptAt: NOW,
     });
     const delivered: unknown[] = [];
+    // SAFETY: this fixture already satisfies the asserted record shape.
     const dispatcher = {
       deliver: async (_id: string, payload: unknown) => {
         delivered.push(payload);
@@ -120,6 +121,7 @@ describe('repository and webhook worker semantics', () => {
       attempts: 7,
       nextAttemptAt: NOW,
     });
+    // SAFETY: this fixture already satisfies the asserted record shape.
     const dispatcher = {
       deliver: async () => {
         throw new Error('upstream unavailable');
