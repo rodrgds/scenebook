@@ -1,4 +1,7 @@
 import { createHash, createPrivateKey } from 'node:crypto';
+import type { JsonObject, JsonValue } from '@scenebook/schema';
+
+import { isJsonObject } from './json-document.js';
 
 import { importPKCS8, SignJWT } from 'jose';
 import { transformSync } from 'esbuild';
@@ -370,7 +373,7 @@ function structuredScalarAt(
   }
   const matches: string[][] = [];
   const matchEnd = matchIndex + matchLength;
-  const walk = (node: unknown, path: readonly string[]): void => {
+  const walk = <N>(node: N, path: readonly string[]): void => {
     if (!node) return;
     if (isScalar(node)) {
       if (node.range && matchIndex >= node.range[0] && matchEnd <= node.range[1]) {
@@ -397,23 +400,39 @@ function structuredScalarAt(
     );
   }
   const path = matches[0]!;
-  const value = structuredClone(document.toJS({ maxAliasCount: 0 }) as unknown);
-  let cursor: unknown = value;
+  // SAFETY: document.toJS of a parsed YAML document only yields JSON-compatible values.
+  let value = structuredClone(document.toJS({ maxAliasCount: 0 })) as JsonValue;
+  let cursor: JsonValue | undefined = value;
+  const isIndexKey = (segment: string): boolean => /^\d+$/u.test(segment);
   for (const segment of path.slice(0, -1)) {
-    if (Array.isArray(cursor) && /^\d+$/u.test(segment)) cursor = cursor[Number(segment)];
-    else if (cursor && typeof cursor === 'object')
-      cursor = (cursor as Record<string, unknown>)[segment];
-    else cursor = undefined;
+    const next: JsonValue | undefined = isJsonObject(cursor)
+      ? cursor[segment]
+      : Array.isArray(cursor) && isIndexKey(segment)
+        ? cursor[Number(segment)]
+        : undefined;
+    if (next === undefined) {
+      cursor = undefined;
+      break;
+    }
+    cursor = next;
   }
-  const final = path.at(-1)!;
-  if (Array.isArray(cursor) && /^\d+$/u.test(final)) cursor[Number(final)] = '__SCENEBOOK_PATCH__';
-  else if (cursor && typeof cursor === 'object')
-    (cursor as Record<string, unknown>)[final] = '__SCENEBOOK_PATCH__';
-  else
+  if (cursor === undefined) {
     throw new GitHubSourceError(
       'github_patch_conflict',
       'Structured patch field could not be resolved',
     );
+  }
+  const final = path.at(-1)!;
+  if (isJsonObject(cursor)) {
+    cursor[final] = '__SCENEBOOK_PATCH__';
+  } else if (Array.isArray(cursor) && isIndexKey(final)) {
+    cursor[Number(final)] = '__SCENEBOOK_PATCH__';
+  } else {
+    throw new GitHubSourceError(
+      'github_patch_conflict',
+      'Structured patch field could not be resolved',
+    );
+  }
   return { path, normalizedStructure: JSON.stringify(value) };
 }
 
@@ -613,9 +632,10 @@ function validateSource(kind: GitHubSourceKind, source: string): void {
   try {
     if (kind === 'scene-yaml') parseSceneYaml(source);
     else if (kind === 'scene-json') {
-      let value: unknown;
+      let value: JsonValue;
       try {
-        value = JSON.parse(source) as unknown;
+        // SAFETY: JSON.parse of the source text only yields JSON-compatible values.
+        value = JSON.parse(source) as JsonValue;
       } catch {
         throw new GitHubSourceError(
           'github_patch_conflict',
@@ -863,11 +883,11 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
     input: {
       readonly method?: 'GET' | 'POST' | 'PUT' | 'PATCH';
       readonly token?: string;
-      readonly body?: Readonly<Record<string, unknown>>;
+      readonly body?: JsonObject;
       readonly allowNotFound?: boolean;
       readonly signal?: AbortSignal;
     } = {},
-  ): Promise<unknown | undefined> {
+  ): Promise<JsonValue | undefined> {
     if (!path.startsWith('/') || path.startsWith('//')) throw new Error('Unsafe GitHub API path');
     if (input.signal?.aborted) throw githubAbortError(input.signal);
     const controller = new AbortController();
@@ -877,18 +897,19 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     let response: Response;
     try {
+      const headers: Record<string, string> = {
+        accept: 'application/vnd.github+json',
+        authorization: `Bearer ${input.token ?? (await this.appJwt())}`,
+        'x-github-api-version': '2022-11-28',
+        'user-agent': 'scenebook-control-plane',
+      };
+      if (input.body) headers['content-type'] = 'application/json; charset=UTF-8';
       response = await this.fetchImpl(`${this.origin}${path}`, {
         method: input.method ?? 'GET',
         redirect: 'error',
         signal: requestSignal,
-        headers: {
-          accept: 'application/vnd.github+json',
-          authorization: `Bearer ${input.token ?? (await this.appJwt())}`,
-          'x-github-api-version': '2022-11-28',
-          ...(input.body ? { 'content-type': 'application/json; charset=UTF-8' } : {}),
-          'user-agent': 'scenebook-control-plane',
-        },
-        ...(input.body ? { body: JSON.stringify(input.body) } : {}),
+        headers,
+        body: input.body ? JSON.stringify(input.body) : undefined,
       });
     } catch (error) {
       if (input.signal?.aborted) throw githubAbortError(input.signal);
@@ -974,7 +995,8 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
       byteLength,
     );
     try {
-      return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
+      // SAFETY: JSON.parse of the capped response body only yields JSON-compatible values.
+      return JSON.parse(new TextDecoder().decode(bytes)) as JsonValue;
     } catch {
       throw new GitHubSourceError('github_invalid_response', 'GitHub API returned invalid JSON');
     }
@@ -1021,7 +1043,7 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
     installationId: string,
     path: string,
     input: Omit<Parameters<RemoteGitHubAppSourceClient['request']>[1], 'token'> = {},
-  ): Promise<unknown | undefined> {
+  ): Promise<JsonValue | undefined> {
     return this.request(path, { ...input, token: await this.installationToken(installationId) });
   }
 
@@ -1148,7 +1170,7 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
       .join('/')}`;
     const existing = await this.installationRequest(input.installationId, refPath, {
       allowNotFound: true,
-      ...(input.signal ? { signal: input.signal } : {}),
+      signal: input.signal,
     });
     if (existing !== undefined) {
       const parsed = RefResponseSchema.safeParse(existing);
@@ -1165,7 +1187,7 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
       await this.installationRequest(input.installationId, `/repos/${repository}/git/refs`, {
         method: 'POST',
         body: { ref: `refs/heads/${input.branch}`, sha: input.baseCommitSha },
-        ...(input.signal ? { signal: input.signal } : {}),
+        signal: input.signal,
       }),
     );
     if (!created.success)
@@ -1199,7 +1221,7 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
       .max(10)
       .safeParse(
         await this.installationRequest(input.installationId, `/repos/${repo}/pulls?${query}`, {
-          ...(input.signal ? { signal: input.signal } : {}),
+          signal: input.signal,
         }),
       );
     if (!existing.success)
@@ -1215,7 +1237,7 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
       await this.installationRequest(input.installationId, `/repos/${repo}/pulls`, {
         method: 'POST',
         body: { title: input.title, head: input.branch, base: input.base, body: input.body },
-        ...(input.signal ? { signal: input.signal } : {}),
+        signal: input.signal,
       }),
     );
     if (!created.success)
@@ -1253,7 +1275,7 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
       .max(100);
     const existing = schema.safeParse(
       await this.installationRequest(input.installationId, `/repos/${repo}/issues?${query}`, {
-        ...(input.signal ? { signal: input.signal } : {}),
+        signal: input.signal,
       }),
     );
     if (!existing.success)
@@ -1271,7 +1293,7 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
       await this.installationRequest(input.installationId, `/repos/${repo}/issues`, {
         method: 'POST',
         body: { title: input.title, body: `${marker}\n${input.body}` },
-        ...(input.signal ? { signal: input.signal } : {}),
+        signal: input.signal,
       }),
     );
     if (!created.success)
@@ -1332,7 +1354,7 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
       installationId: input.installationId,
       repository: input.repository,
       commitSha: state.commitSha,
-      ...(input.signal ? { signal: input.signal } : {}),
+      signal: input.signal,
     });
     const repository = encodeRepository(input.repository);
     const matching = [] as z.infer<typeof CheckRunResponseSchema>[];
@@ -1398,7 +1420,7 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
         commitSha: existing.head_sha,
         status: 'completed',
         conclusion: existing.conclusion,
-        ...(existing.html_url ? { url: this.safeWebUrl(existing.html_url) } : {}),
+        url: existing.html_url ? this.safeWebUrl(existing.html_url) : undefined,
       };
     }
     const body = {
@@ -1423,7 +1445,7 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
         {
           method: existing ? 'PATCH' : 'POST',
           body: mutationBody,
-          ...(input.signal ? { signal: input.signal } : {}),
+          signal: input.signal,
         },
       ),
     );
@@ -1444,8 +1466,8 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
       id: response.data.id,
       commitSha: response.data.head_sha,
       status: state.status,
-      ...(state.conclusion ? { conclusion: state.conclusion } : {}),
-      ...(response.data.html_url ? { url: this.safeWebUrl(response.data.html_url) } : {}),
+      conclusion: state.conclusion,
+      url: response.data.html_url ? this.safeWebUrl(response.data.html_url) : undefined,
     };
   }
 
@@ -1468,7 +1490,7 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
       installationId: input.installationId,
       repository: input.repository,
       commitSha: input.baseCommitSha,
-      ...(input.signal ? { signal: input.signal } : {}),
+      signal: input.signal,
     });
     const base = await this.readAtRef({ ...input, ref: input.baseCommitSha });
     if (base.blobSha !== input.expectedBlobSha)
@@ -1506,7 +1528,7 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
               sha: input.expectedBlobSha,
               branch,
             },
-            ...(input.signal ? { signal: input.signal } : {}),
+            signal: input.signal,
           },
         ),
       );
@@ -1552,7 +1574,8 @@ export class RemoteGitHubAppSourceClient implements GitHubSourceClient {
       branch,
       pullRequestNumber: pull.number,
       pullRequestUrl: pull.url,
-      ...(issue ? { issueNumber: issue.number, issueUrl: issue.url } : {}),
+      issueNumber: issue?.number,
+      issueUrl: issue?.url,
     };
   }
 }
