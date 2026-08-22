@@ -319,7 +319,7 @@
           <div>
             <strong
               >{releaseBlocked
-                ? 'Draft source handoff — release blockers remain'
+                ? 'Draft source handoff: release blockers remain'
                 : 'Source is ready for the release pipeline'}</strong
             >
             <small

@@ -111,7 +111,7 @@ Self-hosters should follow the recovery-aware [deployment runbook](./deploy/SELF
 
 ## Licensing
 
-The integration surface—schema, protocol, Playwright adapter, viewer, and renderer SDK—is licensed under Apache-2.0. Studio and hosted-capable collaboration/publication services are licensed under AGPL-3.0-only; commercial licensing requires a separate agreement. See [LICENSE.md](./LICENSE.md) for the exact source boundaries and third-party notices. This split is a product decision, not legal advice, and does not represent that counsel has reviewed the project.
+The Apache-2.0 integration surface covers the schema, protocol, Playwright adapter, viewer, and renderer SDK. Studio and hosted-capable collaboration/publication services are licensed under AGPL-3.0-only; commercial licensing requires a separate agreement. See [LICENSE.md](./LICENSE.md) for the exact source boundaries and third-party notices. This split is a product decision, not legal advice, and does not represent that counsel has reviewed the project.
 
 ## Package releases
 

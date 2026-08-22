@@ -321,7 +321,7 @@ export const RunArtifactSchema = z
     }
   });
 
-// Compatibility alias used by adapters that call the evidence layer simply Run.
+// Compatibility alias: adapters refer to the evidence artifact as Run.
 export const RunSchema = RunArtifactSchema;
 
 export const BuildRunReferenceSchema = z

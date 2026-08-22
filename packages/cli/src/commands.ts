@@ -108,7 +108,7 @@ import {
 } from './playwright-target.js';
 import { CliError, type CliContext, type LoadedConfig, type ParsedArguments } from './types.js';
 
-const HELP = `Scenebook — portable product stories that stay connected to the product
+const HELP = `Scenebook: portable product stories that stay connected to the product
 
 Usage: scenebook <command> [options]
 

@@ -455,7 +455,7 @@ User grants may be `view` or `review`; link grants are always `view`. Review acc
 For an authenticated User grant, the Console calls `POST .../portal/login-handoffs` with its signed
 control-plane Session and then navigates to the returned first-party publication `/login` URL. API
 tokens cannot mint handoffs directly. The fragment contains a random 256-bit, short-lived,
-single-use credential—not the Session—and `/login` clears it before a strict same-origin bootstrap
+single-use credential, not the Session. `/login` clears it before a strict same-origin bootstrap
 POST. The gateway consumes it over the private service network using
 `SCENEBOOK_GATEWAY_EXCHANGE_SECRET`, then sets an `HttpOnly`, `SameSite` publication cookie. The
 stored digest is bound to the source Session, exact User grant, publication origin, and exact return
@@ -587,9 +587,9 @@ any nonremoved claim -> removing -> removed
 DNS verification proves only control of the TXT record. It never claims that a certificate exists
 or that a CDN/ingress route is live. Activation also requires a current immutable Channel Release,
 then a configured provisioner must explicitly report both `certificate: "ready"` and
-`routing: "ready"`. Disable completes only after `routing: "disabled"`. Removal completes—and the
-database uniqueness claims are released—only after both `certificate: "removed"` and
-`routing: "removed"`. Pending, failed, mismatched, unauthenticated, or unavailable provider results
+`routing: "ready"`. Disable completes only after `routing: "disabled"`. Removal completes only after
+both `certificate: "removed"` and `routing: "removed"`, which also releases the database uniqueness
+claims. Pending, failed, mismatched, unauthenticated, or unavailable provider results
 remain non-active and append an audit event.
 
 The provider endpoint receives an HMAC-authenticated JSON request containing `schemaVersion: 1`,

@@ -65,7 +65,7 @@ Unmodified Playwright tests still produce honest review evidence. The CLI safety
 
 ## Controlled draft recording
 
-`scenebook record <url>` uses the pinned Playwright codegen process only as an onboarding path. It runs with an isolated disposable profile and environment, replaces every navigation target and entered scalar with an explicit fixture before regular-file persistence, and creates a Captured—not Verified—Scene draft.
+`scenebook record <url>` uses the pinned Playwright codegen process only as an onboarding path. It runs with an isolated disposable profile and environment, replaces every navigation target and entered scalar with an explicit fixture before regular-file persistence, and creates a Scene draft that is Captured, not Verified.
 
 The adjacent `recording-review.json` binds the persisted source hash and reports generic Step boundaries, locator brittleness, missing outcome assertions, fixed/dynamic waits, and file impact without copying source snippets or application values. Its project-relative `recording-review.patch` contains zero-context insertion hunks and an exact precondition/result contract; it is never applied automatically. Those suggestions help curate ordinary readable Playwright, but maintained checks and approved Run evidence remain the source of verification truth.
 
@@ -91,7 +91,7 @@ scenebook ci merge-shards
 
 `ci merge-shards` rejects missing or duplicate indices, mixed repository provenance, and duplicate Scene/Target ownership. Only its complete `.scenebook/runs/build.json` is eligible for control-plane ingestion.
 
-By default, the GitHub Action runs `scenebook ci` and exact Run screenshot OCR inside the repository checkout, then always retains a downloadable, script-free visual-review artifact—even when verification fails. It requests no OIDC or Checks token and requires only `contents: read`.
+By default, the GitHub Action runs `scenebook ci` and exact Run screenshot OCR inside the repository checkout, then always retains a downloadable, script-free visual-review artifact, even when verification fails. It requests no OIDC or Checks token and requires only `contents: read`.
 
 The artifact generator does not trust the reporter directory as ordinary upload input. It accepts only a Build created after the current Action invocation and bound to the exact `GITHUB_SHA`, reads that Build and its content-bound Runs through bounded, no-follow file descriptors, rejects traversal and symlinks, verifies canonical Run hashes, verifies screenshot SHA-256 and byte length, and accepts only bounded PNG/JPEG streams with matching decoded dimensions. Screenshot bytes are copied only when the Run, its selected attempt, and the individual State all have complete clear privacy attestations from a non-placeholder scanner. Unknown, warning, blocked, quarantined, malformed, stale, oversized, or mismatched screenshots are withheld; their paths and bytes never enter the artifact. A failure before the reporter starts still produces a metadata-only report containing the original verification exit code.
 
@@ -136,7 +136,7 @@ steps:
 
 Scenebook posts only the bounded `github-checks.json` created for the exact full `GITHUB_SHA` and active `GITHUB_REPOSITORY`, and only when the freshly generated artifact proves an integrity-clean current Build. It links the Check to the retained artifact, strips raw annotation details, forces the conclusion to fail closed if it disagrees with the exact Build status, and sends it to GitHub's HTTPS Checks endpoint. Fork pull requests and every `pull_request_target` event are deliberately skipped before the token is validated or used. Do not substitute a personal access token, expose secrets to fork workflows, or use `pull_request_target` to execute pull-request code. The workflow author remains responsible for granting `checks: write`; the Action cannot broaden its own permissions.
 
-Hosted evidence upload is a separate, explicit mode. The calling job—not the composite Action—must grant GitHub's OIDC permission:
+Hosted evidence upload is a separate, explicit mode. The calling job, not the composite Action, must grant GitHub's OIDC permission:
 
 ```yaml
 permissions:

@@ -285,7 +285,7 @@
               ? `${warnings.length} improvements recommended`
               : 'Ready for portable export'}
         </h2>
-        <p>Checks source only — not product replay or visual comparison.</p>
+        <p>Checks source only, not product replay or visual comparison.</p>
       </div>
     </div>
     <div class="audit-meta">

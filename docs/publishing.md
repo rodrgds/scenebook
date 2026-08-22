@@ -160,7 +160,7 @@ and retryable error states; and retains one idempotency key across retries of th
 form. The server applies structured privacy policy, encrypts accepted fields and CTA identity at
 rest, persists the selected CTA identity for delivery/audit, and queues only its allowed configured
 webhook. CTA fields are never copied into analytics events. The CTA token is a public, narrowly
-validated credential—not a secret or admin token—and its environment variable remains independent
+validated credential, not a secret or admin token. Its environment variable remains independent
 from public analytics.
 
 ### Share links
@@ -251,8 +251,8 @@ scenebook rollback --channel public --release <release-hash> \
 ## Deploying the static release
 
 `scenebook publish --channel <channel> --candidate <hash> --destination <directory> --actor <id> --yes` promotes the complete, already sealed static release directory. Ship
-that entire directory—with `manifest.json`, pages, scripts, styles, media, remix archives, and
-evidence—to an independent static origin or CDN. Do not copy only `index.html`, and do not serve
+that entire directory, including `manifest.json`, pages, scripts, styles, media, remix archives,
+and evidence, to an independent static origin or CDN. Do not copy only `index.html`, and do not serve
 active HTML, JavaScript, CSS, or SVG from the administrative control-plane origin. Canonical and
 share URLs are correct only when `public.baseUrl` matches the deployed root.
 
@@ -323,7 +323,7 @@ Standalone HTML dispatches the same lifecycle from its `<main>` element, so list
 `document` or `window` can observe it. When that document is embedded, it sends only those five
 allowlisted event types to the same-origin iframe wrapper. The wrapper validates both the child
 window and origin, re-emits local DOM events, and can relay observational messages to its own
-parent using the exact referrer origin—never a wildcard. The iframe bridge accepts no incoming
+parent using the exact referrer origin, never a wildcard. The iframe bridge accepts no incoming
 controls. CTA messages crossing either bridge contain only the Scene/Step navigation snapshot,
 stable CTA ID, CTA kind/label, and outcome status; submitted fields, authored webhook IDs,
 submission IDs, and nested field definitions never leave through `postMessage`. Branch cancellation is only synchronous in standalone/Web Component DOM events;
