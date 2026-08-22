@@ -1,10 +1,25 @@
 import { createHash } from 'node:crypto';
+
+/** Format YAML through the oxfmt CLI so generated fixtures match repository formatting. */
+async function formatYaml(source: string, filepath: string): Promise<string> {
+  const child = Bun.spawn(['bunx', 'oxfmt', '--stdin-filepath', filepath], {
+    stdin: 'pipe',
+    stdout: 'pipe',
+    stderr: 'inherit',
+  });
+  child.stdin.write(source);
+  child.stdin.end();
+  const formatted = await new Response(child.stdout).text();
+  if ((await child.exited) !== 0 || formatted.length === 0) {
+    throw new Error('oxfmt failed to format the generated Scene');
+  }
+  return formatted;
+}
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { chromium, type Locator, type Page } from '@playwright/test';
-import { format, resolveConfig } from 'prettier';
 import { stringify } from 'yaml';
 
 const repositoryRoot = resolve(import.meta.dir, '..');
@@ -337,8 +352,7 @@ async function main(): Promise<void> {
     await rename(stagingAssets, outputAssets);
     const source = stringify(scene, { lineWidth: 110, aliasDuplicateObjects: false });
     const scenePath = join(sceneDirectory, 'scene.yaml');
-    const prettierConfig = await resolveConfig(scenePath);
-    await writeFile(scenePath, await format(source, { ...prettierConfig, parser: 'yaml' }));
+    await writeFile(scenePath, await formatYaml(source, scenePath));
     const written = await readFile(scenePath, 'utf8');
     if (!written.includes('invite-member')) throw new Error('Scene source was not written');
   } finally {
