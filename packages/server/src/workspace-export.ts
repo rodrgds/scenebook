@@ -1,4 +1,5 @@
 import { sha256, stableStringify } from '@scenebook/core';
+import type { JsonObject, JsonValue } from '@scenebook/schema';
 import { Zip, ZipPassThrough } from 'fflate';
 
 import type {
@@ -63,16 +64,16 @@ interface ExportAsset {
   readonly object?: StoredObject;
 }
 
-interface ExportMember {
+type ExportMember = {
   readonly path: string;
   readonly sha256: string;
   readonly byteLength: number;
   readonly mediaType: string;
-}
+};
 
 export interface PreparedWorkspaceExport {
   readonly filename: string;
-  readonly manifest: Readonly<Record<string, unknown>>;
+  readonly manifest: JsonObject;
   readonly body: ReadableStream<Uint8Array>;
 }
 
@@ -83,7 +84,11 @@ export class WorkspaceExportIntegrityError extends Error {
   }
 }
 
-function withoutSecrets(value: unknown, key = '', depth = 0): unknown {
+function isJsonObjectValue(value: JsonValue): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function withoutSecrets(value: JsonValue, key = '', depth = 0): JsonValue {
   if (depth > 24) return '[depth-limit]';
   if (
     /token|secret|password|credential|encrypted|challengevalue|operationid|operationkey|iphash/iu.test(
@@ -93,15 +98,19 @@ function withoutSecrets(value: unknown, key = '', depth = 0): unknown {
     return '[withheld]';
   }
   if (Array.isArray(value)) return value.map((item) => withoutSecrets(item, key, depth + 1));
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value).map(([childKey, child]) => [
-        childKey,
-        withoutSecrets(child, childKey, depth + 1),
-      ]),
-    );
+  if (isJsonObjectValue(value)) {
+    const output: JsonObject = {};
+    for (const [childKey, child] of Object.entries(value)) {
+      output[childKey] = withoutSecrets(child, childKey, depth + 1);
+    }
+    return output;
   }
   return value;
+}
+
+// SAFETY: workspace export records are schema-derived and hold only JSON-compatible values.
+function asJsonDocument<T>(value: T): JsonObject {
+  return value as JsonObject;
 }
 
 function safeChannel(channel: ChannelRecord): Omit<ChannelRecord, 'analyticsTokenHash'> {
@@ -119,14 +128,14 @@ function safeJob(job: VerificationJobRecord): Omit<VerificationJobRecord, 'lease
   return safe;
 }
 
-function safeDomain(domain: CustomDomainRecord): Readonly<Record<string, unknown>> {
-  return withoutSecrets(domain) as Readonly<Record<string, unknown>>;
+function safeDomain(domain: CustomDomainRecord): JsonObject {
+  return asJsonDocument(withoutSecrets(asJsonDocument(domain)));
 }
 
 function safeGitHubInstallationBinding(
   binding: GitHubInstallationBindingRecord,
-): Readonly<Record<string, unknown>> {
-  return {
+): JsonObject {
+  const safe: JsonObject = {
     id: binding.id,
     workspaceId: binding.workspaceId,
     projectId: binding.projectId,
@@ -138,12 +147,13 @@ function safeGitHubInstallationBinding(
     createdAt: binding.createdAt,
     updatedAt: binding.updatedAt,
     version: binding.version,
-    ...(binding.revokedAt ? { revokedAt: binding.revokedAt } : {}),
   };
+  if (binding.revokedAt !== undefined) safe['revokedAt'] = binding.revokedAt;
+  return safe;
 }
 
-function safeUpload(upload: ArtifactUploadRecord): Readonly<Record<string, unknown>> {
-  return {
+function safeUpload(upload: ArtifactUploadRecord): JsonObject {
+  const safe: JsonObject = {
     id: upload.id,
     workspaceId: upload.workspaceId,
     projectId: upload.projectId,
@@ -151,10 +161,10 @@ function safeUpload(upload: ArtifactUploadRecord): Readonly<Record<string, unkno
     commit: upload.commit,
     ref: upload.ref,
     status: upload.status,
-    manifestHash: upload.manifestHash,
+    manifestHash: upload.manifestHash ?? '',
     createdAt: upload.createdAt,
     expiresAt: upload.expiresAt,
-    finalizedAt: upload.finalizedAt,
+    finalizedAt: upload.finalizedAt ?? '',
     objects: upload.objects.map((object) => ({
       sha256: object.sha256,
       byteLength: object.byteLength,
@@ -162,15 +172,16 @@ function safeUpload(upload: ArtifactUploadRecord): Readonly<Record<string, unkno
       status: object.status,
     })),
   };
+  return safe;
 }
 
 function safeAudit(
   audit: AuditEventRecord & { sequence: number },
-): Readonly<Record<string, unknown>> {
-  return {
+): JsonObject {
+  const safe: JsonObject = {
     sequence: audit.sequence,
     id: audit.id,
-    workspaceId: audit.workspaceId,
+    workspaceId: audit.workspaceId ?? '',
     actorId: audit.actorId,
     action: audit.action,
     targetType: audit.targetType,
@@ -179,6 +190,7 @@ function safeAudit(
     metadata: withoutSecrets(audit.metadata),
     createdAt: audit.createdAt,
   };
+  return safe;
 }
 
 function assetIdentity(asset: { sha256: string; mediaType: string }): string {
@@ -1053,10 +1065,12 @@ export async function prepareWorkspaceExport(
     members: [recordMember, restorationMember, ...assetMembers],
     assets: inventoryValue,
   };
-  const manifest = {
+  // SAFETY: the manifest is assembled from schema-derived records that hold only
+  // JSON-compatible values, so it satisfies the JsonObject document contract.
+  const manifest = asJsonDocument({
     ...manifestBase,
     manifestHash: sha256(stableStringify(manifestBase)),
-  };
+  });
   const manifestBytes = encodeJson(manifest);
   const metadataBytes =
     manifestBytes.byteLength + recordsBytes.byteLength + restorationBytes.byteLength;

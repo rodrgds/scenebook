@@ -8,6 +8,7 @@ import type {
   Review,
   RunArtifact,
   Scene,
+  JsonObject,
 } from '@scenebook/schema';
 
 export interface WorkspaceRecord {
@@ -33,7 +34,7 @@ export interface ProjectRecord {
  */
 export interface StudioSceneDocument {
   readonly id: string;
-  readonly scene: Readonly<Record<string, unknown>>;
+  readonly scene: JsonObject;
   readonly savedAt: number;
   readonly revision: number;
   readonly storageVersion: 4;
@@ -50,7 +51,7 @@ export interface StudioPayloadReference {
 }
 
 export interface StudioProjectDocument {
-  readonly project: Readonly<Record<string, unknown>>;
+  readonly project: JsonObject;
   readonly revision: number;
   readonly savedAt: number;
 }
@@ -483,7 +484,7 @@ export interface EvidenceRetentionEventRecord {
     | 'delete-failed'
     | 'claim-lost';
   readonly reason: string;
-  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly metadata: JsonObject;
   readonly createdAt: string;
 }
 
@@ -691,7 +692,7 @@ export interface AuditEventRecord {
   readonly targetId: string;
   readonly requestId: string;
   readonly ipHash?: string;
-  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly metadata: JsonObject;
   readonly createdAt: string;
 }
 

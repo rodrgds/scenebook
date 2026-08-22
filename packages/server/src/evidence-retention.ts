@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import type { JsonObject } from '@scenebook/schema';
+
 import { describeError, type Logger } from './logger.js';
 import type { MetricsRegistry } from './metrics.js';
 import { immutableObjectKey, type FinalObjectDeleter } from './object-store.js';
@@ -97,7 +99,7 @@ export class EvidenceRetentionWorker {
   private async runScheduledPass(): Promise<void> {
     if (this.stopping || this.active) return;
     let workspaceIds = await this.options.repository.listEvidenceRetentionWorkspaceIds({
-      ...(this.scheduledCursor ? { afterWorkspaceId: this.scheduledCursor } : {}),
+      afterWorkspaceId: this.scheduledCursor,
       limit: 1,
     });
     if (workspaceIds.length === 0 && this.scheduledCursor) {
@@ -114,26 +116,28 @@ export class EvidenceRetentionWorker {
     claim: EvidenceRetentionClaimRecord | EvidenceRetentionEvaluationRecord,
     disposition: EvidenceRetentionEventRecord['disposition'],
     reason: string,
-    metadata: Readonly<Record<string, unknown>> = {},
+    metadata: JsonObject = {},
     createdAt = this.now().toISOString(),
   ): { readonly event: EvidenceRetentionEventRecord; readonly audit: AuditEventRecord } {
-    const event: EvidenceRetentionEventRecord = {
+    let event: EvidenceRetentionEventRecord = {
       id: this.eventId(),
       workspaceId: claim.workspaceId,
       sha256: claim.sha256,
       mediaType: claim.mediaType,
-      ...('claimId' in claim && claim.claimId ? { claimId: claim.claimId } : {}),
       disposition,
       reason,
       metadata: {
         byteLength: claim.byteLength,
         retentionClass: claim.retentionClass,
         lastFinalizedAt: claim.lastFinalizedAt,
-        projectIds: claim.projectIds,
+        projectIds: [...claim.projectIds],
         ...metadata,
       },
       createdAt,
     };
+    if ('claimId' in claim && typeof claim.claimId === 'string') {
+      event = { ...event, claimId: claim.claimId };
+    }
     return {
       event,
       audit: {
@@ -143,7 +147,10 @@ export class EvidenceRetentionWorker {
         action: `evidence.retention-${disposition}`,
         targetType: 'evidence-object',
         targetId: `${claim.sha256}:${claim.mediaType}`,
-        requestId: 'claimId' in claim && claim.claimId ? claim.claimId : `evaluation:${event.id}`,
+        requestId:
+          'claimId' in claim && typeof claim.claimId === 'string'
+            ? claim.claimId
+            : `evaluation:${event.id}`,
         metadata: event.metadata,
         createdAt,
       },
@@ -154,7 +161,7 @@ export class EvidenceRetentionWorker {
     claim: EvidenceRetentionClaimRecord | EvidenceRetentionEvaluationRecord,
     disposition: EvidenceRetentionEventRecord['disposition'],
     reason: string,
-    metadata: Readonly<Record<string, unknown>> = {},
+    metadata: JsonObject = {},
   ): Promise<void> {
     const records = this.eventRecords(claim, disposition, reason, metadata);
     await this.options.repository.appendEvidenceRetentionEventAndAudit(
@@ -167,7 +174,7 @@ export class EvidenceRetentionWorker {
     claim: EvidenceRetentionClaimRecord | EvidenceRetentionEvaluationRecord,
     disposition: EvidenceRetentionEventRecord['disposition'],
     reason: string,
-    metadata: Readonly<Record<string, unknown>> = {},
+    metadata: JsonObject = {},
   ): Promise<void> {
     await this.event(claim, disposition, reason, metadata).catch((error) => {
       this.options.logger.warn('Evidence retention audit recording failed', {

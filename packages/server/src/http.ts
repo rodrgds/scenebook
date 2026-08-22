@@ -1,13 +1,15 @@
+import type { JsonObject, JsonValue } from '@scenebook/schema';
+
 export class HttpError extends Error {
   readonly status: number;
   readonly code: string;
-  readonly details?: Readonly<Record<string, unknown>>;
+  readonly details?: JsonObject;
 
   constructor(
     status: number,
     code: string,
     message: string,
-    details?: Readonly<Record<string, unknown>>,
+    details?: JsonObject,
   ) {
     super(message);
     this.name = 'HttpError';
@@ -78,14 +80,15 @@ export async function readLimitedBytes(
   return output;
 }
 
-export async function readJsonBody(request: Request, maximumBytes: number): Promise<unknown> {
+export async function readJsonBody(request: Request, maximumBytes: number): Promise<JsonValue> {
   const mediaType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
   if (mediaType !== 'application/json')
     throw new HttpError(415, 'json_required', 'Content-Type must be application/json');
   const bytes = await readLimitedBytes(request, maximumBytes);
   if (bytes.byteLength === 0) throw new HttpError(400, 'body_required', 'Request body is required');
   try {
-    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
+    // SAFETY: JSON.parse of a fatal-decoded UTF-8 body only yields JSON-compatible values.
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as JsonValue;
   } catch (error) {
     throw new HttpError(400, 'invalid_json', 'Request body is not valid UTF-8 JSON', {
       cause: error instanceof Error ? error.name : 'unknown',

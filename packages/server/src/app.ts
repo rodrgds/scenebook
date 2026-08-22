@@ -17,6 +17,9 @@ import {
   type ReleasePublication,
   type Step,
   type StepCta,
+  type JsonObject,
+  type ReviewChange,
+  type JsonValue,
 } from '@scenebook/schema';
 import {
   artifactHash,
@@ -166,14 +169,24 @@ export interface AppVariables {
   verificationRunner?: VerificationRunnerRecord;
 }
 
+const checkRunAuditMetadata = (checkRun: GitHubCheckRunResult | undefined): JsonObject => {
+  if (!checkRun) return {};
+  const metadata: JsonObject = {
+    checkRunId: checkRun.id,
+    checkRunStatus: checkRun.status,
+  };
+  if (checkRun.conclusion) metadata['checkRunConclusion'] = checkRun.conclusion;
+  return metadata;
+};
+
 interface HumanPrincipal {
   readonly userId: string;
   readonly credential: 'api-token' | 'session';
   readonly credentialId: string;
   readonly workspaceId: string;
   readonly scopes: readonly IdentityScope[];
-  readonly projectId?: string;
-  readonly channelId?: string;
+  projectId?: string;
+  channelId?: string;
 }
 
 export type AppEnvironment = { Variables: AppVariables };
@@ -200,7 +213,7 @@ interface AnalyticsCounts {
   readonly uniqueSubjects: AnalyticsCountMap;
 }
 
-function emptyAnalyticsCountMap(): AnalyticsCountMap {
+function emptyAnalyticsCountMap() {
   return { view: 0, start: 0, step: 0, complete: 0, cta: 0, error: 0 };
 }
 
@@ -302,14 +315,37 @@ function responseError(
   code: string,
   message: string,
   requestId: string,
-  details?: unknown,
+  details?: JsonObject,
 ): Response {
-  return new Response(
-    JSON.stringify({
-      error: { code, message, ...(details === undefined ? {} : { details }), requestId },
-    }),
-    { status, headers: { 'content-type': 'application/json; charset=UTF-8' } },
-  );
+  const body: JsonObject = { code, message, requestId };
+  if (details !== undefined) body['details'] = details;
+  return new Response(JSON.stringify({ error: body }), {
+    status,
+    headers: { 'content-type': 'application/json; charset=UTF-8' },
+  });
+}
+
+function isCtaBooleanValue(value: string | boolean | undefined): value is boolean {
+  return typeof value === 'boolean';
+}
+
+function isCtaTextValue(value: string | boolean | undefined): value is string {
+  return typeof value === 'string';
+}
+
+interface PgErrorCode {
+  readonly code?: unknown;
+}
+
+function hasDatabaseCode<T>(error: T, code: string): boolean {
+  return error instanceof Error && 'code' in error && error.code === code;
+}
+
+function databaseErrorCode<T>(error: T): string | undefined {
+  for (const candidate of ['23505', '23503', '23514']) {
+    if (hasDatabaseCode(error, candidate)) return candidate;
+  }
+  return undefined;
 }
 
 function assertCtaFieldContract(
@@ -370,7 +406,7 @@ function assertCtaFieldContract(
     }
     const value = fields[field.id];
     if (field.type === 'checkbox') {
-      if (typeof value !== 'boolean') {
+      if (!isCtaBooleanValue(value)) {
         throw new HttpError(
           422,
           'cta_field_type_mismatch',
@@ -386,7 +422,7 @@ function assertCtaFieldContract(
       }
       continue;
     }
-    if (typeof value !== 'string') {
+    if (!isCtaTextValue(value)) {
       throw new HttpError(422, 'cta_field_type_mismatch', `CTA field ${field.id} must be text`);
     }
     if (field.required && value.trim().length === 0) {
@@ -458,8 +494,8 @@ function artifactIngestionScope(
 
 interface HumanAuthorizationScope {
   readonly workspaceId: string;
-  readonly projectId?: string;
-  readonly channelId?: string;
+  projectId?: string;
+  channelId?: string;
   readonly permission: IdentityScope;
 }
 
@@ -493,12 +529,10 @@ function humanAuthorizationScope(
   else if (/\/channels(?:\/|$)/u.test(path))
     permission = method === 'GET' ? 'channel:read' : 'channel:write';
   else permission = method === 'GET' ? 'project:read' : 'project:write';
-  return {
-    workspaceId,
-    ...(projectId ? { projectId } : {}),
-    ...(channelId ? { channelId } : {}),
-    permission,
-  };
+  const scope: HumanAuthorizationScope = { workspaceId, permission };
+  if (projectId) scope.projectId = projectId;
+  if (channelId) scope.channelId = channelId;
+  return scope;
 }
 
 function githubRefName(ref: string): string {
@@ -549,25 +583,40 @@ function numberQuery(context: AppContext, name: string, fallback: number, maximu
   return value;
 }
 
-function studioSceneCursor(
-  value: string | undefined,
-): { savedAt: number; sceneId: string } | undefined {
+interface StudioSceneCursor {
+  readonly savedAt: number;
+  readonly sceneId: string;
+}
+
+function isJsonObjectValue(value: JsonValue): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStudioSceneCursorValue(value: JsonValue): value is JsonObject & StudioSceneCursor {
+  if (!isJsonObjectValue(value)) return false;
+  const savedAt = value['savedAt'];
+  const sceneId = value['sceneId'];
+  return (
+    typeof savedAt === 'number' &&
+    Number.isSafeInteger(savedAt) &&
+    savedAt >= 0 &&
+    IdSchema.safeParse(sceneId).success
+  );
+}
+
+function studioSceneCursor(value: string | undefined): StudioSceneCursor | undefined {
   if (!value) return undefined;
+  let parsed: JsonValue;
   try {
-    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as unknown;
-    if (!parsed || typeof parsed !== 'object') throw new Error('invalid cursor');
-    const candidate = parsed as { savedAt?: unknown; sceneId?: unknown };
-    if (
-      !Number.isSafeInteger(candidate.savedAt) ||
-      Number(candidate.savedAt) < 0 ||
-      !IdSchema.safeParse(candidate.sceneId).success
-    ) {
-      throw new Error('invalid cursor');
-    }
-    return { savedAt: Number(candidate.savedAt), sceneId: String(candidate.sceneId) };
+    // SAFETY: cursors are server-encoded JSON; JSON.parse yields JSON-compatible values.
+    parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as JsonValue;
   } catch {
     throw new HttpError(400, 'invalid_cursor', 'Hosted Studio catalog cursor is invalid');
   }
+  if (!isStudioSceneCursorValue(parsed)) {
+    throw new HttpError(400, 'invalid_cursor', 'Hosted Studio catalog cursor is invalid');
+  }
+  return { savedAt: parsed.savedAt, sceneId: parsed.sceneId };
 }
 
 function encodeStudioSceneCursor(value: { savedAt: number; id: string }): string {
@@ -679,12 +728,11 @@ function sameStringSet(left: readonly string[], right: readonly string[]): boole
   );
 }
 
+type ComparableReviewChange = Omit<ReviewChange, 'source'>;
+
 function comparableReviewChanges(
-  changes: readonly {
-    readonly source?: unknown;
-    readonly [key: string]: unknown;
-  }[],
-): unknown {
+  changes: readonly ReviewChange[],
+): readonly ComparableReviewChange[] {
   return changes.map(({ source: _source, ...change }) => change);
 }
 
@@ -730,6 +778,7 @@ function releaseFormatForCompilerOutput(
       'social-carousel',
     ].includes(format)
   ) {
+    // SAFETY: the includes guard above proves the string is one of the Release output formats.
     return format as Release['scenes'][number]['outputs'][number]['format'];
   }
   return undefined;
@@ -798,23 +847,39 @@ function buildReferencesRun(build: VerificationBuildRecord, run: VerificationRun
   );
 }
 
-function baselineStateFromRun(
-  state: VerificationRunRecord['run']['attempts'][number]['states'][number],
-): Readonly<Record<string, unknown>> {
-  return {
+type RunAttemptState = VerificationRunRecord['run']['attempts'][number]['states'][number];
+
+interface BaselineComparableState {
+  readonly sceneId: RunAttemptState['sceneId'];
+  readonly stepId: RunAttemptState['stepId'];
+  readonly phase: RunAttemptState['phase'];
+  readonly stateId: RunAttemptState['id'];
+  readonly screenshot: RunAttemptState['screenshot'];
+  readonly screenshotHash: RunAttemptState['screenshotHash'];
+  perceptualHash?: RunAttemptState['perceptualHash'];
+  readonly route: RunAttemptState['route'];
+  readonly viewport: RunAttemptState['viewport'];
+  target?: RunAttemptState['target'];
+  semantic?: RunAttemptState['semantic'];
+  readonly privacy: RunAttemptState['privacy'];
+}
+
+function baselineStateFromRun(state: RunAttemptState): BaselineComparableState {
+  let comparable: BaselineComparableState = {
     sceneId: state.sceneId,
     stepId: state.stepId,
     phase: state.phase,
     stateId: state.id,
     screenshot: state.screenshot,
     screenshotHash: state.screenshotHash,
-    ...(state.perceptualHash ? { perceptualHash: state.perceptualHash } : {}),
     route: state.route,
     viewport: state.viewport,
-    ...(state.target ? { target: state.target } : {}),
-    ...(state.semantic ? { semantic: state.semantic } : {}),
     privacy: state.privacy,
   };
+  if (state.perceptualHash) comparable = { ...comparable, perceptualHash: state.perceptualHash };
+  if (state.target) comparable = { ...comparable, target: state.target };
+  if (state.semantic) comparable = { ...comparable, semantic: state.semantic };
+  return comparable;
 }
 
 export function createControlPlaneApp(
@@ -852,13 +917,14 @@ export function createControlPlaneApp(
     const address =
       context.req.header('x-real-ip') ??
       context.req.header('x-forwarded-for')?.split(',', 1)[0]?.trim();
-    return {
+    const event: AuditEventRecord = {
       id: makeId('audit'),
       ...input,
       requestId,
-      ...(address ? { ipHash: dependencies.hasher.hash(address, 'audit-ip') } : {}),
       createdAt: now().toISOString(),
     };
+    if (address === undefined) return event;
+    return { ...event, ipHash: dependencies.hasher.hash(address, 'audit-ip') };
   };
 
   const audit = async (
@@ -901,15 +967,16 @@ export function createControlPlaneApp(
       ) {
         await dependencies.repository.touchIdentityApiToken(token.id, current.toISOString());
       }
-      return {
+      const principal: HumanPrincipal = {
         userId: token.userId,
         credential: 'api-token',
         credentialId: token.id,
         workspaceId: token.workspaceId,
         scopes: token.scopes,
-        ...(token.projectId ? { projectId: token.projectId } : {}),
-        ...(token.channelId ? { channelId: token.channelId } : {}),
       };
+      if (token.projectId) principal.projectId = token.projectId;
+      if (token.channelId) principal.channelId = token.channelId;
+      return principal;
     }
     let claims;
     try {
@@ -948,15 +1015,16 @@ export function createControlPlaneApp(
         'Identity credential is invalid or expired',
       );
     }
-    return {
+    const principal: HumanPrincipal = {
       userId: session.userId,
       credential: 'session',
       credentialId: session.id,
       workspaceId: session.workspaceId,
       scopes: session.scopes,
-      ...(session.projectId ? { projectId: session.projectId } : {}),
-      ...(session.channelId ? { channelId: session.channelId } : {}),
     };
+    if (session.projectId) principal.projectId = session.projectId;
+    if (session.channelId) principal.channelId = session.channelId;
+    return principal;
   };
 
   const setHumanPrincipal = (context: AppContext, principal: HumanPrincipal): void => {
@@ -1100,7 +1168,7 @@ export function createControlPlaneApp(
   const requireFinalizedEvidenceObject = async (
     context: AppContext,
     claims: UploadTokenClaims,
-    envelope: unknown,
+    envelope: JsonValue,
   ): Promise<ArtifactUploadRecord> => {
     const uploadId = context.req.header('x-scenebook-upload-id');
     if (!uploadId || !IdSchema.safeParse(uploadId).success) {
@@ -1561,10 +1629,7 @@ export function createControlPlaneApp(
         },
       );
     }
-    const databaseCode =
-      typeof error === 'object' && error !== null && 'code' in error
-        ? (error as { code?: unknown }).code
-        : undefined;
+    const databaseCode = databaseErrorCode(error);
     if (databaseCode === '23505')
       return responseError(409, 'unique_conflict', 'Resource already exists', requestId);
     if (databaseCode === '23503')
@@ -1677,8 +1742,8 @@ export function createControlPlaneApp(
       name: body.name,
       tokenHash: generated.tokenHash,
       scopes: body.scopes,
-      ...(body.projectId ? { projectId: body.projectId } : {}),
-      ...(body.channelId ? { channelId: body.channelId } : {}),
+      projectId: body.projectId,
+      channelId: body.channelId,
       createdAt: now().toISOString(),
       expiresAt: boundedExpiry(
         body.expiresAt,
@@ -1846,7 +1911,7 @@ export function createControlPlaneApp(
       action: 'identity.api-token-created',
       targetType: 'identity-api-token',
       targetId: value.token.id,
-      metadata: { userId, scopes: value.token.scopes },
+      metadata: { userId, scopes: [...value.token.scopes] },
     });
     return context.json(value, 201);
   });
@@ -1890,7 +1955,7 @@ export function createControlPlaneApp(
       action: 'identity.api-token-created',
       targetType: 'identity-api-token',
       targetId: value.token.id,
-      metadata: { userId: principal.userId, scopes: value.token.scopes },
+      metadata: { userId: principal.userId, scopes: [...value.token.scopes] },
     });
     return context.json(value, 201);
   });
@@ -1990,17 +2055,18 @@ export function createControlPlaneApp(
       sourceTokenId: source.id,
       workspaceId: principal.workspaceId,
       scopes: principal.scopes,
-      ...(principal.projectId ? { projectId: principal.projectId } : {}),
-      ...(principal.channelId ? { channelId: principal.channelId } : {}),
       createdAt: createdAt.toISOString(),
       expiresAt,
     };
-    await dependencies.repository.createUserSession(session);
+    let storedSession = session;
+    if (principal.projectId) storedSession = { ...storedSession, projectId: principal.projectId };
+    if (principal.channelId) storedSession = { ...storedSession, channelId: principal.channelId };
+    await dependencies.repository.createUserSession(storedSession);
     const credential = await dependencies.identityTokens.issueSession(
-      session,
+      storedSession,
       Math.floor(createdAt.getTime() / 1_000),
     );
-    return context.json({ credential, session }, 201);
+    return context.json({ credential, session: storedSession }, 201);
   });
 
   app.get('/v1/auth/me', async (context) => {
@@ -3063,19 +3129,22 @@ export function createControlPlaneApp(
         action: 'github-source.change-succeeded',
         targetType: 'github-source-change',
         targetId: changeId,
-        metadata: {
-          projectId,
-          repositoryBindingId: repository.id,
-          baseCommitSha: completed.baseCommitSha,
-          baseBlobSha: completed.baseBlobSha,
-          headCommitSha: completed.headCommitSha,
-          headBlobSha: completed.headBlobSha,
-          patchHash: completed.patchHash,
-          pathHash: dependencies.hasher.hash(body.path, 'github-source-path'),
-          pullRequestNumber: completed.pullRequestNumber,
-          issueNumber: completed.issueNumber,
-          evidenceBinding,
-        },
+        metadata: (() => {
+          const detail: JsonObject = {
+            projectId,
+            repositoryBindingId: repository.id,
+            baseCommitSha: completed.baseCommitSha,
+            baseBlobSha: completed.baseBlobSha,
+            patchHash: completed.patchHash,
+            pathHash: dependencies.hasher.hash(body.path, 'github-source-path'),
+            evidenceBinding,
+          };
+          if (completed.headCommitSha) detail['headCommitSha'] = completed.headCommitSha;
+          if (completed.headBlobSha) detail['headBlobSha'] = completed.headBlobSha;
+          if (completed.pullRequestNumber) detail['pullRequestNumber'] = completed.pullRequestNumber;
+          if (completed.issueNumber) detail['issueNumber'] = completed.issueNumber;
+          return detail;
+        })(),
       });
       return context.json({ change: safeGitHubChange(completed) }, 201);
     },
@@ -3165,7 +3234,7 @@ export function createControlPlaneApp(
         repository: binding.repository,
         sourceRef: value.sourceRef,
         environmentId: value.environmentId,
-        runTargetIds: value.runTargetIds,
+        runTargetIds: [...value.runTargetIds],
         intervalSeconds: value.intervalSeconds,
       },
     });
@@ -3466,7 +3535,11 @@ export function createControlPlaneApp(
       action: 'verification.runner-created',
       targetType: 'verification-runner',
       targetId: value.id,
-      metadata: { projectId, scheduleIds: value.scheduleIds, expiresAt: value.expiresAt },
+      metadata: {
+          projectId,
+          scheduleIds: [...value.scheduleIds],
+          expiresAt: value.expiresAt,
+        },
     });
     return context.json({ runner: runnerResponse(value), credential: credential.token }, 201);
   });
@@ -3551,8 +3624,8 @@ export function createControlPlaneApp(
       metadata: {
         scheduleId: job.scheduleId,
         attempt: job.attempts,
-        leaseExpiresAt: job.leaseExpiresAt,
-        deadlineAt: job.deadlineAt,
+        leaseExpiresAt: job.leaseExpiresAt ?? '',
+        deadlineAt: job.deadlineAt ?? '',
       },
     });
     return context.json({ job });
@@ -3923,7 +3996,7 @@ export function createControlPlaneApp(
       metadata: {
         subjectKind: value.review.subject.kind,
         subjectId: value.review.subject.id,
-        ...(checkRun ? { checkRunId: checkRun.id, checkRunStatus: checkRun.status } : {}),
+        ...checkRunAuditMetadata(checkRun),
       },
     });
     return context.json(value, 201);
@@ -4058,7 +4131,7 @@ export function createControlPlaneApp(
         action: 'review.comment-added',
         targetType: 'review',
         targetId: reviewId,
-        metadata: { commentId: value.review.comments.at(-1)?.id },
+        metadata: { commentId: value.review.comments.at(-1)?.id ?? '' },
       });
       return context.json(value, 201);
     },
@@ -4092,7 +4165,11 @@ export function createControlPlaneApp(
         action: body.status === 'resolved' ? 'review.comment-resolved' : 'review.comment-reopened',
         targetType: 'review',
         targetId: reviewId,
-        metadata: { commentId, previousResolvedAt: body.expectedResolvedAt, resolvedAt },
+        metadata: {
+          commentId,
+          previousResolvedAt: body.expectedResolvedAt ?? '',
+          ...(resolvedAt === undefined ? {} : { resolvedAt }),
+        },
       });
       return context.json(value);
     },
@@ -4125,23 +4202,16 @@ export function createControlPlaneApp(
         },
       );
       const checkRun = await syncGitHubCheckForReview(workspaceId, projectId, value);
+      const metadata: JsonObject = { decision: body.decision };
+      if (body.changeId) metadata['changeId'] = body.changeId;
+      Object.assign(metadata, checkRunAuditMetadata(checkRun));
       await audit(context, {
         workspaceId,
         actorId,
         action: `review.${body.decision}`,
         targetType: 'review',
         targetId: reviewId,
-        metadata: {
-          decision: body.decision,
-          changeId: body.changeId,
-          ...(checkRun
-            ? {
-                checkRunId: checkRun.id,
-                checkRunStatus: checkRun.status,
-                ...(checkRun.conclusion ? { checkRunConclusion: checkRun.conclusion } : {}),
-              }
-            : {}),
-        },
+        metadata,
       });
       return context.json(value, 201);
     },
@@ -4538,13 +4608,7 @@ export function createControlPlaneApp(
         metadata: {
           artifactHash: artifactRevision,
           status: value.build.status,
-          ...(checkRun
-            ? {
-                checkRunId: checkRun.id,
-                checkRunStatus: checkRun.status,
-                ...(checkRun.conclusion ? { checkRunConclusion: checkRun.conclusion } : {}),
-              }
-            : {}),
+          ...checkRunAuditMetadata(checkRun),
         },
       });
       return context.json({ build: value }, 201);
@@ -5150,7 +5214,11 @@ export function createControlPlaneApp(
       action: 'channel.created',
       targetType: 'channel',
       targetId: value.id,
-      metadata: { slug: value.slug, kind: value.kind, webhookIds: value.webhookIds },
+      metadata: {
+          slug: value.slug,
+          kind: value.kind,
+          webhookIds: [...value.webhookIds],
+        },
     });
     return context.json({ channel: await channelWithHostedUrl(value), analyticsToken }, 201);
   });
@@ -5225,22 +5293,24 @@ export function createControlPlaneApp(
     domain: CustomDomainRecord,
     action: string,
   ): Promise<void> => {
+    const provisioning = domain.provisioning;
+    const metadata: JsonObject = {
+      projectId: domain.projectId,
+      channelId: domain.channelId,
+      hostname: domain.hostname,
+      status: domain.status,
+    };
+    if (provisioning?.desiredState) metadata['desiredState'] = provisioning.desiredState;
+    if (provisioning?.certificate) metadata['certificate'] = provisioning.certificate;
+    if (provisioning?.routing) metadata['routing'] = provisioning.routing;
+    if (provisioning?.failureCode) metadata['failureCode'] = provisioning.failureCode;
     await audit(context, {
       workspaceId: domain.workspaceId,
       actorId: actor(context),
       action,
       targetType: 'custom-domain',
       targetId: domain.id,
-      metadata: {
-        projectId: domain.projectId,
-        channelId: domain.channelId,
-        hostname: domain.hostname,
-        status: domain.status,
-        desiredState: domain.provisioning?.desiredState,
-        certificate: domain.provisioning?.certificate,
-        routing: domain.provisioning?.routing,
-        failureCode: domain.provisioning?.failureCode,
-      },
+      metadata,
     });
   };
 
@@ -6010,10 +6080,21 @@ export function createControlPlaneApp(
       }
 
       const policy = evaluateChannelPolicy(channel.policy, readiness);
-      if (!policy.allowed)
+      if (!policy.allowed) {
         throw new HttpError(409, 'channel_policy_blocked', 'Channel policy blocked publication', {
-          decision: policy,
+          decision: {
+            allowed: policy.allowed,
+            scenes: policy.scenes.map((scene) => ({
+              sceneId: scene.sceneId,
+              action: scene.action,
+              ...(scene.revision ? { revision: scene.revision } : {}),
+              reasons: scene.reasons.map((reason) => ({ ...reason })),
+            })),
+            blockers: policy.blockers.map((reason) => ({ ...reason })),
+            ...(policy.evaluatedAt ? { evaluatedAt: policy.evaluatedAt } : {}),
+          },
         });
+      }
       const decisions = new Map(policy.scenes.map((decision) => [decision.sceneId, decision]));
       const releaseScenes: Release['scenes'][number][] = [];
       for (const scene of body.release.scenes) {
@@ -6359,7 +6440,7 @@ export function createControlPlaneApp(
       action: 'workspace.export-created',
       targetType: 'workspace',
       targetId: workspaceId,
-      metadata: { manifestHash: value.manifest.manifestHash },
+      metadata: { manifestHash: String(value.manifest.manifestHash) },
     });
     return new Response(value.body, {
       status: 200,
@@ -6848,13 +6929,7 @@ export function createControlPlaneApp(
         targetId: reviewId,
         metadata: {
           channelId: access.channelId,
-          ...(checkRun
-            ? {
-                checkRunId: checkRun.id,
-                checkRunStatus: checkRun.status,
-                ...(checkRun.conclusion ? { checkRunConclusion: checkRun.conclusion } : {}),
-              }
-            : {}),
+          ...checkRunAuditMetadata(checkRun),
         },
       });
       return context.json(value, 201);
