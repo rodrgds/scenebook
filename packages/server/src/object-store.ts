@@ -11,6 +11,7 @@ import {
   HeadBucketCommand,
   PutObjectCommand,
   S3Client,
+  type S3ClientConfig,
 } from '@aws-sdk/client-s3';
 import { assertPathInside } from '@scenebook/core';
 
@@ -198,12 +199,16 @@ function validateKey(value: string): string {
   return value;
 }
 
+function hasErrnoCode<T>(error: T, code: string): boolean {
+  return error instanceof Error && 'code' in error && error.code === code;
+}
+
 async function regularFile(path: string): Promise<boolean> {
   try {
     const info = await lstat(path);
     return info.isFile() && !info.isSymbolicLink();
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    if (hasErrnoCode(error, 'ENOENT')) return false;
     throw error;
   }
 }
@@ -272,7 +277,7 @@ export class FileSystemObjectStore implements ImmutableObjectStore {
       try {
         await link(temporary, destination);
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        if (!hasErrnoCode(error, 'EEXIST')) throw error;
       }
       const object = {
         key,
@@ -310,7 +315,7 @@ export class FileSystemObjectStore implements ImmutableObjectStore {
       try {
         await link(this.path(staged.key), destination);
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        if (!hasErrnoCode(error, 'EEXIST')) throw error;
       }
     }
     const promoted = { ...staged, key };
@@ -413,43 +418,74 @@ export interface S3ObjectStoreOptions {
   readonly forcePathStyle?: boolean;
 }
 
-async function* remoteBodyChunks(body: unknown): AsyncGenerator<Uint8Array> {
-  if (
-    body &&
+type RemoteBody =
+  | AsyncIterable<Uint8Array | Buffer | string>
+  | { readonly transformToByteArray: () => Promise<Uint8Array> };
+
+function isStringChunk(chunk: Uint8Array | Buffer | string): chunk is string {
+  return typeof chunk === 'string';
+}
+
+function isAsyncIterableBody(
+  body: RemoteBody,
+): body is AsyncIterable<Uint8Array | Buffer | string> {
+  return (
     typeof body === 'object' &&
     Symbol.asyncIterator in body &&
     typeof body[Symbol.asyncIterator] === 'function'
-  ) {
-    for await (const chunk of body as AsyncIterable<Uint8Array | Buffer | string>) {
-      yield typeof chunk === 'string' ? Buffer.from(chunk) : new Uint8Array(chunk);
+  );
+}
+
+async function* remoteBodyChunks(body: RemoteBody): AsyncGenerator<Uint8Array> {
+  if (isAsyncIterableBody(body)) {
+    for await (const chunk of body) {
+      yield isStringChunk(chunk) ? Buffer.from(chunk) : new Uint8Array(chunk);
     }
     return;
   }
-  if (
-    body &&
-    typeof body === 'object' &&
-    'transformToByteArray' in body &&
-    typeof body.transformToByteArray === 'function'
-  ) {
-    yield new Uint8Array(await body.transformToByteArray());
-    return;
+  yield new Uint8Array(await body.transformToByteArray());
+}
+
+function s3ClientConfig(options: S3ObjectStoreOptions): S3ClientConfig {
+  const config: S3ClientConfig = {
+    region: options.region,
+    endpoint: options.endpoint,
+    forcePathStyle: options.forcePathStyle,
+  };
+  if (options.accessKeyId && options.secretAccessKey) {
+    config.credentials = {
+      accessKeyId: options.accessKeyId,
+      secretAccessKey: options.secretAccessKey,
+    };
   }
-  throw new Error('S3 object body is not stream-readable');
+  return config;
 }
 
 function copySource(bucket: string, key: string): string {
   return `${bucket}/${key.split('/').map(encodeURIComponent).join('/')}`;
 }
 
-function conditionalStatus(error: unknown): number | undefined {
-  if (!error || typeof error !== 'object') return undefined;
-  const metadata = '$metadata' in error ? error.$metadata : undefined;
-  if (!metadata || typeof metadata !== 'object' || !('httpStatusCode' in metadata))
-    return undefined;
-  return typeof metadata.httpStatusCode === 'number' ? metadata.httpStatusCode : undefined;
+interface AwsServiceError {
+  readonly $metadata: { readonly httpStatusCode: number };
 }
 
-function isConditionalWriteConflict(error: unknown): boolean {
+function isAwsServiceError<T>(error: T): error is T & AwsServiceError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    '$metadata' in error &&
+    typeof error.$metadata === 'object' &&
+    error.$metadata !== null &&
+    'httpStatusCode' in error.$metadata &&
+    typeof error.$metadata.httpStatusCode === 'number'
+  );
+}
+
+function conditionalStatus<T>(error: T): number | undefined {
+  return isAwsServiceError(error) ? error.$metadata.httpStatusCode : undefined;
+}
+
+function isConditionalWriteConflict<T>(error: T): boolean {
   const status = conditionalStatus(error);
   if (status === 409 || status === 412) return true;
   if (!(error instanceof Error)) return false;
@@ -463,21 +499,7 @@ export class S3ObjectStore implements ImmutableObjectStore {
     private readonly options: S3ObjectStoreOptions,
     client?: S3Client,
   ) {
-    this.client =
-      client ??
-      new S3Client({
-        region: options.region,
-        endpoint: options.endpoint,
-        forcePathStyle: options.forcePathStyle,
-        ...(options.accessKeyId && options.secretAccessKey
-          ? {
-              credentials: {
-                accessKeyId: options.accessKeyId,
-                secretAccessKey: options.secretAccessKey,
-              },
-            }
-          : {}),
-      });
+    this.client = client ?? new S3Client(s3ClientConfig(options));
   }
 
   async health(): Promise<void> {
@@ -696,21 +718,7 @@ export class S3FinalObjectDeleter implements FinalObjectDeleter {
     private readonly options: S3ObjectStoreOptions,
     client?: S3Client,
   ) {
-    this.client =
-      client ??
-      new S3Client({
-        region: options.region,
-        endpoint: options.endpoint,
-        forcePathStyle: options.forcePathStyle,
-        ...(options.accessKeyId && options.secretAccessKey
-          ? {
-              credentials: {
-                accessKeyId: options.accessKeyId,
-                secretAccessKey: options.secretAccessKey,
-              },
-            }
-          : {}),
-      });
+    this.client = client ?? new S3Client(s3ClientConfig(options));
   }
 
   async health(): Promise<void> {
