@@ -6,7 +6,7 @@ import {
   timingSafeEqual,
 } from 'node:crypto';
 
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 
 import type { UploadTokenClaims } from './domain.js';
 
@@ -45,7 +45,7 @@ export class SecretBox {
     this.key = decodeKey(encodedKey);
   }
 
-  encrypt(value: unknown): string {
+  encrypt<T>(value: T): string {
     const nonce = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.key, nonce);
     const plaintext = Buffer.from(JSON.stringify(value));
@@ -63,8 +63,38 @@ export class SecretBox {
     const decipher = createDecipheriv('aes-256-gcm', this.key, nonce);
     decipher.setAuthTag(tag);
     const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    // SAFETY: the AEAD tag authenticates the whole envelope, so the decrypted JSON was produced by encrypt<T>.
     return JSON.parse(plaintext.toString('utf8')) as T;
   }
+}
+
+interface UploadTokenPayload extends JWTPayload {
+  workspace_id: string;
+  project_id: string;
+  repository: string;
+  commit: string;
+  ref: string;
+  workflow_ref: string;
+  permissions: readonly ['artifact:write'];
+  exp: number;
+  jti: string;
+}
+
+function isUploadTokenPayload(payload: JWTPayload): payload is UploadTokenPayload {
+  const permissions = payload.permissions;
+  return (
+    typeof payload.workspace_id === 'string' &&
+    typeof payload.project_id === 'string' &&
+    typeof payload.repository === 'string' &&
+    typeof payload.commit === 'string' &&
+    typeof payload.ref === 'string' &&
+    typeof payload.workflow_ref === 'string' &&
+    Array.isArray(permissions) &&
+    permissions.length === 1 &&
+    permissions[0] === 'artifact:write' &&
+    typeof payload.exp === 'number' &&
+    typeof payload.jti === 'string'
+  );
 }
 
 export class UploadTokenService {
@@ -110,20 +140,7 @@ export class UploadTokenService {
       clockTolerance: 5,
       currentDate: new Date(nowSeconds * 1_000),
     });
-    const permissions = payload.permissions;
-    if (
-      typeof payload.workspace_id !== 'string' ||
-      typeof payload.project_id !== 'string' ||
-      typeof payload.repository !== 'string' ||
-      typeof payload.commit !== 'string' ||
-      typeof payload.ref !== 'string' ||
-      typeof payload.workflow_ref !== 'string' ||
-      !Array.isArray(permissions) ||
-      permissions.length !== 1 ||
-      permissions[0] !== 'artifact:write' ||
-      typeof payload.exp !== 'number' ||
-      typeof payload.jti !== 'string'
-    ) {
+    if (!isUploadTokenPayload(payload)) {
       throw new Error('Upload token has invalid claims');
     }
     return {
