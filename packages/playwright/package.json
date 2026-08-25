@@ -42,7 +42,7 @@
     "clean": "rm -rf dist coverage"
   },
   "dependencies": {
-    "@playwright/test": "1.61.1",
+    "@playwright/test": "1.62.1",
     "@scenebook/adapters": "workspace:*",
     "@scenebook/core": "workspace:*",
     "@scenebook/diff": "workspace:*",
