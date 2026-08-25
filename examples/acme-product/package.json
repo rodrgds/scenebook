@@ -9,7 +9,7 @@
     "test:replay": "playwright test --config playwright.config.ts"
   },
   "dependencies": {
-    "@playwright/test": "1.61.1",
+    "@playwright/test": "1.62.1",
     "@scenebook/cli": "workspace:*",
     "@scenebook/playwright": "workspace:*"
   },

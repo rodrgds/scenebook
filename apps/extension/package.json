@@ -20,7 +20,7 @@
     "yaml": "2.9.0"
   },
   "devDependencies": {
-    "@playwright/test": "1.61.1",
+    "@playwright/test": "1.62.1",
     "@scenebook/schema": "workspace:*",
     "@types/chrome": "0.2.2",
     "sharp": "0.35.3",
