@@ -24,12 +24,12 @@
   "devDependencies": {
     "@scenebook/compiler": "workspace:*",
     "@sveltejs/adapter-static": "3.0.10",
-    "@sveltejs/vite-plugin-svelte": "7.2.0",
+    "@sveltejs/vite-plugin-svelte": "7.3.0",
     "@testing-library/svelte": "5.4.2",
-    "happy-dom": "20.11.0",
-    "svelte-check": "4.7.3",
-    "typescript": "6.0.3",
-    "vite": "8.1.5",
-    "vitest": "4.1.10"
+    "happy-dom": "20.11.15",
+    "svelte-check": "4.7.6",
+    "typescript": "7.0.2",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
   }
 }
